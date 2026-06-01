@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
@@ -24,6 +24,202 @@ function safeRefetch(query: any) {
   if (query.isUninitialized) return;
   if (typeof query.refetch !== "function") return;
   query.refetch();
+}
+
+function escapeHtml(text: string) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function timestampForFilename(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+}
+
+function normalizeFilenamePart(value: string) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function downloadBlobFile(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildExportHtmlDocument(args: {
+  title: string;
+  metaLines: string[];
+  bodyHtml: string;
+  hintLine?: string;
+}) {
+  const { title, metaLines, bodyHtml, hintLine } = args;
+  const safeTitle = escapeHtml(title);
+  const safeMeta = metaLines.filter(Boolean).map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+  const safeHint = hintLine ? `<div style="margin-top:6px;color:#555;">${escapeHtml(hintLine)}</div>` : "";
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${safeTitle}</title>
+    <style>
+      body { font-family: Arial, Helvetica, sans-serif; padding: 16px; color: #111; }
+      h2 { margin: 0 0 6px 0; font-size: 18px; }
+      .meta { font-size: 12px; margin-bottom: 12px; color: #333; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #cfcfcf; padding: 6px 8px; font-size: 12px; vertical-align: top; }
+      th { background: #f3f3f3; text-align: left; }
+    </style>
+  </head>
+  <body>
+    <h2>${safeTitle}</h2>
+    <div class="meta">
+      ${safeMeta}
+      ${safeHint}
+    </div>
+    ${bodyHtml}
+  </body>
+</html>`;
+}
+
+function openPrintWindow(args: {
+  title: string;
+  metaLines: string[];
+  bodyHtml: string;
+  hintLine?: string;
+  autoPrint: boolean;
+}) {
+  const html = buildExportHtmlDocument(args);
+  const w = window.open("", "_blank", "noopener,noreferrer");
+  if (!w) throw new Error("Popup blocked. Please allow popups and try again.");
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  if (args.autoPrint) {
+    window.setTimeout(() => {
+      try {
+        w.print();
+      } catch {
+        // ignore
+      }
+    }, 250);
+  }
+}
+
+function downloadExcelFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
+  const html = buildExportHtmlDocument({
+    title: args.title,
+    metaLines: args.metaLines,
+    bodyHtml: args.element.innerHTML
+  });
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const filename = `${normalizeFilenamePart(args.filenameBase || args.title)}_${timestampForFilename()}.xls`;
+  downloadBlobFile(filename, blob);
+}
+
+function ReportCard(props: {
+  title: string;
+  filenameBase: string;
+  metaLines: string[];
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  const disabled = props.disabled ?? false;
+
+  function getContentEl() {
+    const el = contentRef.current;
+    if (!el) throw new Error("Report content not available.");
+    return el;
+  }
+
+  return (
+    <Card>
+      <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div className="text-lg font-bold">{props.title}</div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => {
+              try {
+                const el = getContentEl();
+                downloadExcelFromElement({
+                  title: props.title,
+                  metaLines: props.metaLines,
+                  filenameBase: props.filenameBase,
+                  element: el
+                });
+              } catch (e: any) {
+                window.alert(String(e?.message ?? e));
+              }
+            }}
+          >
+            Download Excel
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => {
+              try {
+                const el = getContentEl();
+                openPrintWindow({
+                  title: props.title,
+                  metaLines: props.metaLines,
+                  bodyHtml: el.innerHTML,
+                  hintLine: "Tip: choose “Save as PDF” in the print dialog.",
+                  autoPrint: true
+                });
+              } catch (e: any) {
+                window.alert(String(e?.message ?? e));
+              }
+            }}
+          >
+            Download PDF
+          </Button>
+          <Button
+            variant="ghost"
+            disabled={disabled}
+            onClick={() => {
+              try {
+                const el = getContentEl();
+                openPrintWindow({
+                  title: props.title,
+                  metaLines: props.metaLines,
+                  bodyHtml: el.innerHTML,
+                  autoPrint: true
+                });
+              } catch (e: any) {
+                window.alert(String(e?.message ?? e));
+              }
+            }}
+          >
+            Print
+          </Button>
+        </div>
+      </div>
+      <div ref={contentRef}>{props.children}</div>
+    </Card>
+  );
 }
 
 export function ReportsPage() {
@@ -105,6 +301,24 @@ export function ReportsPage() {
     return [{ value: "", label: "Select party" }, ...opts];
   }, [partiesQuery.data, effectiveZoneId]);
 
+  const exportMetaLines = useMemo(() => {
+    const zoneLabel =
+      role === "admin"
+        ? (zoneOptions.find((z) => z.value === zoneId)?.label ?? zoneId)
+        : role === "zonal_head"
+          ? "My Zone"
+          : "—";
+    const miqaatLabel = miqaatOptions.find((m) => m.value === miqaatId)?.label ?? "—";
+    const partyLabel = partyOptions.find((p) => p.value === partyId)?.label ?? "—";
+    return [
+      `Zone: ${zoneLabel}`,
+      `Miqaat: ${miqaatLabel}`,
+      `Party: ${partyLabel}`,
+      `Year: ${year}`,
+      `Quarter: Q${quarter}`
+    ];
+  }, [miqaatId, miqaatOptions, partyId, partyOptions, quarter, role, year, zoneId, zoneOptions]);
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">Reports</div>
@@ -167,8 +381,12 @@ export function ReportsPage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Card>
-          <div className="mb-2 text-lg font-bold">Status Summary</div>
+        <ReportCard
+          title="Status Summary"
+          filenameBase="status_summary"
+          metaLines={exportMetaLines}
+          disabled={statusQuery.isLoading || statusQuery.isError}
+        >
           {statusQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : statusQuery.isError ? (
@@ -189,10 +407,14 @@ export function ReportsPage() {
               </div>
             </div>
           )}
-        </Card>
+        </ReportCard>
 
-        <Card>
-          <div className="mb-2 text-lg font-bold">Miqaat Schedule</div>
+        <ReportCard
+          title="Miqaat Schedule"
+          filenameBase="miqaat_schedule"
+          metaLines={exportMetaLines}
+          disabled={!miqaatId || miqaatScheduleQuery.isLoading || miqaatScheduleQuery.isError}
+        >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view schedule report.</div>
           ) : miqaatScheduleQuery.isLoading ? (
@@ -227,12 +449,16 @@ export function ReportsPage() {
               </table>
             </div>
           )}
-        </Card>
+        </ReportCard>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Card>
-          <div className="mb-2 text-lg font-bold">Zone-wise Schedule Summary</div>
+        <ReportCard
+          title="Zone-wise Schedule Summary"
+          filenameBase="zone_schedule_summary"
+          metaLines={exportMetaLines}
+          disabled={!miqaatId || zoneScheduleQuery.isLoading || zoneScheduleQuery.isError}
+        >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view zone-wise summary.</div>
           ) : zoneScheduleQuery.isLoading ? (
@@ -271,10 +497,14 @@ export function ReportsPage() {
               </table>
             </div>
           )}
-        </Card>
+        </ReportCard>
 
-        <Card>
-          <div className="mb-2 text-lg font-bold">Attendance Feedback Log</div>
+        <ReportCard
+          title="Attendance Feedback Log"
+          filenameBase="attendance_feedback_log"
+          metaLines={exportMetaLines}
+          disabled={!miqaatId || attendanceQuery.isLoading || attendanceQuery.isError}
+        >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view attendance report.</div>
           ) : attendanceQuery.isLoading ? (
@@ -313,11 +543,15 @@ export function ReportsPage() {
               </table>
             </div>
           )}
-        </Card>
+        </ReportCard>
       </div>
 
-      <Card>
-        <div className="mb-2 text-lg font-bold">Party Performance Ratings (Summary)</div>
+      <ReportCard
+        title="Party Performance Ratings (Summary)"
+        filenameBase="party_performance_ratings_summary"
+        metaLines={exportMetaLines}
+        disabled={performanceSummaryQuery.isLoading || performanceSummaryQuery.isError}
+      >
         {performanceSummaryQuery.isLoading ? (
           <div className="text-sm text-textMuted">Loading...</div>
         ) : performanceSummaryQuery.isError ? (
@@ -348,10 +582,14 @@ export function ReportsPage() {
             </table>
           </div>
         )}
-      </Card>
+      </ReportCard>
 
-      <Card>
-        <div className="mb-2 text-lg font-bold">Party Performance Trend</div>
+      <ReportCard
+        title="Party Performance Trend"
+        filenameBase="party_performance_trend"
+        metaLines={exportMetaLines}
+        disabled={!partyId || performanceTrendQuery.isLoading || performanceTrendQuery.isError}
+      >
         {!partyId ? (
           <div className="text-sm text-textMuted">Select a Party to view performance trend.</div>
         ) : performanceTrendQuery.isLoading ? (
@@ -384,10 +622,14 @@ export function ReportsPage() {
             </table>
           </div>
         )}
-      </Card>
+      </ReportCard>
 
-      <Card>
-        <div className="mb-2 text-lg font-bold">Party Assignment History</div>
+      <ReportCard
+        title="Party Assignment History"
+        filenameBase="party_assignment_history"
+        metaLines={exportMetaLines}
+        disabled={!partyId || partyHistoryQuery.isLoading || partyHistoryQuery.isError}
+      >
         {!partyId ? (
           <div className="text-sm text-textMuted">Select a Party to view venue history.</div>
         ) : partyHistoryQuery.isLoading ? (
@@ -418,11 +660,15 @@ export function ReportsPage() {
             </table>
           </div>
         )}
-      </Card>
+      </ReportCard>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <Card>
-          <div className="mb-2 text-lg font-bold">Quarterly Review</div>
+        <ReportCard
+          title="Quarterly Review"
+          filenameBase="quarterly_review"
+          metaLines={exportMetaLines}
+          disabled={quarterlyQuery.isLoading || quarterlyQuery.isError}
+        >
           {quarterlyQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : quarterlyQuery.isError ? (
@@ -486,10 +732,14 @@ export function ReportsPage() {
               </div>
             </div>
           )}
-        </Card>
+        </ReportCard>
 
-        <Card>
-          <div className="mb-2 text-lg font-bold">Manually Edited Schedule</div>
+        <ReportCard
+          title="Manually Edited Schedule"
+          filenameBase="manually_edited_schedule"
+          metaLines={exportMetaLines}
+          disabled={manuallyEditedQuery.isLoading || manuallyEditedQuery.isError}
+        >
           {manuallyEditedQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : manuallyEditedQuery.isError ? (
@@ -526,7 +776,7 @@ export function ReportsPage() {
               </table>
             </div>
           )}
-        </Card>
+        </ReportCard>
       </div>
     </div>
   );
