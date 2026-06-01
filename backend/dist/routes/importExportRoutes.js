@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.importExportRoutes = void 0;
 const express_1 = require("express");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const mysql2_1 = __importDefault(require("mysql2"));
+const env_1 = require("../config/env");
 const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const response_1 = require("../utils/response");
@@ -115,6 +117,58 @@ function csvResponse(res, filename, csv) {
     res.setHeader("content-disposition", `attachment; filename="${filename}"`);
     res.status(200).send(csv);
 }
+function sqlResponse(res, filename, sql) {
+    res.setHeader("content-type", "application/sql; charset=utf-8");
+    res.setHeader("content-disposition", `attachment; filename="${filename}"`);
+    res.status(200).send(sql);
+}
+function timestampForFilename(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+}
+async function buildDatabaseBackupSql() {
+    const [tableRows] = await pool_1.pool.query("SHOW TABLES");
+    const tableNames = tableRows
+        .map((row) => String(Object.values(row)[0] ?? "").trim())
+        .filter(Boolean);
+    const lines = [
+        `-- MPSS database backup`,
+        `-- Database: ${env_1.env.db.name}`,
+        `-- Generated at: ${new Date().toISOString()}`,
+        "",
+        "SET FOREIGN_KEY_CHECKS=0;",
+        ""
+    ];
+    for (const tableName of tableNames) {
+        const escapedTableName = mysql2_1.default.escapeId(tableName);
+        const [createRows] = await pool_1.pool.query(`SHOW CREATE TABLE ${escapedTableName}`);
+        const createSql = String(createRows[0]?.["Create Table"] ?? "");
+        if (!createSql)
+            continue;
+        lines.push(`-- Table: ${tableName}`);
+        lines.push(`DROP TABLE IF EXISTS ${escapedTableName};`);
+        lines.push(`${createSql};`);
+        const [rows] = await pool_1.pool.query(`SELECT * FROM ${escapedTableName}`);
+        if (rows.length > 0) {
+            const columns = Object.keys(rows[0]).map((column) => mysql2_1.default.escapeId(column)).join(", ");
+            const valueLines = rows.map((row) => {
+                const values = Object.keys(row).map((column) => mysql2_1.default.escape(row[column])).join(", ");
+                return `(${values})`;
+            });
+            lines.push(`INSERT INTO ${escapedTableName} (${columns}) VALUES`);
+            lines.push(`${valueLines.join(",\n")};`);
+        }
+        lines.push("");
+    }
+    lines.push("SET FOREIGN_KEY_CHECKS=1;");
+    lines.push("");
+    return lines.join("\n");
+}
 const entityConfig = {
     zones: {
         templateHeaders: ["zone_name", "coordinator_name", "contact_number", "whatsapp_number", "password"],
@@ -139,6 +193,16 @@ const entityConfig = {
 };
 exports.importExportRoutes = (0, express_1.Router)();
 exports.importExportRoutes.use(auth_1.requireAuth, (0, auth_1.requireRole)(["admin"]));
+exports.importExportRoutes.get("/database-backup", async (_req, res) => {
+    try {
+        const sql = await buildDatabaseBackupSql();
+        const filename = `database_backup_${timestampForFilename()}.sql`;
+        return sqlResponse(res, filename, sql);
+    }
+    catch {
+        return (0, response_1.fail)(res, "Failed to generate database backup", 500);
+    }
+});
 exports.importExportRoutes.get("/:entity/template", async (req, res) => {
     const entity = String(req.params.entity ?? "");
     const cfg = entityConfig[entity];

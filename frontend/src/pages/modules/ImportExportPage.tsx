@@ -28,6 +28,22 @@ function downloadTextFile(filename: string, text: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+function extractFilename(contentDisposition: string | null, fallback: string) {
+  const match = contentDisposition?.match(/filename="?([^"]+)"?/i);
+  return match?.[1] ?? fallback;
+}
+
+function downloadBlobFile(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function parseEnvelope<T>(raw: string): ApiEnvelope<T> {
   try {
     return JSON.parse(raw) as ApiEnvelope<T>;
@@ -137,6 +153,28 @@ export function ImportExportPage() {
     }
   }
 
+  async function downloadDatabaseBackup() {
+    setError(null);
+    setResult(null);
+    setBusy(true);
+    try {
+      const res = await fetch(resolveApiUrl("/api/v1/import-export/database-backup"), {
+        headers: token ? { authorization: `Bearer ${token}` } : undefined
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "Backup download failed");
+      }
+      const blob = await res.blob();
+      const filename = extractFilename(res.headers.get("content-disposition"), "database_backup.sql");
+      downloadBlobFile(filename, blob);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">Import / Export</div>
@@ -166,6 +204,20 @@ export function ImportExportPage() {
 
           <div className="text-sm text-textMuted">
             For Zones / Mohallahs / Parties: password is required for new records; leave blank to keep existing password unchanged.
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <div className="text-lg font-bold">Database Backup</div>
+            <div className="text-sm text-textMuted">Download a full SQL backup of the current database to your local machine.</div>
+          </div>
+          <div className="flex gap-2">
+            <Button disabled={busy} onClick={downloadDatabaseBackup}>
+              {busy ? "Preparing..." : "Download Backup"}
+            </Button>
           </div>
         </div>
       </Card>
