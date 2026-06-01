@@ -14,7 +14,14 @@ import { importExportRoutes } from "./routes/importExportRoutes";
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || env.cors.allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("CORS_NOT_ALLOWED"));
+    }
+  })
+);
 app.use(express.json({ limit: "5mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));

@@ -14,6 +14,10 @@ function requireEnv(name, fallback) {
 }
 exports.env = {
     port: Number(process.env.PORT ?? "4000"),
+    cors: {
+        allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ??
+            "https://allocation-iota.vercel.app,http://localhost:5173").split(",").map((origin) => origin.trim()).filter(Boolean)
+    },
     db: {
         host: requireEnv("DB_HOST", "64.20.33.10"),
         port: Number(process.env.DB_PORT ?? "3306"),

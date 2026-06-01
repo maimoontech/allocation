@@ -17,7 +17,13 @@ const reportsRoutes_1 = require("./routes/reportsRoutes");
 const ratingsRoutes_1 = require("./routes/ratingsRoutes");
 const importExportRoutes_1 = require("./routes/importExportRoutes");
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin(origin, callback) {
+        if (!origin || env_1.env.cors.allowedOrigins.includes(origin))
+            return callback(null, true);
+        return callback(new Error("CORS_NOT_ALLOWED"));
+    }
+}));
 app.use(express_1.default.json({ limit: "5mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/v1/auth", authRoutes_1.authRoutes);
