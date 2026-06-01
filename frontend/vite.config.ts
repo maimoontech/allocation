@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       "/api": {
         // target: "http://localhost:4000",
-        target: "https://allocation-msl6.onrender.com",
+        target: "https://allocation-msl6.onrender.com:4000",
         changeOrigin: true
       }
     }
