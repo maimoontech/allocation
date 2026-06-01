@@ -3,6 +3,7 @@ import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 import { Select } from "../../components/ui/Select";
 import { useAppSelector } from "../../hooks/storeHooks";
+import { resolveApiUrl } from "../../features/api/api";
 
 type ImportResult = {
   inserted: number;
@@ -48,7 +49,7 @@ export function ImportExportPage() {
   );
 
   async function fetchCsv(path: string) {
-    const res = await fetch(path, {
+    const res = await fetch(resolveApiUrl(path), {
       headers: token ? { authorization: `Bearer ${token}` } : undefined
     });
     if (!res.ok) {
@@ -56,6 +57,17 @@ export function ImportExportPage() {
       throw new Error(msg || "Request failed");
     }
     return await res.text();
+  }
+
+  async function readCsvFile(file: File) {
+    try {
+      return await file.text();
+    } catch (e: any) {
+      if (e?.name === "NotReadableError") {
+        throw new Error("Could not read the selected CSV file. Close it in Excel or another app, select it again, and retry.");
+      }
+      throw e;
+    }
   }
 
   async function downloadTemplate() {
@@ -95,8 +107,8 @@ export function ImportExportPage() {
     }
     setBusy(true);
     try {
-      const csv = await file.text();
-      const res = await fetch(`/api/v1/import-export/${entity}/import`, {
+      const csv = await readCsvFile(file);
+      const res = await fetch(resolveApiUrl(`/api/v1/import-export/${entity}/import`), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -231,4 +243,3 @@ export function ImportExportPage() {
     </div>
   );
 }
-

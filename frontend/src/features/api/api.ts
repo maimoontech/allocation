@@ -2,7 +2,12 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { RootState } from "../../store";
 
 const defaultApiBaseUrl = "https://allocation-msl6.onrender.com/api/v1";
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || defaultApiBaseUrl;
+export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || defaultApiBaseUrl;
+
+export function resolveApiUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  return new URL(path, `${apiBaseUrl}/`).toString();
+}
 
 export const api = createApi({
   reducerPath: "api",
