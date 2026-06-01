@@ -118,7 +118,6 @@ function openPrintWindow(args: {
       try {
         w.print();
       } catch {
-        // ignore
       }
     }, 250);
   }
@@ -133,6 +132,41 @@ function downloadExcelFromElement(args: { title: string; metaLines: string[]; fi
   const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
   const filename = `${normalizeFilenamePart(args.filenameBase || args.title)}_${timestampForFilename()}.xls`;
   downloadBlobFile(filename, blob);
+}
+
+function IconExcel({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 12h10" />
+      <path d="M8 16h10" />
+      <path d="M11 10v10" />
+    </svg>
+  );
+}
+
+function IconPdf({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8" />
+      <path d="M8 17h6" />
+      <path d="M16 13l2 2-2 2" />
+    </svg>
+  );
+}
+
+function IconPrint({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 8V3h10v5" />
+      <path d="M6 17H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <path d="M7 14h10v7H7z" />
+      <path d="M18 12h0" />
+    </svg>
+  );
 }
 
 function ReportCard(props: {
@@ -159,7 +193,10 @@ function ReportCard(props: {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="ghost"
+            className="px-3"
             disabled={disabled}
+            aria-label="Download Excel"
+            title="Download Excel"
             onClick={() => {
               try {
                 const el = getContentEl();
@@ -174,11 +211,14 @@ function ReportCard(props: {
               }
             }}
           >
-            Download Excel
+            <IconExcel />
           </Button>
           <Button
             variant="ghost"
+            className="px-3"
             disabled={disabled}
+            aria-label="Download PDF"
+            title="Download PDF"
             onClick={() => {
               try {
                 const el = getContentEl();
@@ -194,11 +234,14 @@ function ReportCard(props: {
               }
             }}
           >
-            Download PDF
+            <IconPdf />
           </Button>
           <Button
             variant="ghost"
+            className="px-3"
             disabled={disabled}
+            aria-label="Print"
+            title="Print"
             onClick={() => {
               try {
                 const el = getContentEl();
@@ -213,7 +256,7 @@ function ReportCard(props: {
               }
             }}
           >
-            Print
+            <IconPrint />
           </Button>
         </div>
       </div>
