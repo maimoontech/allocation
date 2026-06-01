@@ -24,15 +24,18 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/parties", label: "Parties" },
     { to: "/venues", label: "Venues" },
     { to: "/schedules", label: "Schedules" },
-    { to: "/reports", label: "Reports" }
+    { to: "/reports", label: "Reports" },
+    { to: "/change-password", label: "Change Password" }
   ],
   party: [
     { to: "/my-schedule", label: "My Schedule" },
-    { to: "/rate-mic", label: "Rate Mic" }
+    { to: "/rate-mic", label: "Rate Mic" },
+    { to: "/change-password", label: "Change Password" }
   ],
   coordinator: [
     { to: "/assigned-parties", label: "Assigned Parties" },
-    { to: "/attendance-rating", label: "Attendance & Rating" }
+    { to: "/attendance-rating", label: "Attendance & Rating" },
+    { to: "/change-password", label: "Change Password" }
   ]
 };
 

@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { authenticate, refreshAccessToken, revokeRefreshToken } from "../services/authService";
+import { authenticate, changePassword, refreshAccessToken, revokeRefreshToken } from "../services/authService";
+import { requireAuth, requireRole } from "../middleware/auth";
 import { fail, ok } from "../utils/response";
 import type { Role } from "../middleware/auth";
 
@@ -45,4 +46,27 @@ authRoutes.post("/logout", async (req, res) => {
     }
   }
   return ok(res, { success: true }, "OK");
+});
+
+authRoutes.post("/change-password", requireAuth, requireRole(["zonal_head", "party", "coordinator"]), async (req, res) => {
+  const { current_password, new_password } = (req.body ?? {}) as {
+    current_password?: string;
+    new_password?: string;
+  };
+  if (!current_password || !new_password) return fail(res, "Invalid request", 400);
+
+  try {
+    await changePassword({
+      role: req.user!.role as "zonal_head" | "party" | "coordinator",
+      id: req.user!.id,
+      currentPassword: current_password,
+      newPassword: new_password
+    });
+    return ok(res, { success: true }, "Password changed");
+  } catch (err: any) {
+    if (err?.message === "INVALID_PASSWORD_CHANGE") {
+      return fail(res, "Current password is incorrect", 400);
+    }
+    return fail(res, "Failed to change password", 500);
+  }
 });

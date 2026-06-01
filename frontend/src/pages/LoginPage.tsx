@@ -37,7 +37,7 @@ export function LoginPage() {
   const roleHelperText = useMemo(() => {
     if (role === "admin") return "Use your Admin username";
     if (role === "zonal_head") return "Use your Zone name or Zone ID";
-    if (role === "party") return "Use your Party name or Party ID";
+    if (role === "party") return "Use your ITS No as User ID";
     return "Use your Mohallah name or Mohallah ID";
   }, [role]);
 
@@ -84,7 +84,7 @@ export function LoginPage() {
               options={roleOptions}
             />
             <Input
-              label="ID / Name"
+              label={role === "party" ? "ITS No" : "ID / Name"}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               autoComplete="username"

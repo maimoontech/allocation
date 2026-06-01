@@ -4,6 +4,8 @@ type ApiEnvelope<T> = { success: boolean; data: T; message?: string };
 
 export type Party = {
   id: number;
+  its_no: string;
+  leader_name: string;
   party_name: string;
   zone_id: number;
   zone_name: string;
@@ -15,6 +17,8 @@ export type Party = {
 
 export type CreatePartyRequest = {
   zone_id?: number;
+  its_no: string;
+  leader_name: string;
   party_name: string;
   category: Party["category"];
   is_active?: 0 | 1;
@@ -24,6 +28,8 @@ export type CreatePartyRequest = {
 export type UpdatePartyRequest = {
   id: number;
   zone_id?: number;
+  its_no: string;
+  leader_name: string;
   party_name: string;
   category: Party["category"];
   is_active?: 0 | 1;
@@ -62,4 +68,3 @@ export const partiesApi = api.injectEndpoints({
 });
 
 export const { useGetPartiesQuery, useCreatePartyMutation, useUpdatePartyMutation, useDeletePartyMutation } = partiesApi;
-

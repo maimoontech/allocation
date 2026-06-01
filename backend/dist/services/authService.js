@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.authenticate = authenticate;
 exports.refreshAccessToken = refreshAccessToken;
 exports.revokeRefreshToken = revokeRefreshToken;
+exports.changePassword = changePassword;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const crypto_1 = __importDefault(require("crypto"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
@@ -19,6 +20,13 @@ function hashRefreshToken(token) {
 }
 function randomRefreshToken() {
     return crypto_1.default.randomBytes(48).toString("base64url");
+}
+function tableForSelfServiceRole(role) {
+    if (role === "zonal_head")
+        return "zones";
+    if (role === "party")
+        return "parties";
+    return "mohallahs";
 }
 async function authenticate(params) {
     const { identifier, password, role } = params;
@@ -65,11 +73,7 @@ async function authenticate(params) {
         return issueTokens(user);
     }
     if (role === "party") {
-        const query = isNumericId(idOrName)
-            ? "SELECT id, party_name, zone_id, password_hash, last_login_at FROM parties WHERE id = :id LIMIT 1"
-            : "SELECT id, party_name, zone_id, password_hash, last_login_at FROM parties WHERE party_name = :name LIMIT 1";
-        const lookup = isNumericId(idOrName) ? { id: Number(idOrName) } : { name: idOrName };
-        const [rows] = await pool_1.pool.query(query, lookup);
+        const [rows] = await pool_1.pool.query("SELECT id, its_no, party_name, zone_id, password_hash, last_login_at FROM parties WHERE its_no = :its_no LIMIT 1", { its_no: idOrName });
         const party = rows[0];
         if (!party)
             throw new Error("INVALID_CREDENTIALS");
@@ -157,6 +161,27 @@ async function refreshAccessToken(refreshToken) {
 async function revokeRefreshToken(refreshToken) {
     const tokenHash = hashRefreshToken(refreshToken);
     await pool_1.pool.query("UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = :token_hash AND revoked_at IS NULL", { token_hash: tokenHash });
+}
+async function changePassword(params) {
+    const { role, id, currentPassword, newPassword } = params;
+    const current = currentPassword.trim();
+    const next = newPassword.trim();
+    if (!current || !next)
+        throw new Error("INVALID_PASSWORD_CHANGE");
+    const table = tableForSelfServiceRole(role);
+    const [rows] = await pool_1.pool.query(`SELECT password_hash FROM ${table} WHERE id = :id LIMIT 1`, { id });
+    const account = rows[0];
+    if (!account)
+        throw new Error("INVALID_PASSWORD_CHANGE");
+    const ok = await bcryptjs_1.default.compare(currentPassword, account.password_hash);
+    if (!ok)
+        throw new Error("INVALID_PASSWORD_CHANGE");
+    const password_hash = await bcryptjs_1.default.hash(newPassword, 10);
+    const updatedAtSql = table === "zones" ? ", updated_at = NOW()" : "";
+    await pool_1.pool.query(`UPDATE ${table} SET password_hash = :password_hash${updatedAtSql} WHERE id = :id`, {
+        id,
+        password_hash
+    });
 }
 async function loadUser(role, id) {
     if (role === "admin") {

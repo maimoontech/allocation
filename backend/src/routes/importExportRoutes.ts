@@ -133,8 +133,8 @@ const entityConfig = {
     exportHeaders: ["zone_name", "mohallah_name", "coordinator_name", "contact_number", "whatsapp_number", "password"]
   },
   parties: {
-    templateHeaders: ["zone_name", "party_name", "category", "is_active", "password"],
-    exportHeaders: ["zone_name", "party_name", "category", "is_active", "password"]
+    templateHeaders: ["zone_name", "its_no", "leader_name", "party_name", "category", "is_active", "password"],
+    exportHeaders: ["zone_name", "its_no", "leader_name", "party_name", "category", "is_active", "password"]
   },
   venues: {
     templateHeaders: ["zone_name", "mohallah_name", "venue_name", "min_parties", "max_parties", "is_active"],
@@ -181,7 +181,7 @@ importExportRoutes.get("/:entity/export", async (req, res) => {
 
   if (entity === "parties") {
     const [rows] = await pool.query<any[]>(
-      `SELECT z.zone_name, p.party_name, p.category, p.is_active, '' AS password
+      `SELECT z.zone_name, p.its_no, p.leader_name, p.party_name, p.category, p.is_active, '' AS password
        FROM parties p JOIN zones z ON z.id = p.zone_id
        ORDER BY z.zone_name, p.party_name`
     );
@@ -392,11 +392,15 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
 
         if (entity === "parties") {
           const zone_name = required(get("zone_name"));
+          const its_no = required(get("its_no"));
+          const leader_name = required(get("leader_name"));
           const party_name = required(get("party_name"));
           const category = required(get("category")) as any;
           const is_active = asBool01(get("is_active"));
           const password = get("password");
-          if (!zone_name || !party_name || !category) throw new Error("zone_name, party_name and category are required");
+          if (!zone_name || !its_no || !leader_name || !party_name || !category) {
+            throw new Error("zone_name, its_no, leader_name, party_name and category are required");
+          }
           if (!["A", "B", "C", "H"].includes(category)) throw new Error("category must be A, B, C or H");
           const zone_id = zoneByName.get(zone_name);
           if (!zone_id) throw new Error(`Zone not found: ${zone_name}`);
@@ -404,7 +408,7 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
           const key = `${zone_name}||${party_name}`;
           const existingId = partyByKey.get(key) ?? null;
           if (existingId) {
-            const params: any = { id: existingId, category, is_active: is_active ?? 1 };
+            const params: any = { id: existingId, its_no, leader_name, category, is_active: is_active ?? 1 };
             let passwordSql = "";
             if (password) {
               params.password_hash = await bcrypt.hash(String(password), 10);
@@ -412,7 +416,9 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
             }
             const [r] = await conn.query<any>(
               `UPDATE parties
-               SET category = :category,
+               SET its_no = :its_no,
+                   leader_name = :leader_name,
+                   category = :category,
                    is_active = :is_active
                    ${passwordSql}
                WHERE id = :id`,
@@ -425,9 +431,9 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
             if (!password) throw new Error("password is required for new party");
             const password_hash = await bcrypt.hash(String(password), 10);
             const [r] = await conn.query<any>(
-              `INSERT INTO parties (party_name, zone_id, category, is_active, password_hash, created_at)
-               VALUES (:party_name, :zone_id, :category, :is_active, :password_hash, NOW())`,
-              { party_name, zone_id, category, is_active: is_active ?? 1, password_hash }
+              `INSERT INTO parties (its_no, leader_name, party_name, zone_id, category, is_active, password_hash, created_at)
+               VALUES (:its_no, :leader_name, :party_name, :zone_id, :category, :is_active, :password_hash, NOW())`,
+              { its_no, leader_name, party_name, zone_id, category, is_active: is_active ?? 1, password_hash }
             );
             result.inserted += 1;
             const insertId = Number((r as any).insertId ?? 0);

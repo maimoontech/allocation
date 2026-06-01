@@ -15,11 +15,11 @@ function requireEnv(name, fallback) {
 exports.env = {
     port: Number(process.env.PORT ?? "4000"),
     db: {
-        host: requireEnv("DB_HOST", "localhost"),
+        host: requireEnv("DB_HOST", "64.20.33.10"),
         port: Number(process.env.DB_PORT ?? "3306"),
         name: requireEnv("DB_NAME", "masjid_scheduling"),
-        user: requireEnv("DB_USER", "root"),
-        pass: process.env.DB_PASS ?? ""
+        user: requireEnv("DB_USER", "karachizakereen"),
+        pass: process.env.DB_PASS ?? "Kz@5253"
     },
     jwt: {
         secret: requireEnv("JWT_SECRET", "change_me"),

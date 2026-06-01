@@ -125,8 +125,8 @@ const entityConfig = {
         exportHeaders: ["zone_name", "mohallah_name", "coordinator_name", "contact_number", "whatsapp_number", "password"]
     },
     parties: {
-        templateHeaders: ["zone_name", "party_name", "category", "is_active", "password"],
-        exportHeaders: ["zone_name", "party_name", "category", "is_active", "password"]
+        templateHeaders: ["zone_name", "its_no", "leader_name", "party_name", "category", "is_active", "password"],
+        exportHeaders: ["zone_name", "its_no", "leader_name", "party_name", "category", "is_active", "password"]
     },
     venues: {
         templateHeaders: ["zone_name", "mohallah_name", "venue_name", "min_parties", "max_parties", "is_active"],
@@ -163,7 +163,7 @@ exports.importExportRoutes.get("/:entity/export", async (req, res) => {
         return csvResponse(res, "mohallahs.csv", toCsv(rows, cfg.exportHeaders));
     }
     if (entity === "parties") {
-        const [rows] = await pool_1.pool.query(`SELECT z.zone_name, p.party_name, p.category, p.is_active, '' AS password
+        const [rows] = await pool_1.pool.query(`SELECT z.zone_name, p.its_no, p.leader_name, p.party_name, p.category, p.is_active, '' AS password
        FROM parties p JOIN zones z ON z.id = p.zone_id
        ORDER BY z.zone_name, p.party_name`);
         return csvResponse(res, "parties.csv", toCsv(rows, cfg.exportHeaders));
@@ -349,12 +349,15 @@ exports.importExportRoutes.post("/:entity/import", async (req, res) => {
                 }
                 if (entity === "parties") {
                     const zone_name = required(get("zone_name"));
+                    const its_no = required(get("its_no"));
+                    const leader_name = required(get("leader_name"));
                     const party_name = required(get("party_name"));
                     const category = required(get("category"));
                     const is_active = asBool01(get("is_active"));
                     const password = get("password");
-                    if (!zone_name || !party_name || !category)
-                        throw new Error("zone_name, party_name and category are required");
+                    if (!zone_name || !its_no || !leader_name || !party_name || !category) {
+                        throw new Error("zone_name, its_no, leader_name, party_name and category are required");
+                    }
                     if (!["A", "B", "C", "H"].includes(category))
                         throw new Error("category must be A, B, C or H");
                     const zone_id = zoneByName.get(zone_name);
@@ -363,14 +366,16 @@ exports.importExportRoutes.post("/:entity/import", async (req, res) => {
                     const key = `${zone_name}||${party_name}`;
                     const existingId = partyByKey.get(key) ?? null;
                     if (existingId) {
-                        const params = { id: existingId, category, is_active: is_active ?? 1 };
+                        const params = { id: existingId, its_no, leader_name, category, is_active: is_active ?? 1 };
                         let passwordSql = "";
                         if (password) {
                             params.password_hash = await bcryptjs_1.default.hash(String(password), 10);
                             passwordSql = ", password_hash = :password_hash";
                         }
                         const [r] = await conn.query(`UPDATE parties
-               SET category = :category,
+               SET its_no = :its_no,
+                   leader_name = :leader_name,
+                   category = :category,
                    is_active = :is_active
                    ${passwordSql}
                WHERE id = :id`, params);
@@ -384,8 +389,8 @@ exports.importExportRoutes.post("/:entity/import", async (req, res) => {
                         if (!password)
                             throw new Error("password is required for new party");
                         const password_hash = await bcryptjs_1.default.hash(String(password), 10);
-                        const [r] = await conn.query(`INSERT INTO parties (party_name, zone_id, category, is_active, password_hash, created_at)
-               VALUES (:party_name, :zone_id, :category, :is_active, :password_hash, NOW())`, { party_name, zone_id, category, is_active: is_active ?? 1, password_hash });
+                        const [r] = await conn.query(`INSERT INTO parties (its_no, leader_name, party_name, zone_id, category, is_active, password_hash, created_at)
+               VALUES (:its_no, :leader_name, :party_name, :zone_id, :category, :is_active, :password_hash, NOW())`, { its_no, leader_name, party_name, zone_id, category, is_active: is_active ?? 1, password_hash });
                         result.inserted += 1;
                         const insertId = Number(r.insertId ?? 0);
                         if (Number.isFinite(insertId) && insertId > 0)

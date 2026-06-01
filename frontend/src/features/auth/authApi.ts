@@ -20,6 +20,11 @@ export type LoginResponse = {
   user: AuthUser;
 };
 
+export type ChangePasswordRequest = {
+  current_password: string;
+  new_password: string;
+};
+
 export const authApi = api.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation<LoginResponse, LoginRequest>({
@@ -44,8 +49,16 @@ export const authApi = api.injectEndpoints({
         method: "POST"
       }),
       transformResponse: (response: ApiEnvelope<{ success: boolean }>) => response.data
+    }),
+    changePassword: builder.mutation<{ success: boolean }, ChangePasswordRequest>({
+      query: (body) => ({
+        url: "/auth/change-password",
+        method: "POST",
+        body
+      }),
+      transformResponse: (response: ApiEnvelope<{ success: boolean }>) => response.data
     })
   })
 });
 
-export const { useLoginMutation, useRefreshMutation, useLogoutMutation } = authApi;
+export const { useLoginMutation, useRefreshMutation, useLogoutMutation, useChangePasswordMutation } = authApi;

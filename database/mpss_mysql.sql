@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS mohallahs (
 
 CREATE TABLE IF NOT EXISTS parties (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  its_no VARCHAR(20) NOT NULL,
+  leader_name VARCHAR(150) NOT NULL,
   party_name VARCHAR(150) NOT NULL,
   zone_id INT UNSIGNED NOT NULL,
   category ENUM('A','B','C','H') NOT NULL,
@@ -56,6 +58,7 @@ CREATE TABLE IF NOT EXISTS parties (
   last_login_at DATETIME NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  UNIQUE KEY uq_parties_its_no (its_no),
   UNIQUE KEY uq_parties_zone_name (zone_id, party_name),
   KEY idx_parties_zone_id (zone_id),
   KEY idx_parties_category (category),
@@ -195,4 +198,3 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 INSERT INTO admins (username, admin_name, password_hash)
 VALUES ('admin', 'System Admin', '$2b$10$/Y4NYMHT/5NDeFbFY7ty7e92kaACeq6nxPS3z5m.GWSohNAloziAu')
 ON DUPLICATE KEY UPDATE admin_name = VALUES(admin_name), password_hash = VALUES(password_hash);
-

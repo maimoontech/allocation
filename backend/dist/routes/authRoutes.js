@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.authRoutes = void 0;
 const express_1 = require("express");
 const authService_1 = require("../services/authService");
+const auth_1 = require("../middleware/auth");
 const response_1 = require("../utils/response");
 exports.authRoutes = (0, express_1.Router)();
 exports.authRoutes.post("/login", async (req, res) => {
@@ -42,4 +43,24 @@ exports.authRoutes.post("/logout", async (req, res) => {
         }
     }
     return (0, response_1.ok)(res, { success: true }, "OK");
+});
+exports.authRoutes.post("/change-password", auth_1.requireAuth, (0, auth_1.requireRole)(["zonal_head", "party", "coordinator"]), async (req, res) => {
+    const { current_password, new_password } = (req.body ?? {});
+    if (!current_password || !new_password)
+        return (0, response_1.fail)(res, "Invalid request", 400);
+    try {
+        await (0, authService_1.changePassword)({
+            role: req.user.role,
+            id: req.user.id,
+            currentPassword: current_password,
+            newPassword: new_password
+        });
+        return (0, response_1.ok)(res, { success: true }, "Password changed");
+    }
+    catch (err) {
+        if (err?.message === "INVALID_PASSWORD_CHANGE") {
+            return (0, response_1.fail)(res, "Current password is incorrect", 400);
+        }
+        return (0, response_1.fail)(res, "Failed to change password", 500);
+    }
 });

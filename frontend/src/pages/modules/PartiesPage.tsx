@@ -46,6 +46,8 @@ export function PartiesPage() {
 
   const [editing, setEditing] = useState<Party | null>(null);
   const [zoneId, setZoneId] = useState<string>("");
+  const [itsNo, setItsNo] = useState("");
+  const [leaderName, setLeaderName] = useState("");
   const [partyName, setPartyName] = useState("");
   const [category, setCategory] = useState<Party["category"]>("A");
   const [isActive, setIsActive] = useState<string>("1");
@@ -83,6 +85,8 @@ export function PartiesPage() {
   function resetForm() {
     setEditing(null);
     setZoneId("");
+    setItsNo("");
+    setLeaderName("");
     setPartyName("");
     setCategory("A");
     setIsActive("1");
@@ -92,10 +96,12 @@ export function PartiesPage() {
   async function onSubmit() {
     const finalZoneId = role === "zonal_head" ? user?.zoneId : Number(zoneId);
     if (role !== "zonal_head" && (!Number.isFinite(finalZoneId) || !finalZoneId)) return;
-    if (!partyName.trim()) return;
+    if (!itsNo.trim() || !leaderName.trim() || !partyName.trim()) return;
     if (!editing && !password.trim()) return;
 
     const base = {
+      its_no: itsNo.trim(),
+      leader_name: leaderName.trim(),
       party_name: partyName.trim(),
       category,
       is_active: isActive === "1" ? (1 as const) : (0 as const)
@@ -137,6 +143,8 @@ export function PartiesPage() {
           {role === "admin" ? (
             <Select label="Zone" value={zoneId} onChange={(e) => setZoneId(e.target.value)} options={zoneOptions} />
           ) : null}
+          <Input label="ITS No" value={itsNo} onChange={(e) => setItsNo(e.target.value)} />
+          <Input label="Leader Name" value={leaderName} onChange={(e) => setLeaderName(e.target.value)} />
           <Input label="Party Name" value={partyName} onChange={(e) => setPartyName(e.target.value)} />
           <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as Party["category"])} options={categoryOptions} />
           <Select label="Status" value={isActive} onChange={(e) => setIsActive(e.target.value)} options={statusOptions} />
@@ -180,6 +188,8 @@ export function PartiesPage() {
               <thead>
                 <tr className="border-b border-border">
                   <th className="py-2 pr-3">Zone</th>
+                  <th className="py-2 pr-3">ITS No</th>
+                  <th className="py-2 pr-3">Leader</th>
                   <th className="py-2 pr-3">Party</th>
                   <th className="py-2 pr-3">Category</th>
                   <th className="py-2 pr-3">Status</th>
@@ -190,6 +200,8 @@ export function PartiesPage() {
                 {sorted.map((p) => (
                   <tr key={p.id} className="border-b border-border last:border-0">
                     <td className="py-2 pr-3">{p.zone_name}</td>
+                    <td className="py-2 pr-3">{p.its_no}</td>
+                    <td className="py-2 pr-3">{p.leader_name}</td>
                     <td className="py-2 pr-3 font-semibold">{p.party_name}</td>
                     <td className="py-2 pr-3">{p.category}</td>
                     <td className="py-2 pr-3">{p.is_active ? "Active" : "Inactive"}</td>
@@ -201,6 +213,8 @@ export function PartiesPage() {
                           onClick={() => {
                             setEditing(p);
                             setZoneId(String(p.zone_id));
+                            setItsNo(p.its_no);
+                            setLeaderName(p.leader_name);
                             setPartyName(p.party_name);
                             setCategory(p.category);
                             setIsActive(p.is_active ? "1" : "0");

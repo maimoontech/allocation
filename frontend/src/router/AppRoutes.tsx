@@ -15,6 +15,7 @@ import { MySchedulePage } from "../pages/party/MySchedulePage";
 import { RateMicPage } from "../pages/party/RateMicPage";
 import { AssignedPartiesPage } from "../pages/coordinator/AssignedPartiesPage";
 import { AttendanceRatingPage } from "../pages/coordinator/AttendanceRatingPage";
+import { ChangePasswordPage } from "../pages/ChangePasswordPage";
 
 export function AppRoutes() {
   return (
@@ -45,6 +46,10 @@ export function AppRoutes() {
         <Route element={<ProtectedRoute roles={["coordinator"]} />}>
           <Route path="/assigned-parties" element={<AssignedPartiesPage />} />
           <Route path="/attendance-rating" element={<AttendanceRatingPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute roles={["zonal_head", "party", "coordinator"]} />}>
+          <Route path="/change-password" element={<ChangePasswordPage />} />
         </Route>
 
         <Route path="/" element={<Navigate to="/login" replace />} />
