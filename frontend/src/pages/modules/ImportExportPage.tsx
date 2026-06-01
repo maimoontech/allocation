@@ -28,6 +28,14 @@ function downloadTextFile(filename: string, text: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
+function parseEnvelope<T>(raw: string): ApiEnvelope<T> {
+  try {
+    return JSON.parse(raw) as ApiEnvelope<T>;
+  } catch {
+    throw new Error(raw || "Request failed");
+  }
+}
+
 export function ImportExportPage() {
   const token = useAppSelector((s) => s.auth.token);
   const [entity, setEntity] = useState<EntityKey>("zones");
@@ -116,7 +124,8 @@ export function ImportExportPage() {
         },
         body: JSON.stringify({ csv })
       });
-      const json = (await res.json()) as ApiEnvelope<ImportResult>;
+      const raw = await res.text();
+      const json = parseEnvelope<ImportResult>(raw);
       if (!res.ok || !json.success) {
         throw new Error(json.message || "Import failed");
       }
