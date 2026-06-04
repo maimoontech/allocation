@@ -4,6 +4,7 @@ import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
+import { calculateHijriDate } from "../../utils/hijriDate";
 import {
   useCreateMiqaatMutation,
   useDeleteMiqaatMutation,
@@ -118,6 +119,11 @@ export function MiqaatsPage() {
     setIsActive("1");
   }
 
+  function handleEnglishDateChange(value: string) {
+    setEnglishDate(value);
+    setHijriDate(value ? calculateHijriDate(value) : "");
+  }
+
   async function onSubmit() {
     if (!name.trim() || !englishDate.trim()) return;
     const payload = {
@@ -152,8 +158,8 @@ export function MiqaatsPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Input label="Miqaat Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input label="English Date" type="date" value={englishDate} onChange={(e) => setEnglishDate(e.target.value)} />
-          <Input label="Hijri Date (optional)" value={hijriDate} onChange={(e) => setHijriDate(e.target.value)} />
+          <Input label="English Date" type="date" value={englishDate} onChange={(e) => handleEnglishDateChange(e.target.value)} />
+          <Input label="Hijri Date (editable)" value={hijriDate} onChange={(e) => setHijriDate(e.target.value)} />
           <Select label="Status" value={isActive} onChange={(e) => setIsActive(e.target.value)} options={activeOptions} />
         </div>
         <div className="mt-3 flex gap-2">
