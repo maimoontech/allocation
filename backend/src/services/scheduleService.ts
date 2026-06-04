@@ -2,12 +2,17 @@ import { pool } from "../db/pool";
 
 type Party = { id: number; category: "A" | "B" | "C" | "H" };
 type Venue = { id: number; min_parties: number; max_parties: number };
+type ActiveCategory = "A" | "B" | "C";
 
 function categoryRank(category: Party["category"]) {
   if (category === "A") return 0;
   if (category === "B") return 1;
   if (category === "C") return 2;
   return 99;
+}
+
+function activeCategoryOrder(): ActiveCategory[] {
+  return ["A", "B", "C"];
 }
 
 export async function generateSchedule(params: {
@@ -110,39 +115,44 @@ export async function generateSchedule(params: {
       return candidates.find((p) => !assignedParty.has(p.id)) ?? null;
     }
 
-    const partiesA = parties.filter((p) => p.category === "A");
-    const partiesB = parties.filter((p) => p.category === "B");
+    const partiesByCategory: Record<ActiveCategory, Party[]> = {
+      A: parties.filter((p) => p.category === "A"),
+      B: parties.filter((p) => p.category === "B"),
+      C: parties.filter((p) => p.category === "C")
+    };
 
-    for (const venue of venues) {
-      if (!canPlace(venue.id)) continue;
-      const pickedA = pickParty(partiesA, venue.id);
-      if (pickedA) {
-        place(venue.id, pickedA.id);
-        continue;
+    function pickByPriority(venueId: number) {
+      for (const category of activeCategoryOrder()) {
+        const picked = pickParty(partiesByCategory[category], venueId);
+        if (picked) return picked;
       }
-      const pickedB = pickParty(partiesB, venue.id);
-      if (pickedB) place(venue.id, pickedB.id);
+      return null;
     }
 
-    for (const party of parties) {
-      if (assignedParty.has(party.id)) continue;
-      let bestVenueId: number | null = null;
-      let bestScore = Number.POSITIVE_INFINITY;
+    function fillVenuesToTarget(targetForVenue: (venue: Venue) => number) {
+      let progress = true;
+      while (progress) {
+        progress = false;
+        for (const venue of venues) {
+          const target = Math.min(Math.max(0, targetForVenue(venue)), venue.max_parties);
+          if ((occupancy.get(venue.id) ?? 0) >= target) continue;
+          if (!canPlace(venue.id)) continue;
 
-      for (const venue of venues) {
-        if (!canPlace(venue.id)) continue;
-        const isVisited = visited.has(`${party.id}:${venue.id}`) ? 1 : 0;
-        const occ = occupancy.get(venue.id) ?? 0;
-        const score = isVisited * 100 + occ;
-        if (score < bestScore) {
-          bestScore = score;
-          bestVenueId = venue.id;
+          const picked = pickByPriority(venue.id);
+          if (!picked) continue;
+
+          place(venue.id, picked.id);
+          progress = true;
         }
       }
-
-      if (bestVenueId === null) break;
-      place(bestVenueId, party.id);
     }
+
+    // First ensure each active venue gets a first assignment, preferring A then B then C.
+    fillVenuesToTarget(() => 1);
+
+    // Then honor venue minimum capacity before filling additional optional capacity.
+    fillVenuesToTarget((venue) => Math.max(1, venue.min_parties));
+    fillVenuesToTarget((venue) => Math.max(venue.min_parties, venue.max_parties));
 
     if (assignments.length === 0) throw new Error("NO_ASSIGNMENTS");
 
@@ -177,4 +187,3 @@ export async function generateSchedule(params: {
     connection.release();
   }
 }
-

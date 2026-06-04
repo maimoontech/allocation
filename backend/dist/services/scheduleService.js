@@ -11,6 +11,9 @@ function categoryRank(category) {
         return 2;
     return 99;
 }
+function activeCategoryOrder() {
+    return ["A", "B", "C"];
+}
 async function generateSchedule(params) {
     const { miqaatId, zoneId, overwrite, createdBy } = params;
     const connection = await pool_1.pool.getConnection();
@@ -82,40 +85,42 @@ async function generateSchedule(params) {
                 return notVisited;
             return candidates.find((p) => !assignedParty.has(p.id)) ?? null;
         }
-        const partiesA = parties.filter((p) => p.category === "A");
-        const partiesB = parties.filter((p) => p.category === "B");
-        for (const venue of venues) {
-            if (!canPlace(venue.id))
-                continue;
-            const pickedA = pickParty(partiesA, venue.id);
-            if (pickedA) {
-                place(venue.id, pickedA.id);
-                continue;
+        const partiesByCategory = {
+            A: parties.filter((p) => p.category === "A"),
+            B: parties.filter((p) => p.category === "B"),
+            C: parties.filter((p) => p.category === "C")
+        };
+        function pickByPriority(venueId) {
+            for (const category of activeCategoryOrder()) {
+                const picked = pickParty(partiesByCategory[category], venueId);
+                if (picked)
+                    return picked;
             }
-            const pickedB = pickParty(partiesB, venue.id);
-            if (pickedB)
-                place(venue.id, pickedB.id);
+            return null;
         }
-        for (const party of parties) {
-            if (assignedParty.has(party.id))
-                continue;
-            let bestVenueId = null;
-            let bestScore = Number.POSITIVE_INFINITY;
-            for (const venue of venues) {
-                if (!canPlace(venue.id))
-                    continue;
-                const isVisited = visited.has(`${party.id}:${venue.id}`) ? 1 : 0;
-                const occ = occupancy.get(venue.id) ?? 0;
-                const score = isVisited * 100 + occ;
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestVenueId = venue.id;
+        function fillVenuesToTarget(targetForVenue) {
+            let progress = true;
+            while (progress) {
+                progress = false;
+                for (const venue of venues) {
+                    const target = Math.min(Math.max(0, targetForVenue(venue)), venue.max_parties);
+                    if ((occupancy.get(venue.id) ?? 0) >= target)
+                        continue;
+                    if (!canPlace(venue.id))
+                        continue;
+                    const picked = pickByPriority(venue.id);
+                    if (!picked)
+                        continue;
+                    place(venue.id, picked.id);
+                    progress = true;
                 }
             }
-            if (bestVenueId === null)
-                break;
-            place(bestVenueId, party.id);
         }
+        // First ensure each active venue gets a first assignment, preferring A then B then C.
+        fillVenuesToTarget(() => 1);
+        // Then honor venue minimum capacity before filling additional optional capacity.
+        fillVenuesToTarget((venue) => Math.max(1, venue.min_parties));
+        fillVenuesToTarget((venue) => Math.max(venue.min_parties, venue.max_parties));
         if (assignments.length === 0)
             throw new Error("NO_ASSIGNMENTS");
         for (const a of assignments) {
