@@ -62,6 +62,22 @@ function openPrintWindow(title: string, bodyHtml: string) {
   }, 200);
 }
 
+function getErrorMessage(error: unknown) {
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return "Request failed";
+
+  const maybeError = error as {
+    data?: { message?: string };
+    error?: string;
+    status?: number | string;
+  };
+
+  if (maybeError.data?.message) return maybeError.data.message;
+  if (typeof maybeError.error === "string" && maybeError.error) return maybeError.error;
+  if (maybeError.status === 404) return "Delete route not found on server";
+  return "Request failed";
+}
+
 export function SchedulesPage() {
   const user = useAppSelector((s) => s.auth.user);
   const role = user?.role ?? "admin";
@@ -93,6 +109,8 @@ export function SchedulesPage() {
   const [editing, setEditing] = useState<ScheduleRow | null>(null);
   const [editVenueId, setEditVenueId] = useState<string>("");
   const [editPartyId, setEditPartyId] = useState<string>("");
+  const [actionMessage, setActionMessage] = useState<string>("");
+  const [actionError, setActionError] = useState<string>("");
 
   const isBusy = generateState.isLoading || updateState.isLoading || deleteState.isLoading || deleteScopeState.isLoading;
 
@@ -214,13 +232,36 @@ export function SchedulesPage() {
 
     const confirmed = window.confirm("Delete generated schedules for the selected Miqaat and selected Zone only?");
     if (!confirmed) return;
+    setActionMessage("");
+    setActionError("");
 
-    await deleteSchedulesByScope({
-      miqaat_id: mId,
-      zone_id: role === "admin" ? zId : undefined
-    }).unwrap();
+    try {
+      const result = await deleteSchedulesByScope({
+        miqaat_id: mId,
+        zone_id: role === "admin" ? zId : undefined
+      }).unwrap();
 
-    schedulesQuery.refetch();
+      await schedulesQuery.refetch();
+      setActionMessage(`${result.deleted} schedule row(s) deleted.`);
+      return;
+    } catch (bulkError) {
+      const targetRows = rows.filter((row) => row.miqaat_id === mId && row.zone_id === zId);
+      if (targetRows.length === 0) {
+        setActionError("No schedule rows found for the selected Miqaat and Zone.");
+        return;
+      }
+
+      try {
+        for (const row of targetRows) {
+          await deleteSchedule({ id: row.id }).unwrap();
+        }
+        await schedulesQuery.refetch();
+        setActionMessage(`${targetRows.length} schedule row(s) deleted.`);
+        return;
+      } catch (rowDeleteError) {
+        setActionError(getErrorMessage(rowDeleteError || bulkError));
+      }
+    }
   }
 
   return (
@@ -277,6 +318,8 @@ export function SchedulesPage() {
             Refresh
           </Button>
         </div>
+        {actionMessage ? <div className="mt-2 text-sm text-secondary">{actionMessage}</div> : null}
+        {actionError ? <div className="mt-2 text-sm text-danger">{actionError}</div> : null}
         {generateState.isError ? <div className="mt-2 text-sm text-danger">Failed to generate schedule</div> : null}
       </Card>
 
