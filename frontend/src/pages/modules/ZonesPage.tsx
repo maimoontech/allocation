@@ -142,6 +142,7 @@ export function ZonesPage() {
                             setContactNumber(z.contact_number ?? "");
                             setWhatsappNumber(z.whatsapp_number ?? "");
                             setPassword("");
+                            window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
                         >
                           Edit

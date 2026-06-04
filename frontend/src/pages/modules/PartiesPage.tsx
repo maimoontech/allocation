@@ -383,6 +383,7 @@ export function PartiesPage() {
                             setCategory(p.category);
                             setIsActive(p.is_active ? "1" : "0");
                             setPassword("");
+                            window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
                         >
                           Edit

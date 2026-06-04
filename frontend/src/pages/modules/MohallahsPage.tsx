@@ -349,6 +349,7 @@ export function MohallahsPage() {
                             setContactNumber(m.contact_number ?? "");
                             setWhatsappNumber(m.whatsapp_number ?? "");
                             setPassword("");
+                            window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
                         >
                           Edit

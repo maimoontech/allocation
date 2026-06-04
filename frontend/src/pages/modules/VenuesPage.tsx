@@ -369,6 +369,7 @@ export function VenuesPage() {
                             setMinParties(String(v.min_parties));
                             setMaxParties(String(v.max_parties));
                             setIsActive(v.is_active ? "1" : "0");
+                            window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
                         >
                           Edit

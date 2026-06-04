@@ -278,6 +278,7 @@ export function MiqaatsPage() {
                             setEnglishDate(m.english_date);
                             setHijriDate(m.hijri_date ?? "");
                             setIsActive(m.is_active ? "1" : "0");
+                            window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
                         >
                           Edit
