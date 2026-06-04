@@ -44,7 +44,7 @@ export function AssignedPartiesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="text-2xl font-bold">Assigned Parties View</div>
+      <div className="text-2xl font-bold">Venue Assigned Parties</div>
 
       <Card>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -73,7 +73,7 @@ export function AssignedPartiesPage() {
       ) : cards.length === 0 ? (
         <Card>
           <div className="text-sm text-textMuted">
-            No assigned parties yet. Ask Admin/Zonal Head to generate schedule for your zone.
+            No assigned parties yet. Ask Admin/Zonal Head to generate schedule for your venue.
           </div>
         </Card>
       ) : (

@@ -6,7 +6,6 @@ export type AuthUser = {
   displayName: string;
   zoneId?: number;
   partyId?: number;
-  mohallahId?: number;
+  venueId?: number;
   lastLoginAt?: string | null;
 };
-

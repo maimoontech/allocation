@@ -1,4 +1,5 @@
 import { Router } from "express";
+import bcrypt from "bcryptjs";
 import { pool } from "../db/pool";
 import { fail, ok } from "../utils/response";
 import { requireAuth, requireRole } from "../middleware/auth";
@@ -14,7 +15,9 @@ venuesRoutes.get("/", async (req, res) => {
   const params = Number.isFinite(zoneId) ? { zone_id: zoneId } : {};
 
   const [rows] = await pool.query<any[]>(
-    `SELECT v.id, v.venue_name, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name, v.min_parties, v.max_parties, v.is_active, v.created_at
+    `SELECT v.id, v.venue_name, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
+            v.coordinator_name, v.contact_number, v.whatsapp_number,
+            v.min_parties, v.max_parties, v.is_active, v.created_at
      FROM venues v
      JOIN mohallahs m ON m.id = v.mohallah_id
      JOIN zones z ON z.id = m.zone_id
@@ -27,19 +30,28 @@ venuesRoutes.get("/", async (req, res) => {
 
 venuesRoutes.post("/", async (req, res) => {
   const user = req.user!;
-  const { venue_name, mohallah_id, min_parties, max_parties, is_active } = req.body ?? {};
-  if (!venue_name || !mohallah_id) return fail(res, "Invalid request", 400);
+  const { venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password, min_parties, max_parties, is_active } =
+    req.body ?? {};
+  if (!venue_name || !mohallah_id || !password) return fail(res, "Invalid request", 400);
 
   if (user.role === "zonal_head") {
     const [rows] = await pool.query<any[]>("SELECT zone_id FROM mohallahs WHERE id = :id LIMIT 1", { id: mohallah_id });
     if (!rows[0] || rows[0].zone_id !== user.zoneId) return fail(res, "Forbidden", 403);
   }
 
+  const password_hash = await bcrypt.hash(String(password), 10);
   await pool.query(
-    "INSERT INTO venues (venue_name, mohallah_id, min_parties, max_parties, is_active, created_at) VALUES (:venue_name, :mohallah_id, :min_parties, :max_parties, :is_active, NOW())",
+    `INSERT INTO venues
+      (venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password_hash, min_parties, max_parties, is_active, created_at)
+     VALUES
+      (:venue_name, :mohallah_id, :coordinator_name, :contact_number, :whatsapp_number, :password_hash, :min_parties, :max_parties, :is_active, NOW())`,
     {
       venue_name,
       mohallah_id,
+      coordinator_name: coordinator_name || null,
+      contact_number: contact_number || null,
+      whatsapp_number: whatsapp_number || null,
+      password_hash,
       min_parties: min_parties ?? 1,
       max_parties: max_parties ?? 5,
       is_active: is_active ?? 1
@@ -53,7 +65,8 @@ venuesRoutes.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return fail(res, "Invalid ID", 400);
 
-  const { venue_name, mohallah_id, min_parties, max_parties, is_active } = req.body ?? {};
+  const { venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password, min_parties, max_parties, is_active } =
+    req.body ?? {};
   if (!venue_name || !mohallah_id) return fail(res, "Invalid request", 400);
 
   if (user.role === "zonal_head") {
@@ -61,16 +74,36 @@ venuesRoutes.put("/:id", async (req, res) => {
     if (!rows[0] || rows[0].zone_id !== user.zoneId) return fail(res, "Forbidden", 403);
   }
 
+  const params: any = {
+    id,
+    venue_name,
+    mohallah_id,
+    coordinator_name: coordinator_name || null,
+    contact_number: contact_number || null,
+    whatsapp_number: whatsapp_number || null,
+    min_parties: min_parties ?? 1,
+    max_parties: max_parties ?? 5,
+    is_active: is_active ?? 1
+  };
+  let passwordSql = "";
+  if (password) {
+    params.password_hash = await bcrypt.hash(String(password), 10);
+    passwordSql = ", password_hash = :password_hash";
+  }
+
   await pool.query(
-    "UPDATE venues SET venue_name = :venue_name, mohallah_id = :mohallah_id, min_parties = :min_parties, max_parties = :max_parties, is_active = :is_active WHERE id = :id",
-    {
-      id,
-      venue_name,
-      mohallah_id,
-      min_parties: min_parties ?? 1,
-      max_parties: max_parties ?? 5,
-      is_active: is_active ?? 1
-    }
+    `UPDATE venues
+     SET venue_name = :venue_name,
+         mohallah_id = :mohallah_id,
+         coordinator_name = :coordinator_name,
+         contact_number = :contact_number,
+         whatsapp_number = :whatsapp_number,
+         ${passwordSql ? "password_hash = :password_hash," : ""}
+         min_parties = :min_parties,
+         max_parties = :max_parties,
+         is_active = :is_active
+     WHERE id = :id`,
+    params
   );
   return ok(res, { success: true }, "Updated");
 });
@@ -83,4 +116,3 @@ venuesRoutes.delete("/:id", async (req, res) => {
   await pool.query("DELETE FROM venues WHERE id = :id", { id });
   return ok(res, { success: true }, "Deleted");
 });
-

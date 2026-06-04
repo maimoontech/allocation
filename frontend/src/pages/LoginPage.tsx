@@ -13,7 +13,7 @@ const roleOptions = [
   { value: "admin", label: "Admin" },
   { value: "zonal_head", label: "Zonal Head" },
   { value: "party", label: "Party" },
-  { value: "coordinator", label: "Mohallah Coordinator" }
+  { value: "coordinator", label: "Venue Coordinator" }
 ];
 
 function defaultPathByRole(role: Role) {
@@ -38,7 +38,7 @@ export function LoginPage() {
     if (role === "admin") return "Use your Admin username";
     if (role === "zonal_head") return "Use your Zone name or Zone ID";
     if (role === "party") return "Use your ITS No as User ID";
-    return "Use your Mohallah name or Mohallah ID";
+    return "Use your Venue name or Venue ID";
   }, [role]);
 
   return (

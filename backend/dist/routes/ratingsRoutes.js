@@ -42,16 +42,15 @@ exports.ratingsRoutes.post("/performance", auth_1.requireAuth, (0, auth_1.requir
     }
     const [rows] = await pool_1.pool.query(`SELECT s.id
      FROM schedules s
-     JOIN venues v ON v.id = s.venue_id
-     WHERE s.id = :id AND v.mohallah_id = :mohallah_id
-     LIMIT 1`, { id: scheduleId, mohallah_id: user.mohallahId });
+     WHERE s.id = :id AND s.venue_id = :venue_id
+     LIMIT 1`, { id: scheduleId, venue_id: user.venueId });
     if (!rows[0])
         return (0, response_1.fail)(res, "Forbidden", 403);
     try {
         await pool_1.pool.query(`INSERT INTO performance_ratings (schedule_id, coordinator_id, attended_properly, recitation_score, discipline_score, attendance_score, overall_score, comments, created_at)
        VALUES (:schedule_id, :coordinator_id, :attended_properly, :recitation, :discipline, :attendance, :overall, :comments, NOW())`, {
             schedule_id: scheduleId,
-            coordinator_id: user.mohallahId,
+            coordinator_id: user.venueId,
             attended_properly: attended_properly ? 1 : 0,
             recitation: scores.recitation,
             discipline: scores.discipline,

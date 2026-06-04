@@ -11,7 +11,7 @@ export type JwtClaims = {
   id: number;
   zoneId?: number;
   partyId?: number;
-  mohallahId?: number;
+  venueId?: number;
 };
 
 declare module "express-serve-static-core" {
@@ -41,4 +41,3 @@ export function requireRole(roles: Role[]) {
     return next();
   };
 }
-

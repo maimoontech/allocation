@@ -186,7 +186,7 @@ export function AttendanceRatingPage() {
         </Card>
       ) : rows.length === 0 ? (
         <Card>
-          <div className="text-sm text-textMuted">No schedule rows found for your Mohallah.</div>
+          <div className="text-sm text-textMuted">No schedule rows found for your venue.</div>
         </Card>
       ) : (
         <div className="space-y-3">

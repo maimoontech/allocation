@@ -91,6 +91,10 @@ export function VenuesPage() {
   const [editing, setEditing] = useState<Venue | null>(null);
   const [mohallahId, setMohallahId] = useState<string>("");
   const [venueName, setVenueName] = useState("");
+  const [coordinatorName, setCoordinatorName] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [password, setPassword] = useState("");
   const [minParties, setMinParties] = useState<string>("1");
   const [maxParties, setMaxParties] = useState<string>("5");
   const [isActive, setIsActive] = useState<string>("1");
@@ -167,6 +171,10 @@ export function VenuesPage() {
     setEditing(null);
     setMohallahId("");
     setVenueName("");
+    setCoordinatorName("");
+    setContactNumber("");
+    setWhatsappNumber("");
+    setPassword("");
     setMinParties("1");
     setMaxParties("5");
     setIsActive("1");
@@ -178,25 +186,39 @@ export function VenuesPage() {
     const max = Number(maxParties);
     if (!Number.isFinite(finalMohallahId) || finalMohallahId <= 0) return;
     if (!venueName.trim()) return;
+    if (!editing && !password.trim()) return;
     if (!Number.isFinite(min) || min <= 0) return;
     if (!Number.isFinite(max) || max <= 0) return;
     if (min > max) return;
 
-    const base = {
-      venue_name: venueName.trim(),
-      mohallah_id: finalMohallahId,
-      min_parties: min,
-      max_parties: max,
-      is_active: isActive === "1" ? (1 as const) : (0 as const)
-    };
-
     if (!editing) {
-      await createVenue(base).unwrap();
+      await createVenue({
+        venue_name: venueName.trim(),
+        mohallah_id: finalMohallahId,
+        coordinator_name: coordinatorName.trim() || null,
+        contact_number: contactNumber.trim() || null,
+        whatsapp_number: whatsappNumber.trim() || null,
+        password,
+        min_parties: min,
+        max_parties: max,
+        is_active: isActive === "1" ? (1 as const) : (0 as const)
+      }).unwrap();
       resetForm();
       return;
     }
 
-    await updateVenue({ id: editing.id, ...base }).unwrap();
+    await updateVenue({
+      id: editing.id,
+      venue_name: venueName.trim(),
+      mohallah_id: finalMohallahId,
+      coordinator_name: coordinatorName.trim() || null,
+      contact_number: contactNumber.trim() || null,
+      whatsapp_number: whatsappNumber.trim() || null,
+      password: password.trim() || undefined,
+      min_parties: min,
+      max_parties: max,
+      is_active: isActive === "1" ? (1 as const) : (0 as const)
+    }).unwrap();
     resetForm();
   }
 
@@ -221,6 +243,15 @@ export function VenuesPage() {
             options={mohallahOptions}
           />
           <Input label="Venue Name" value={venueName} onChange={(e) => setVenueName(e.target.value)} />
+          <Input label="Coordinator Name" value={coordinatorName} onChange={(e) => setCoordinatorName(e.target.value)} />
+          <Input label="Mobile No." value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} />
+          <Input label="WhatsApp No." value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} />
+          <Input
+            label={editing ? "New Password (optional)" : "Password"}
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
           <Input label="Min Parties" value={minParties} onChange={(e) => setMinParties(e.target.value)} />
           <Input label="Max Parties" value={maxParties} onChange={(e) => setMaxParties(e.target.value)} />
           <Select label="Status" value={isActive} onChange={(e) => setIsActive(e.target.value)} options={statusOptions} />
@@ -342,6 +373,9 @@ export function VenuesPage() {
                   <th className="py-2 pr-3">Zone</th>
                   <th className="py-2 pr-3">Mohallah</th>
                   <th className="py-2 pr-3">Venue</th>
+                  <th className="py-2 pr-3">Coordinator</th>
+                  <th className="py-2 pr-3">Mobile</th>
+                  <th className="py-2 pr-3">WhatsApp</th>
                   <th className="py-2 pr-3">Capacity</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Actions</th>
@@ -353,6 +387,9 @@ export function VenuesPage() {
                     <td className="py-2 pr-3">{v.zone_name}</td>
                     <td className="py-2 pr-3">{v.mohallah_name}</td>
                     <td className="py-2 pr-3 font-semibold">{v.venue_name}</td>
+                    <td className="py-2 pr-3">{v.coordinator_name ?? "—"}</td>
+                    <td className="py-2 pr-3">{v.contact_number ?? "—"}</td>
+                    <td className="py-2 pr-3">{v.whatsapp_number ?? "—"}</td>
                     <td className="py-2 pr-3">
                       {v.min_parties}/{v.max_parties}
                     </td>
@@ -366,6 +403,10 @@ export function VenuesPage() {
                             setEditing(v);
                             setMohallahId(String(v.mohallah_id));
                             setVenueName(v.venue_name);
+                            setCoordinatorName(v.coordinator_name ?? "");
+                            setContactNumber(v.contact_number ?? "");
+                            setWhatsappNumber(v.whatsapp_number ?? "");
+                            setPassword("");
                             setMinParties(String(v.min_parties));
                             setMaxParties(String(v.max_parties));
                             setIsActive(v.is_active ? "1" : "0");

@@ -18,7 +18,7 @@ exports.schedulesRoutes.get("/", async (req, res) => {
             : null;
     const conditions = [];
     const params = {};
-    params.coordinator_id = user.role === "coordinator" ? user.mohallahId : 0;
+    params.coordinator_id = user.role === "coordinator" ? user.venueId : 0;
     if (Number.isFinite(miqaatId)) {
         conditions.push("s.miqaat_id = :miqaat_id");
         params.miqaat_id = miqaatId;
@@ -28,8 +28,8 @@ exports.schedulesRoutes.get("/", async (req, res) => {
         params.party_id = user.partyId;
     }
     else if (user.role === "coordinator") {
-        conditions.push("m.id = :mohallah_id");
-        params.mohallah_id = user.mohallahId;
+        conditions.push("v.id = :venue_id");
+        params.venue_id = user.venueId;
     }
     else if (Number.isFinite(zoneId)) {
         conditions.push("m.zone_id = :zone_id");

@@ -74,7 +74,6 @@ export function MohallahsPage() {
   const [coordinatorName, setCoordinatorName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [password, setPassword] = useState("");
 
   const isBusy = createState.isLoading || updateState.isLoading || deleteState.isLoading;
 
@@ -147,14 +146,12 @@ export function MohallahsPage() {
     setCoordinatorName("");
     setContactNumber("");
     setWhatsappNumber("");
-    setPassword("");
   }
 
   async function onSubmit() {
     const finalZoneId = Number(zoneId);
     if (!Number.isFinite(finalZoneId) || finalZoneId <= 0) return;
     if (!mohallahName.trim() || !coordinatorName.trim()) return;
-    if (!editing && !password.trim()) return;
 
     if (!editing) {
       await createMohallah({
@@ -162,8 +159,7 @@ export function MohallahsPage() {
         mohallah_name: mohallahName.trim(),
         coordinator_name: coordinatorName.trim(),
         contact_number: contactNumber.trim() || null,
-        whatsapp_number: whatsappNumber.trim() || null,
-        password
+        whatsapp_number: whatsappNumber.trim() || null
       }).unwrap();
       resetForm();
       return;
@@ -175,8 +171,7 @@ export function MohallahsPage() {
       mohallah_name: mohallahName.trim(),
       coordinator_name: coordinatorName.trim(),
       contact_number: contactNumber.trim() || null,
-      whatsapp_number: whatsappNumber.trim() || null,
-      password: password.trim() ? password : undefined
+      whatsapp_number: whatsappNumber.trim() || null
     }).unwrap();
     resetForm();
   }
@@ -200,12 +195,6 @@ export function MohallahsPage() {
           <Input label="Coordinator Name" value={coordinatorName} onChange={(e) => setCoordinatorName(e.target.value)} />
           <Input label="Contact Number" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} />
           <Input label="WhatsApp Number" value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} />
-          <Input
-            label={editing ? "New Password (optional)" : "Password"}
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
         </div>
         <div className="mt-3 flex gap-2">
           <Button onClick={onSubmit} disabled={isBusy}>
@@ -348,7 +337,6 @@ export function MohallahsPage() {
                             setCoordinatorName(m.coordinator_name);
                             setContactNumber(m.contact_number ?? "");
                             setWhatsappNumber(m.whatsapp_number ?? "");
-                            setPassword("");
                             window.scrollTo({ top: 0, behavior: "smooth" });
                           }}
                         >

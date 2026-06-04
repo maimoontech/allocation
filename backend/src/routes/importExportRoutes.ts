@@ -191,16 +191,38 @@ const entityConfig = {
     exportHeaders: ["zone_name", "coordinator_name", "contact_number", "whatsapp_number", "password"]
   },
   mohallahs: {
-    templateHeaders: ["zone_name", "mohallah_name", "coordinator_name", "contact_number", "whatsapp_number", "password"],
-    exportHeaders: ["zone_name", "mohallah_name", "coordinator_name", "contact_number", "whatsapp_number", "password"]
+    templateHeaders: ["zone_name", "mohallah_name", "coordinator_name", "contact_number", "whatsapp_number"],
+    exportHeaders: ["zone_name", "mohallah_name", "coordinator_name", "contact_number", "whatsapp_number"]
   },
   parties: {
     templateHeaders: ["zone_name", "its_no", "leader_name", "party_name", "category", "is_active", "password"],
     exportHeaders: ["zone_name", "its_no", "leader_name", "party_name", "category", "is_active", "password"]
   },
   venues: {
-    templateHeaders: ["zone_name", "mohallah_name", "venue_name", "min_parties", "max_parties", "is_active"],
-    exportHeaders: ["zone_name", "mohallah_name", "venue_name", "min_parties", "max_parties", "is_active"]
+    templateHeaders: [
+      "zone_name",
+      "mohallah_name",
+      "venue_name",
+      "coordinator_name",
+      "contact_number",
+      "whatsapp_number",
+      "password",
+      "min_parties",
+      "max_parties",
+      "is_active"
+    ],
+    exportHeaders: [
+      "zone_name",
+      "mohallah_name",
+      "venue_name",
+      "coordinator_name",
+      "contact_number",
+      "whatsapp_number",
+      "password",
+      "min_parties",
+      "max_parties",
+      "is_active"
+    ]
   },
   miqaats: {
     templateHeaders: ["miqaat_name", "english_date", "hijri_date", "is_active"],
@@ -244,7 +266,7 @@ importExportRoutes.get("/:entity/export", async (req, res) => {
 
   if (entity === "mohallahs") {
     const [rows] = await pool.query<any[]>(
-      `SELECT z.zone_name, m.mohallah_name, m.coordinator_name, m.contact_number, m.whatsapp_number, '' AS password
+      `SELECT z.zone_name, m.mohallah_name, m.coordinator_name, m.contact_number, m.whatsapp_number
        FROM mohallahs m JOIN zones z ON z.id = m.zone_id
        ORDER BY z.zone_name, m.mohallah_name`
     );
@@ -262,7 +284,8 @@ importExportRoutes.get("/:entity/export", async (req, res) => {
 
   if (entity === "venues") {
     const [rows] = await pool.query<any[]>(
-      `SELECT z.zone_name, m.mohallah_name, v.venue_name, v.min_parties, v.max_parties, v.is_active
+      `SELECT z.zone_name, m.mohallah_name, v.venue_name, v.coordinator_name, v.contact_number, v.whatsapp_number,
+              '' AS password, v.min_parties, v.max_parties, v.is_active
        FROM venues v
        JOIN mohallahs m ON m.id = v.mohallah_id
        JOIN zones z ON z.id = m.zone_id
@@ -407,7 +430,6 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
           const zone_name = required(get("zone_name"));
           const mohallah_name = required(get("mohallah_name"));
           const coordinator_name = required(get("coordinator_name"));
-          const password = get("password");
           if (!zone_name || !mohallah_name || !coordinator_name) {
             throw new Error("zone_name, mohallah_name and coordinator_name are required");
           }
@@ -423,17 +445,11 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
               contact_number: get("contact_number") || null,
               whatsapp_number: get("whatsapp_number") || null
             };
-            let passwordSql = "";
-            if (password) {
-              params.password_hash = await bcrypt.hash(String(password), 10);
-              passwordSql = ", password_hash = :password_hash";
-            }
             const [r] = await conn.query<any>(
               `UPDATE mohallahs
                SET coordinator_name = :coordinator_name,
                    contact_number = :contact_number,
                    whatsapp_number = :whatsapp_number
-                   ${passwordSql}
                WHERE id = :id`,
               params
             );
@@ -441,18 +457,15 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
             if (affected === 1) result.updated += 1;
             else result.skipped += 1;
           } else {
-            if (!password) throw new Error("password is required for new mohallah");
-            const password_hash = await bcrypt.hash(String(password), 10);
             const [r] = await conn.query<any>(
-              `INSERT INTO mohallahs (zone_id, mohallah_name, coordinator_name, contact_number, whatsapp_number, password_hash, created_at)
-               VALUES (:zone_id, :mohallah_name, :coordinator_name, :contact_number, :whatsapp_number, :password_hash, NOW())`,
+              `INSERT INTO mohallahs (zone_id, mohallah_name, coordinator_name, contact_number, whatsapp_number, created_at)
+               VALUES (:zone_id, :mohallah_name, :coordinator_name, :contact_number, :whatsapp_number, NOW())`,
               {
                 zone_id,
                 mohallah_name,
                 coordinator_name,
                 contact_number: get("contact_number") || null,
-                whatsapp_number: get("whatsapp_number") || null,
-                password_hash
+                whatsapp_number: get("whatsapp_number") || null
               }
             );
             result.inserted += 1;
@@ -518,6 +531,10 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
           const zone_name = required(get("zone_name"));
           const mohallah_name = required(get("mohallah_name"));
           const venue_name = required(get("venue_name"));
+          const coordinator_name = get("coordinator_name") || null;
+          const contact_number = get("contact_number") || null;
+          const whatsapp_number = get("whatsapp_number") || null;
+          const password = get("password");
           const min_parties = asInt(get("min_parties"));
           const max_parties = asInt(get("max_parties"));
           const is_active = asBool01(get("is_active"));
@@ -525,20 +542,36 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
           const mohallah_id = mohallahByKey.get(`${zone_name}||${mohallah_name}`);
           if (!mohallah_id) throw new Error(`Mohallah not found: ${zone_name} / ${mohallah_name}`);
 
+          const params: any = {
+            venue_name,
+            mohallah_id,
+            coordinator_name,
+            contact_number,
+            whatsapp_number,
+            password_hash: null,
+            min_parties: min_parties ?? 1,
+            max_parties: max_parties ?? 5,
+            is_active: is_active ?? 1
+          };
+          let passwordSql = "";
+          if (password) {
+            params.password_hash = await bcrypt.hash(String(password), 10);
+            passwordSql = ", password_hash = VALUES(password_hash)";
+          }
+
           const [r] = await conn.query<any>(
-            `INSERT INTO venues (venue_name, mohallah_id, min_parties, max_parties, is_active, created_at)
-             VALUES (:venue_name, :mohallah_id, :min_parties, :max_parties, :is_active, NOW())
+            `INSERT INTO venues
+               (venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password_hash, min_parties, max_parties, is_active, created_at)
+             VALUES
+               (:venue_name, :mohallah_id, :coordinator_name, :contact_number, :whatsapp_number, :password_hash, :min_parties, :max_parties, :is_active, NOW())
              ON DUPLICATE KEY UPDATE
+               coordinator_name = VALUES(coordinator_name),
+               contact_number = VALUES(contact_number),
+               whatsapp_number = VALUES(whatsapp_number),
                min_parties = VALUES(min_parties),
                max_parties = VALUES(max_parties),
-               is_active = VALUES(is_active)`,
-            {
-              venue_name,
-              mohallah_id,
-              min_parties: min_parties ?? 1,
-              max_parties: max_parties ?? 5,
-              is_active: is_active ?? 1
-            }
+               is_active = VALUES(is_active)${passwordSql}`,
+            params
           );
           const affected = Number((r as any).affectedRows ?? 0);
           if (affected === 1) result.inserted += 1;

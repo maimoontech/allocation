@@ -11,7 +11,7 @@ type AuthUser = {
   displayName: string;
   zoneId?: number;
   partyId?: number;
-  mohallahId?: number;
+  venueId?: number;
   lastLoginAt?: string | null;
 };
 
@@ -30,7 +30,7 @@ function randomRefreshToken() {
 function tableForSelfServiceRole(role: Exclude<Role, "admin">) {
   if (role === "zonal_head") return "zones";
   if (role === "party") return "parties";
-  return "mohallahs";
+  return "venues";
 }
 
 export async function authenticate(params: {
@@ -111,24 +111,32 @@ export async function authenticate(params: {
   }
 
   const query = isNumericId(idOrName)
-    ? "SELECT id, mohallah_name, zone_id, password_hash, last_login_at FROM mohallahs WHERE id = :id LIMIT 1"
-    : "SELECT id, mohallah_name, zone_id, password_hash, last_login_at FROM mohallahs WHERE mohallah_name = :name LIMIT 1";
+    ? `SELECT v.id, v.venue_name, m.zone_id, v.password_hash, v.last_login_at
+       FROM venues v
+       JOIN mohallahs m ON m.id = v.mohallah_id
+       WHERE v.id = :id
+       LIMIT 1`
+    : `SELECT v.id, v.venue_name, m.zone_id, v.password_hash, v.last_login_at
+       FROM venues v
+       JOIN mohallahs m ON m.id = v.mohallah_id
+       WHERE v.venue_name = :name
+       LIMIT 1`;
   const lookup = isNumericId(idOrName) ? { id: Number(idOrName) } : { name: idOrName };
   const [rows] = await pool.query<any[]>(query, lookup);
-  const mohallah = rows[0];
-  if (!mohallah) throw new Error("INVALID_CREDENTIALS");
-  const ok = await bcrypt.compare(password, mohallah.password_hash);
+  const venue = rows[0];
+  if (!venue || !venue.password_hash) throw new Error("INVALID_CREDENTIALS");
+  const ok = await bcrypt.compare(password, venue.password_hash);
   if (!ok) throw new Error("INVALID_CREDENTIALS");
 
-  await pool.query("UPDATE mohallahs SET last_login_at = NOW() WHERE id = :id", { id: mohallah.id });
+  await pool.query("UPDATE venues SET last_login_at = NOW() WHERE id = :id", { id: venue.id });
 
   const user: AuthUser = {
     role,
-    id: mohallah.id,
-    displayName: mohallah.mohallah_name,
-    zoneId: mohallah.zone_id,
-    mohallahId: mohallah.id,
-    lastLoginAt: mohallah.last_login_at
+    id: venue.id,
+    displayName: venue.venue_name,
+    zoneId: venue.zone_id,
+    venueId: venue.id,
+    lastLoginAt: venue.last_login_at
   };
   return issueTokens(user);
 }
@@ -140,7 +148,7 @@ async function issueTokens(user: AuthUser): Promise<{ user: AuthUser; token: str
     id: user.id,
     zoneId: user.zoneId,
     partyId: user.partyId,
-    mohallahId: user.mohallahId
+    venueId: user.venueId
   };
 
   const token = jwt.sign(claims, env.jwt.secret, { expiresIn: env.jwt.expiresIn as any });
@@ -183,7 +191,7 @@ export async function refreshAccessToken(refreshToken: string) {
     id: user.id,
     zoneId: user.zoneId,
     partyId: user.partyId,
-    mohallahId: user.mohallahId
+    venueId: user.venueId
   };
   const token = jwt.sign(claims, env.jwt.secret, { expiresIn: env.jwt.expiresIn as any });
   return { token };
@@ -274,17 +282,21 @@ async function loadUser(role: Role, id: number): Promise<AuthUser> {
   }
 
   const [rows] = await pool.query<any[]>(
-    "SELECT id, mohallah_name, zone_id, last_login_at FROM mohallahs WHERE id = :id LIMIT 1",
+    `SELECT v.id, v.venue_name, m.zone_id, v.last_login_at
+     FROM venues v
+     JOIN mohallahs m ON m.id = v.mohallah_id
+     WHERE v.id = :id
+     LIMIT 1`,
     { id }
   );
-  const mohallah = rows[0];
-  if (!mohallah) throw new Error("INVALID_REFRESH");
+  const venue = rows[0];
+  if (!venue) throw new Error("INVALID_REFRESH");
   return {
     role,
-    id: mohallah.id,
-    displayName: mohallah.mohallah_name,
-    zoneId: mohallah.zone_id,
-    mohallahId: mohallah.id,
-    lastLoginAt: mohallah.last_login_at
+    id: venue.id,
+    displayName: venue.venue_name,
+    zoneId: venue.zone_id,
+    venueId: venue.id,
+    lastLoginAt: venue.last_login_at
   };
 }

@@ -9,15 +9,23 @@ export type Venue = {
   mohallah_name: string;
   zone_id: number;
   zone_name: string;
+  coordinator_name: string | null;
+  contact_number: string | null;
+  whatsapp_number: string | null;
   min_parties: number;
   max_parties: number;
   is_active: 0 | 1;
+  last_login_at?: string | null;
   created_at: string;
 };
 
 export type CreateVenueRequest = {
   venue_name: string;
   mohallah_id: number;
+  coordinator_name?: string | null;
+  contact_number?: string | null;
+  whatsapp_number?: string | null;
+  password: string;
   min_parties?: number;
   max_parties?: number;
   is_active?: 0 | 1;
@@ -27,6 +35,10 @@ export type UpdateVenueRequest = {
   id: number;
   venue_name: string;
   mohallah_id: number;
+  coordinator_name?: string | null;
+  contact_number?: string | null;
+  whatsapp_number?: string | null;
+  password?: string;
   min_parties?: number;
   max_parties?: number;
   is_active?: 0 | 1;
@@ -64,4 +76,3 @@ export const venuesApi = api.injectEndpoints({
 });
 
 export const { useGetVenuesQuery, useCreateVenueMutation, useUpdateVenueMutation, useDeleteVenueMutation } = venuesApi;
-

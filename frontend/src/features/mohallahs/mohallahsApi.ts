@@ -20,7 +20,6 @@ export type CreateMohallahRequest = {
   coordinator_name: string;
   contact_number?: string | null;
   whatsapp_number?: string | null;
-  password: string;
 };
 
 export type UpdateMohallahRequest = {
@@ -30,7 +29,6 @@ export type UpdateMohallahRequest = {
   coordinator_name: string;
   contact_number?: string | null;
   whatsapp_number?: string | null;
-  password?: string;
 };
 
 export const mohallahsApi = api.injectEndpoints({
@@ -73,4 +71,3 @@ export const {
   useUpdateMohallahMutation,
   useDeleteMohallahMutation
 } = mohallahsApi;
-

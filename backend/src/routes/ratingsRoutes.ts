@@ -49,10 +49,9 @@ ratingsRoutes.post("/performance", requireAuth, requireRole(["coordinator"]), as
   const [rows] = await pool.query<any[]>(
     `SELECT s.id
      FROM schedules s
-     JOIN venues v ON v.id = s.venue_id
-     WHERE s.id = :id AND v.mohallah_id = :mohallah_id
+     WHERE s.id = :id AND s.venue_id = :venue_id
      LIMIT 1`,
-    { id: scheduleId, mohallah_id: user.mohallahId }
+    { id: scheduleId, venue_id: user.venueId }
   );
   if (!rows[0]) return fail(res, "Forbidden", 403);
 
@@ -62,7 +61,7 @@ ratingsRoutes.post("/performance", requireAuth, requireRole(["coordinator"]), as
        VALUES (:schedule_id, :coordinator_id, :attended_properly, :recitation, :discipline, :attendance, :overall, :comments, NOW())`,
       {
         schedule_id: scheduleId,
-        coordinator_id: user.mohallahId,
+        coordinator_id: user.venueId,
         attended_properly: attended_properly ? 1 : 0,
         recitation: scores.recitation,
         discipline: scores.discipline,
