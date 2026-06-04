@@ -92,6 +92,24 @@ schedulesRoutes.post("/generate", requireRole(["admin", "zonal_head"]), async (r
   }
 });
 
+schedulesRoutes.delete("/", requireRole(["admin", "zonal_head"]), async (req, res) => {
+  const user = req.user!;
+  const miqaatId = Number(req.query.miqaat_id);
+  const zoneId = user.role === "zonal_head" ? Number(user.zoneId) : Number(req.query.zone_id);
+
+  if (!Number.isFinite(miqaatId) || !Number.isFinite(zoneId)) return fail(res, "Invalid request", 400);
+
+  const [result] = await pool.query<any>(
+    `DELETE s FROM schedules s
+     JOIN venues v ON v.id = s.venue_id
+     JOIN mohallahs m ON m.id = v.mohallah_id
+     WHERE s.miqaat_id = :miqaat_id AND m.zone_id = :zone_id`,
+    { miqaat_id: miqaatId, zone_id: zoneId }
+  );
+
+  return ok(res, { success: true, deleted: Number((result as any).affectedRows ?? 0) }, "Deleted");
+});
+
 schedulesRoutes.put("/:id", requireRole(["admin", "zonal_head"]), async (req, res) => {
   const user = req.user!;
   const id = Number(req.params.id);

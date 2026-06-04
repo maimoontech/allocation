@@ -10,6 +10,7 @@ import { useGetVenuesQuery } from "../../features/venues/venuesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
 import {
   useDeleteScheduleMutation,
+  useDeleteSchedulesByScopeMutation,
   useGenerateScheduleMutation,
   useGetSchedulesQuery,
   useUpdateScheduleMutation,
@@ -86,13 +87,14 @@ export function SchedulesPage() {
   const [generateSchedule, generateState] = useGenerateScheduleMutation();
   const [updateSchedule, updateState] = useUpdateScheduleMutation();
   const [deleteSchedule, deleteState] = useDeleteScheduleMutation();
+  const [deleteSchedulesByScope, deleteScopeState] = useDeleteSchedulesByScopeMutation();
 
   const [overwrite, setOverwrite] = useState<string>("0");
   const [editing, setEditing] = useState<ScheduleRow | null>(null);
   const [editVenueId, setEditVenueId] = useState<string>("");
   const [editPartyId, setEditPartyId] = useState<string>("");
 
-  const isBusy = generateState.isLoading || updateState.isLoading || deleteState.isLoading;
+  const isBusy = generateState.isLoading || updateState.isLoading || deleteState.isLoading || deleteScopeState.isLoading;
 
   const zoneOptions = useMemo(() => {
     const zones = zonesQuery.data ?? [];
@@ -204,6 +206,23 @@ export function SchedulesPage() {
     schedulesQuery.refetch();
   }
 
+  async function onDeleteSelectedSchedule() {
+    const mId = Number(miqaatId);
+    const zId = role === "zonal_head" ? user?.zoneId : Number(zoneId);
+    if (!Number.isFinite(mId) || mId <= 0) return;
+    if (!Number.isFinite(zId) || !zId) return;
+
+    const confirmed = window.confirm("Delete generated schedules for the selected Miqaat and selected Zone only?");
+    if (!confirmed) return;
+
+    await deleteSchedulesByScope({
+      miqaat_id: mId,
+      zone_id: role === "admin" ? zId : undefined
+    }).unwrap();
+
+    schedulesQuery.refetch();
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">Schedules</div>
@@ -246,6 +265,13 @@ export function SchedulesPage() {
         <div className="mt-3 flex gap-2">
           <Button onClick={onGenerate} disabled={isBusy}>
             {generateState.isLoading ? "Generating..." : "Generate"}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={onDeleteSelectedSchedule}
+            disabled={isBusy || !effectiveMiqaatId || !effectiveZoneId}
+          >
+            {deleteScopeState.isLoading ? "Deleting..." : "Delete Selected"}
           </Button>
           <Button variant="ghost" onClick={() => schedulesQuery.refetch()} disabled={isBusy}>
             Refresh

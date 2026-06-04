@@ -33,6 +33,11 @@ export type GenerateScheduleRequest = {
   overwrite: boolean;
 };
 
+export type DeleteSchedulesByScopeRequest = {
+  miqaat_id: number;
+  zone_id?: number;
+};
+
 export const schedulesApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getSchedules: builder.query<ScheduleRow[], { miqaat_id?: number; zone_id?: number } | void>({
@@ -66,9 +71,24 @@ export const schedulesApi = api.injectEndpoints({
       query: ({ id }) => ({ url: `/schedules/${id}`, method: "DELETE" }),
       transformResponse: (res: ApiEnvelope<{ success: true }>) => res.data,
       invalidatesTags: (_r, _e, arg) => [{ type: "Schedules", id: arg.id }, { type: "Schedules", id: "LIST" }]
+    }),
+    deleteSchedulesByScope: builder.mutation<{ success: true; deleted: number }, DeleteSchedulesByScopeRequest>({
+      query: ({ miqaat_id, zone_id }) => {
+        const params = new URLSearchParams();
+        params.set("miqaat_id", String(miqaat_id));
+        if (zone_id) params.set("zone_id", String(zone_id));
+        return { url: `/schedules?${params.toString()}`, method: "DELETE" };
+      },
+      transformResponse: (res: ApiEnvelope<{ success: true; deleted: number }>) => res.data,
+      invalidatesTags: [{ type: "Schedules", id: "LIST" }]
     })
   })
 });
 
-export const { useGetSchedulesQuery, useGenerateScheduleMutation, useUpdateScheduleMutation, useDeleteScheduleMutation } =
-  schedulesApi;
+export const {
+  useGetSchedulesQuery,
+  useGenerateScheduleMutation,
+  useUpdateScheduleMutation,
+  useDeleteScheduleMutation,
+  useDeleteSchedulesByScopeMutation
+} = schedulesApi;
