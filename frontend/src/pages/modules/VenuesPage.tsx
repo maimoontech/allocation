@@ -98,6 +98,8 @@ export function VenuesPage() {
   const [minParties, setMinParties] = useState<string>("1");
   const [maxParties, setMaxParties] = useState<string>("5");
   const [isActive, setIsActive] = useState<string>("1");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formMessage, setFormMessage] = useState<string | null>(null);
 
   const isBusy = createState.isLoading || updateState.isLoading || deleteState.isLoading;
 
@@ -178,6 +180,14 @@ export function VenuesPage() {
     setMinParties("1");
     setMaxParties("5");
     setIsActive("1");
+    setFormError(null);
+  }
+
+  function getErrorMessage(error: unknown) {
+    if (typeof error === "string") return error;
+    if (!error || typeof error !== "object") return "Failed to save venue";
+    const maybeError = error as { data?: { message?: string }; error?: string };
+    return maybeError.data?.message || maybeError.error || "Failed to save venue";
   }
 
   async function onSubmit() {
@@ -190,36 +200,46 @@ export function VenuesPage() {
     if (!Number.isFinite(min) || min <= 0) return;
     if (!Number.isFinite(max) || max <= 0) return;
     if (min > max) return;
+    setFormError(null);
+    setFormMessage(null);
 
-    if (!editing) {
-      await createVenue({
+    try {
+      if (!editing) {
+        await createVenue({
+          venue_name: venueName.trim(),
+          mohallah_id: finalMohallahId,
+          coordinator_name: coordinatorName.trim() || null,
+          contact_number: contactNumber.trim() || null,
+          whatsapp_number: whatsappNumber.trim() || null,
+          password,
+          min_parties: min,
+          max_parties: max,
+          is_active: isActive === "1" ? (1 as const) : (0 as const)
+        }).unwrap();
+        await venuesQuery.refetch();
+        resetForm();
+        setFormMessage("Venue created successfully.");
+        return;
+      }
+
+      await updateVenue({
+        id: editing.id,
         venue_name: venueName.trim(),
         mohallah_id: finalMohallahId,
         coordinator_name: coordinatorName.trim() || null,
         contact_number: contactNumber.trim() || null,
         whatsapp_number: whatsappNumber.trim() || null,
-        password,
+        password: password.trim() || undefined,
         min_parties: min,
         max_parties: max,
         is_active: isActive === "1" ? (1 as const) : (0 as const)
       }).unwrap();
+      await venuesQuery.refetch();
       resetForm();
-      return;
+      setFormMessage("Venue updated successfully.");
+    } catch (error) {
+      setFormError(getErrorMessage(error));
     }
-
-    await updateVenue({
-      id: editing.id,
-      venue_name: venueName.trim(),
-      mohallah_id: finalMohallahId,
-      coordinator_name: coordinatorName.trim() || null,
-      contact_number: contactNumber.trim() || null,
-      whatsapp_number: whatsappNumber.trim() || null,
-      password: password.trim() || undefined,
-      min_parties: min,
-      max_parties: max,
-      is_active: isActive === "1" ? (1 as const) : (0 as const)
-    }).unwrap();
-    resetForm();
   }
 
   return (
@@ -264,6 +284,8 @@ export function VenuesPage() {
             Refresh
           </Button>
         </div>
+        {formMessage ? <div className="mt-2 text-sm text-secondary">{formMessage}</div> : null}
+        {formError ? <div className="mt-2 text-sm text-danger">{formError}</div> : null}
       </Card>
 
       <Card>
