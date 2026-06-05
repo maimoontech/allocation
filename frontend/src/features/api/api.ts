@@ -20,6 +20,18 @@ export const api = createApi({
       const token = (getState() as RootState).auth.token;
       if (token) headers.set("authorization", `Bearer ${token}`);
       return headers;
+    },
+    responseHandler: async (response) => {
+      const text = await response.text();
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        const head = text.replace(/\s+/g, " ").trim().slice(0, 200);
+        throw new Error(
+          `Invalid JSON response. This usually means the API base URL/proxy is wrong or the backend is down. Response starts with: ${head}`
+        );
+      }
     }
   }),
   tagTypes: ["Zones", "Mohallahs", "Parties", "Venues", "Miqaats", "Schedules", "Reports", "Ratings"],
