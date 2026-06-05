@@ -8,6 +8,17 @@ export const partiesRoutes = Router();
 
 partiesRoutes.use(requireAuth, requireRole(["admin", "zonal_head"]));
 
+function handlePartyDbError(res: any, err: any) {
+  const code = String(err?.code ?? "");
+  if (code === "ER_DUP_ENTRY") {
+    const msg = String(err?.sqlMessage ?? err?.message ?? "");
+    if (msg.includes("uq_parties_its_no")) return fail(res, "ITS No already exists", 409);
+    if (msg.includes("uq_parties_zone_name")) return fail(res, "Party name already exists in this zone", 409);
+    return fail(res, "Duplicate entry", 409);
+  }
+  return fail(res, "Database error", 500);
+}
+
 partiesRoutes.get("/", async (req, res) => {
   const user = req.user!;
   const zoneId = user.role === "zonal_head" ? user.zoneId : req.query.zone_id ? Number(req.query.zone_id) : null;
@@ -31,20 +42,24 @@ partiesRoutes.post("/", async (req, res) => {
   const finalZoneId = user.role === "zonal_head" ? user.zoneId : zone_id;
   if (!finalZoneId || !its_no || !leader_name || !party_name || !category || !password) return fail(res, "Invalid request", 400);
 
-  const password_hash = await bcrypt.hash(String(password), 10);
-  await pool.query(
-    "INSERT INTO parties (its_no, leader_name, party_name, zone_id, category, is_active, password_hash, created_at) VALUES (:its_no, :leader_name, :party_name, :zone_id, :category, :is_active, :password_hash, NOW())",
-    {
-      its_no,
-      leader_name,
-      party_name,
-      zone_id: finalZoneId,
-      category,
-      is_active: is_active ?? 1,
-      password_hash
-    }
-  );
-  return ok(res, { success: true }, "Created");
+  try {
+    const password_hash = await bcrypt.hash(String(password), 10);
+    await pool.query(
+      "INSERT INTO parties (its_no, leader_name, party_name, zone_id, category, is_active, password_hash, created_at) VALUES (:its_no, :leader_name, :party_name, :zone_id, :category, :is_active, :password_hash, NOW())",
+      {
+        its_no,
+        leader_name,
+        party_name,
+        zone_id: finalZoneId,
+        category,
+        is_active: is_active ?? 1,
+        password_hash
+      }
+    );
+    return ok(res, { success: true }, "Created");
+  } catch (err: any) {
+    return handlePartyDbError(res, err);
+  }
 });
 
 partiesRoutes.put("/:id", async (req, res) => {
@@ -65,11 +80,15 @@ partiesRoutes.put("/:id", async (req, res) => {
 
   const scopeSql = user.role === "zonal_head" ? " AND zone_id = :zone_id" : "";
 
-  await pool.query(
-    `UPDATE parties SET its_no = :its_no, leader_name = :leader_name, party_name = :party_name, zone_id = :zone_id, category = :category, is_active = :is_active${setPasswordSql} WHERE id = :id${scopeSql}`,
-    params
-  );
-  return ok(res, { success: true }, "Updated");
+  try {
+    await pool.query(
+      `UPDATE parties SET its_no = :its_no, leader_name = :leader_name, party_name = :party_name, zone_id = :zone_id, category = :category, is_active = :is_active${setPasswordSql} WHERE id = :id${scopeSql}`,
+      params
+    );
+    return ok(res, { success: true }, "Updated");
+  } catch (err: any) {
+    return handlePartyDbError(res, err);
+  }
 });
 
 partiesRoutes.delete("/:id", async (req, res) => {

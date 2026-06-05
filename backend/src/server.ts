@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env";
+import { fail } from "./utils/response";
 import { authRoutes } from "./routes/authRoutes";
 import { zonesRoutes } from "./routes/zonesRoutes";
 import { mohallahsRoutes } from "./routes/mohallahsRoutes";
@@ -36,6 +37,13 @@ app.use("/api/v1/schedules", schedulesRoutes);
 app.use("/api/v1/reports", reportsRoutes);
 app.use("/api/v1/ratings", ratingsRoutes);
 app.use("/api/v1/import-export", importExportRoutes);
+
+app.use((err: any, _req: any, res: any, _next: any) => {
+  if (res.headersSent) return;
+  const code = String(err?.code ?? "");
+  if (code === "ER_DUP_ENTRY") return fail(res, "Duplicate entry", 409);
+  return fail(res, "Internal server error", 500);
+});
 
 app.listen(env.port, () => {
   process.stdout.write(`API listening on http://localhost:${env.port}\\n`);
