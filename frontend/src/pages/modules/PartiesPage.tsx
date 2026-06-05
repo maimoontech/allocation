@@ -325,7 +325,7 @@ export function PartiesPage() {
         {formError ? <div className="mt-2 text-sm text-danger">{formError}</div> : null}
         <div className="mt-3 flex gap-2">
           <Button onClick={onSubmit} disabled={isBusy}>
-            editing ? (updateState.isLoading ? "Updating..." : "Update") : createState.isLoading ? "Creating..." : "Create"
+            {editing ? (updateState.isLoading ? "Updating..." : "Update") : createState.isLoading ? "Creating..." : "Create"}
           </Button>
           <Button variant="ghost" onClick={() => partiesQuery.refetch()} disabled={isBusy}>
             Refresh
