@@ -70,6 +70,10 @@ function openPrintWindow(title: string, bodyHtml: string) {
   }, 200);
 }
 
+function extractApiErrorMessage(e: any) {
+  return String(e?.data?.message ?? e?.message ?? e?.error ?? "Request failed");
+}
+
 export function PartiesPage() {
   const user = useAppSelector((s) => s.auth.user);
   const role = user?.role ?? "admin";
@@ -97,6 +101,8 @@ export function PartiesPage() {
   const [category, setCategory] = useState<Party["category"]>("A");
   const [isActive, setIsActive] = useState<string>("1");
   const [password, setPassword] = useState("");
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const isBusy = createState.isLoading || updateState.isLoading || deleteState.isLoading;
 
@@ -172,13 +178,46 @@ export function PartiesPage() {
     setCategory("A");
     setIsActive("1");
     setPassword("");
+    setSubmitAttempted(false);
+    setFormError(null);
   }
 
   async function onSubmit() {
+    setSubmitAttempted(true);
+    setFormError(null);
+
     const finalZoneId = role === "zonal_head" ? user?.zoneId : Number(zoneId);
-    if (role !== "zonal_head" && (!Number.isFinite(finalZoneId) || !finalZoneId)) return;
-    if (!itsNo.trim() || !leaderName.trim() || !partyName.trim()) return;
-    if (!editing && !password.trim()) return;
+    if (role === "zonal_head") {
+      if (!Number.isFinite(finalZoneId) || !finalZoneId) {
+        setFormError("Zone is missing for this user. Please re-login.");
+        return;
+      }
+    } else {
+      if (!zoneId) {
+        setFormError("Please select a Zone.");
+        return;
+      }
+      if (!Number.isFinite(finalZoneId) || !finalZoneId) {
+        setFormError("Invalid Zone selected. Please select again.");
+        return;
+      }
+    }
+    if (!itsNo.trim()) {
+      setFormError("ITS No is required.");
+      return;
+    }
+    if (!leaderName.trim()) {
+      setFormError("Leader Name is required.");
+      return;
+    }
+    if (!partyName.trim()) {
+      setFormError("Party Name is required.");
+      return;
+    }
+    if (!editing && !password.trim()) {
+      setFormError("Password is required for new party.");
+      return;
+    }
 
     const base = {
       its_no: itsNo.trim(),
@@ -189,22 +228,32 @@ export function PartiesPage() {
     };
 
     if (!editing) {
-      await createParty({
-        ...base,
-        zone_id: role === "zonal_head" ? undefined : finalZoneId,
-        password
-      }).unwrap();
-      resetForm();
+      try {
+        await createParty({
+          ...base,
+          zone_id: role === "zonal_head" ? undefined : finalZoneId,
+          password
+        }).unwrap();
+        resetForm();
+        partiesQuery.refetch();
+      } catch (e: any) {
+        setFormError(extractApiErrorMessage(e));
+      }
       return;
     }
 
-    await updateParty({
-      id: editing.id,
-      ...base,
-      zone_id: role === "zonal_head" ? undefined : finalZoneId,
-      password: password.trim() ? password : undefined
-    }).unwrap();
-    resetForm();
+    try {
+      await updateParty({
+        id: editing.id,
+        ...base,
+        zone_id: role === "zonal_head" ? undefined : finalZoneId,
+        password: password.trim() ? password : undefined
+      }).unwrap();
+      resetForm();
+      partiesQuery.refetch();
+    } catch (e: any) {
+      setFormError(extractApiErrorMessage(e));
+    }
   }
 
   return (
@@ -222,23 +271,61 @@ export function PartiesPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {role === "admin" ? (
-            <Select label="Zone" value={zoneId} onChange={(e) => setZoneId(e.target.value)} options={zoneOptions} />
+            <Select
+              label="Zone"
+              value={zoneId}
+              onChange={(e) => {
+                setZoneId(e.target.value);
+                setFormError(null);
+              }}
+              options={zoneOptions}
+              error={submitAttempted && !zoneId ? "Required" : undefined}
+            />
           ) : null}
-          <Input label="ITS No" value={itsNo} onChange={(e) => setItsNo(e.target.value)} />
-          <Input label="Leader Name" value={leaderName} onChange={(e) => setLeaderName(e.target.value)} />
-          <Input label="Party Name" value={partyName} onChange={(e) => setPartyName(e.target.value)} />
+          <Input
+            label="ITS No"
+            value={itsNo}
+            onChange={(e) => {
+              setItsNo(e.target.value);
+              setFormError(null);
+            }}
+            error={submitAttempted && !itsNo.trim() ? "Required" : undefined}
+          />
+          <Input
+            label="Leader Name"
+            value={leaderName}
+            onChange={(e) => {
+              setLeaderName(e.target.value);
+              setFormError(null);
+            }}
+            error={submitAttempted && !leaderName.trim() ? "Required" : undefined}
+          />
+          <Input
+            label="Party Name"
+            value={partyName}
+            onChange={(e) => {
+              setPartyName(e.target.value);
+              setFormError(null);
+            }}
+            error={submitAttempted && !partyName.trim() ? "Required" : undefined}
+          />
           <Select label="Category" value={category} onChange={(e) => setCategory(e.target.value as Party["category"])} options={categoryOptions} />
           <Select label="Status" value={isActive} onChange={(e) => setIsActive(e.target.value)} options={statusOptions} />
           <Input
             label={editing ? "New Password (optional)" : "Password"}
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              setFormError(null);
+            }}
+            error={submitAttempted && !editing && !password.trim() ? "Required" : undefined}
           />
         </div>
+        {formError ? <div className="mt-2 text-sm text-danger">{formError}</div> : null}
         <div className="mt-3 flex gap-2">
           <Button onClick={onSubmit} disabled={isBusy}>
-            {editing ? "Update" : "Create"}
+            editing ? (updateState.isLoading ? "Updating..." : "Update") : createState.isLoading ? "Creating..." : "Create"
           </Button>
           <Button variant="ghost" onClick={() => partiesQuery.refetch()} disabled={isBusy}>
             Refresh
