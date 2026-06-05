@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
@@ -26,9 +28,39 @@ function escapeHtml(text: string) {
     .replaceAll("'", "&#39;");
 }
 
-function openPrintWindow(title: string, bodyHtml: string) {
-  const safeTitle = escapeHtml(title);
-  const html = `<!doctype html>
+function timestampForFilename(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+}
+
+function normalizeFilenamePart(value: string) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function downloadBlobFile(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildExportHtmlDocument(args: { title: string; metaLines: string[]; bodyHtml: string }) {
+  const safeTitle = escapeHtml(args.title);
+  const safeMeta = args.metaLines.filter(Boolean).map((line) => `<div>${escapeHtml(line)}</div>`).join("");
+  return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -43,9 +75,14 @@ function openPrintWindow(title: string, bodyHtml: string) {
   </head>
   <body>
     <h2>${safeTitle}</h2>
-    ${bodyHtml}
+    <div style="font-size: 12px; margin-bottom: 12px; color: #333;">${safeMeta}</div>
+    ${args.bodyHtml}
   </body>
 </html>`;
+}
+
+function openPrintWindow(args: { title: string; metaLines: string[]; bodyHtml: string }) {
+  const html = buildExportHtmlDocument(args);
   const w = window.open("", "_blank", "noopener,noreferrer");
   if (!w) {
     window.alert("Popup blocked. Please allow popups and try again.");
@@ -60,6 +97,78 @@ function openPrintWindow(title: string, bodyHtml: string) {
       w.print();
     } catch {}
   }, 200);
+}
+
+function downloadExcelDocument(args: { title: string; filenameBase: string; metaLines: string[]; bodyHtml: string }) {
+  const html = buildExportHtmlDocument(args);
+  const filename = `${normalizeFilenamePart(args.filenameBase || args.title)}_${timestampForFilename()}.xls`;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  downloadBlobFile(filename, blob);
+}
+
+function IconExcel({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 12h10" />
+      <path d="M8 16h10" />
+      <path d="M10 10l4 10" />
+      <path d="M14 10l-4 10" />
+    </svg>
+  );
+}
+
+function IconPdf({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h8" />
+      <path d="M8 17h6" />
+      <path d="M16 13l2 2-2 2" />
+    </svg>
+  );
+}
+
+function IconPrint({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7 8V3h10v5" />
+      <path d="M6 17H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+      <path d="M7 14h10v7H7z" />
+      <path d="M18 12h0" />
+    </svg>
+  );
+}
+
+function buildScheduleTableHtml(rows: ScheduleRow[]) {
+  const tableRows = rows
+    .map(
+      (row) => `<tr>
+        <td>${escapeHtml(`${formatDateDdMmmYy(row.english_date)} - ${row.miqaat_name}`)}</td>
+        <td>${escapeHtml(row.zone_name)}</td>
+        <td>${escapeHtml(row.mohallah_name)}</td>
+        <td>${escapeHtml(row.venue_name)}</td>
+        <td>${escapeHtml(`${row.party_name} (${row.category})`)}</td>
+        <td>${escapeHtml(row.is_manual ? "Yes" : "No")}</td>
+      </tr>`
+    )
+    .join("");
+
+  return `<table>
+    <thead>
+      <tr>
+        <th>Miqaat</th>
+        <th>Zone</th>
+        <th>Mohallah</th>
+        <th>Venue</th>
+        <th>Party</th>
+        <th>Manual</th>
+      </tr>
+    </thead>
+    <tbody>${tableRows}</tbody>
+  </table>`;
 }
 
 function getErrorMessage(error: unknown) {
@@ -196,6 +305,20 @@ export function SchedulesPage() {
   const startIndex = (currentPage - 1) * pageSizeNumber;
   const endIndex = Math.min(startIndex + pageSizeNumber, total);
   const pageRows = useMemo(() => sortedRows.slice(startIndex, endIndex), [endIndex, sortedRows, startIndex]);
+  const selectedMiqaatLabel = useMemo(() => {
+    const match = (miqaatsQuery.data ?? []).find((item) => item.id === effectiveMiqaatId);
+    return match ? `${formatDateDdMmmYy(match.english_date)} - ${match.miqaat_name}` : "All miqaats";
+  }, [effectiveMiqaatId, miqaatsQuery.data]);
+  const selectedZoneLabel = useMemo(() => {
+    if (!effectiveZoneId) return "All zones";
+    const match = (zonesQuery.data ?? []).find((item) => item.id === effectiveZoneId);
+    return match?.zone_name ?? (role === "zonal_head" ? "My Zone" : "Selected zone");
+  }, [effectiveZoneId, role, zonesQuery.data]);
+  const exportMetaLines = useMemo(
+    () => [`Miqaat: ${selectedMiqaatLabel}`, `Zone: ${selectedZoneLabel}`, `Rows: ${sortedRows.length}`],
+    [selectedMiqaatLabel, selectedZoneLabel, sortedRows.length]
+  );
+  const exportBodyHtml = useMemo(() => buildScheduleTableHtml(sortedRows), [sortedRows]);
 
   async function onGenerate() {
     const mId = Number(miqaatId);
@@ -262,6 +385,60 @@ export function SchedulesPage() {
         setActionError(getErrorMessage(rowDeleteError || bulkError));
       }
     }
+  }
+
+  function onDownloadExcel() {
+    if (sortedRows.length === 0) return;
+    downloadExcelDocument({
+      title: "Schedule List",
+      filenameBase: "schedule_list",
+      metaLines: exportMetaLines,
+      bodyHtml: exportBodyHtml
+    });
+  }
+
+  function onDownloadPdf() {
+    if (sortedRows.length === 0) return;
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    doc.setFontSize(16);
+    doc.text("Schedule List", 40, 40);
+    doc.setFontSize(10);
+    exportMetaLines.forEach((line, index) => {
+      doc.text(line, 40, 60 + index * 14);
+    });
+    autoTable(doc, {
+      startY: 110,
+      head: [["Miqaat", "Zone", "Mohallah", "Venue", "Party", "Manual"]],
+      body: sortedRows.map((row) => [
+        `${formatDateDdMmmYy(row.english_date)} - ${row.miqaat_name}`,
+        row.zone_name,
+        row.mohallah_name,
+        row.venue_name,
+        `${row.party_name} (${row.category})`,
+        row.is_manual ? "Yes" : "No"
+      ]),
+      styles: {
+        fontSize: 8,
+        cellPadding: 4,
+        valign: "top"
+      },
+      headStyles: {
+        fillColor: [243, 243, 243],
+        textColor: [17, 17, 17]
+      },
+      margin: { left: 40, right: 40 }
+    });
+    const filename = `schedule_list_${timestampForFilename()}.pdf`;
+    doc.save(filename);
+  }
+
+  function onPrint() {
+    if (sortedRows.length === 0) return;
+    openPrintWindow({
+      title: "Schedule List",
+      metaLines: exportMetaLines,
+      bodyHtml: exportBodyHtml
+    });
   }
 
   return (
@@ -358,13 +535,22 @@ export function SchedulesPage() {
             <div className="text-sm text-textMuted">{rows.length} rows</div>
             <Button
               variant="ghost"
-              onClick={() => {
-                const el = listRef.current;
-                if (!el) return;
-                openPrintWindow("Schedule List", el.innerHTML);
-              }}
+              onClick={onDownloadExcel}
+              disabled={sortedRows.length === 0}
             >
-              Print
+              <span className="mr-2">
+                <IconExcel />
+              </span>
+              Download as Excel
+            </Button>
+            <Button variant="ghost" onClick={onDownloadPdf} disabled={sortedRows.length === 0}>
+              <span className="mr-2">
+                <IconPdf />
+              </span>
+              Download as PDF
+            </Button>
+            <Button variant="ghost" onClick={onPrint} disabled={sortedRows.length === 0} title="Print Schedule List" aria-label="Print Schedule List">
+              <IconPrint />
             </Button>
           </div>
         </div>
