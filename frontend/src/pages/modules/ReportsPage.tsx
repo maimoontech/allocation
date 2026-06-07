@@ -161,6 +161,93 @@ function renderMiqaatScheduleTableHtml(rows: Array<{ zone_name: string; venue_na
   return `<table>${header}${body}</table>`;
 }
 
+function venueColumnKey(r: { zone_name: string; mohallah_name: string; venue_name: string }) {
+  return `${r.zone_name}||${r.mohallah_name}||${r.venue_name}`;
+}
+
+function venueColumnLabel(r: { zone_name: string; mohallah_name: string; venue_name: string }) {
+  return `${r.zone_name}<br/>${r.mohallah_name}<br/><b>${r.venue_name}</b>`;
+}
+
+function miqaatTitleLabel(miqaat: { miqaat_name: string; english_date: string } | undefined, fallbackId: string) {
+  return miqaat ? `${formatDateDdMmmYy(miqaat.english_date)} - ${miqaat.miqaat_name}` : `Miqaat #${fallbackId}`;
+}
+
+function buildBulkMiqaatScheduleExcelTableHtml(args: {
+  miqaatTitles: Record<string, string>;
+  rowsByMiqaatId: Record<string, Array<{ zone_name: string; mohallah_name: string; venue_name: string; party_name: string; category: string; is_manual: 0 | 1 }>>;
+}) {
+  const allRows = Object.values(args.rowsByMiqaatId).flat();
+  const venueKeyToLabel = new Map<string, string>();
+  for (const r of allRows) {
+    const key = venueColumnKey(r);
+    if (!venueKeyToLabel.has(key)) venueKeyToLabel.set(key, venueColumnLabel(r));
+  }
+  const venueKeys = Array.from(venueKeyToLabel.keys()).sort((a, b) => a.localeCompare(b));
+
+  const thead = `<thead>
+    <tr>
+      <th style="min-width: 160px;">Miqaat</th>
+      <th style="min-width: 220px;">Party</th>
+      ${venueKeys.map((k) => `<th style="min-width: 180px;">${venueKeyToLabel.get(k) ?? ""}</th>`).join("")}
+    </tr>
+  </thead>`;
+
+  const tbodyLines: string[] = [];
+  const miqaatIds = Object.keys(args.rowsByMiqaatId);
+
+  for (const miqaatId of miqaatIds) {
+    const title = args.miqaatTitles[miqaatId] ?? `Miqaat #${miqaatId}`;
+    const rows = args.rowsByMiqaatId[miqaatId] ?? [];
+
+    const partyKeys = Array.from(
+      new Set(rows.map((r) => `${r.party_name}||${r.category}`))
+    ).sort((a, b) => a.localeCompare(b));
+
+    const assignment = new Map<string, { venueKey: string; isManual: boolean }>();
+    for (const r of rows) {
+      const pKey = `${r.party_name}||${r.category}`;
+      const vKey = venueColumnKey(r);
+      if (!assignment.has(pKey)) assignment.set(pKey, { venueKey: vKey, isManual: Boolean(r.is_manual) });
+    }
+
+    const rowspan = Math.max(1, partyKeys.length);
+    if (partyKeys.length === 0) {
+      tbodyLines.push(`<tr>
+        <td>${escapeHtml(title)}</td>
+        <td colspan="${2 + venueKeys.length - 1}" style="color:#666;">No schedule rows</td>
+      </tr>`);
+      continue;
+    }
+
+    partyKeys.forEach((pKey, idx) => {
+      const [partyName, category] = pKey.split("||");
+      const cellValues = venueKeys
+        .map((vk) => {
+          const a = assignment.get(pKey);
+          if (!a || a.venueKey !== vk) return "<td></td>";
+          return `<td style="text-align:center;">&#10003;${a.isManual ? " (M)" : ""}</td>`;
+        })
+        .join("");
+
+      if (idx === 0) {
+        tbodyLines.push(`<tr>
+          <td rowspan="${rowspan}" style="font-weight:bold;vertical-align:top;">${escapeHtml(title)}</td>
+          <td>${escapeHtml(`${partyName} (${category})`)}</td>
+          ${cellValues}
+        </tr>`);
+      } else {
+        tbodyLines.push(`<tr>
+          <td>${escapeHtml(`${partyName} (${category})`)}</td>
+          ${cellValues}
+        </tr>`);
+      }
+    });
+  }
+
+  return `<table>${thead}<tbody>${tbodyLines.join("")}</tbody></table>`;
+}
+
 function IconExcel({ className = "h-4 w-4" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -477,25 +564,28 @@ export function ReportsPage() {
             ? "My Zone"
             : "—";
 
-      const sections: string[] = [];
+      const miqaatTitles: Record<string, string> = {};
+      const rowsByMiqaatId: Record<string, any[]> = {};
+      const miqaats = miqaatsQuery.data ?? [];
+
       for (const id of ids) {
-        const miqaat = (miqaatsQuery.data ?? []).find((m) => String(m.id) === id);
-        const title = miqaat ? `${formatDateDdMmmYy(miqaat.english_date)} - ${miqaat.miqaat_name}` : `Miqaat #${id}`;
+        const miqaat = miqaats.find((m) => String(m.id) === id);
+        miqaatTitles[id] = miqaatTitleLabel(miqaat, id);
+
         const params = new URLSearchParams();
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        const table = renderMiqaatScheduleTableHtml(env.data as any);
-        sections.push(`<div style="page-break-inside: avoid; margin-bottom: 18px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px;">${escapeHtml(title)}</h3>
-          ${table}
-        </div>`);
+        rowsByMiqaatId[id] = env.data as any[];
       }
+
+      const table = buildBulkMiqaatScheduleExcelTableHtml({ miqaatTitles, rowsByMiqaatId });
 
       const html = buildExportHtmlDocument({
         title: "Miqaat Schedules",
         metaLines: [`Zone: ${zoneLabel}`, `Count: ${ids.length}`],
-        bodyHtml: sections.join("")
+        bodyHtml: table,
+        hintLine: "Legend: ✓ = assigned, (M) = manual"
       });
       const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
       const filename = `miqaat_schedules_${timestampForFilename()}.xls`;
