@@ -461,6 +461,52 @@ export function ReportsPage() {
     }
   }
 
+  async function downloadMultipleMiqaatSchedulesExcel() {
+    setBulkError(null);
+    const ids = bulkMiqaatIds.slice().filter(Boolean);
+    if (ids.length === 0) {
+      setBulkError("Select at least one Miqaat to download.");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const zoneLabel =
+        role === "admin"
+          ? (zoneOptions.find((z) => z.value === zoneId)?.label ?? zoneId)
+          : role === "zonal_head"
+            ? "My Zone"
+            : "—";
+
+      const sections: string[] = [];
+      for (const id of ids) {
+        const miqaat = (miqaatsQuery.data ?? []).find((m) => String(m.id) === id);
+        const title = miqaat ? `${formatDateDdMmmYy(miqaat.english_date)} - ${miqaat.miqaat_name}` : `Miqaat #${id}`;
+        const params = new URLSearchParams();
+        params.set("miqaat_id", id);
+        if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
+        const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
+        const table = renderMiqaatScheduleTableHtml(env.data as any);
+        sections.push(`<div style="page-break-inside: avoid; margin-bottom: 18px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 14px;">${escapeHtml(title)}</h3>
+          ${table}
+        </div>`);
+      }
+
+      const html = buildExportHtmlDocument({
+        title: "Miqaat Schedules",
+        metaLines: [`Zone: ${zoneLabel}`, `Count: ${ids.length}`],
+        bodyHtml: sections.join("")
+      });
+      const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const filename = `miqaat_schedules_${timestampForFilename()}.xls`;
+      downloadBlobFile(filename, blob);
+    } catch (e: any) {
+      setBulkError(String(e?.message ?? e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">Reports</div>
@@ -533,6 +579,9 @@ export function ReportsPage() {
                 }}
               >
                 Clear
+              </Button>
+              <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} variant="ghost" onClick={downloadMultipleMiqaatSchedulesExcel}>
+                {bulkBusy ? "Preparing..." : "Download Excel"}
               </Button>
               <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} onClick={printMultipleMiqaatSchedules}>
                 {bulkBusy ? "Preparing..." : "Print Selected"}
