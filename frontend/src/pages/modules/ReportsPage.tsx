@@ -139,30 +139,6 @@ function downloadExcelFromElement(args: { title: string; metaLines: string[]; fi
   downloadBlobFile(filename, blob);
 }
 
-function renderMiqaatScheduleTableHtml(rows: Array<{ zone_name: string; venue_name: string; mohallah_name: string; party_name: string; category: string; is_manual: 0 | 1 }>) {
-  const header = `<thead>
-    <tr>
-      <th>Zone</th>
-      <th>Venue</th>
-      <th>Party</th>
-      <th>Manual</th>
-    </tr>
-  </thead>`;
-  const body = `<tbody>${rows
-    .map((r) => {
-      const venue = `${r.venue_name} (${r.mohallah_name})`;
-      const party = `${r.party_name} (${r.category})`;
-      return `<tr>
-        <td>${escapeHtml(r.zone_name)}</td>
-        <td>${escapeHtml(venue)}</td>
-        <td>${escapeHtml(party)}</td>
-        <td>${r.is_manual ? "Yes" : "No"}</td>
-      </tr>`;
-    })
-    .join("")}</tbody>`;
-  return `<table>${header}${body}</table>`;
-}
-
 function venueColumnKey(r: { zone_name: string; mohallah_name: string; venue_name: string }) {
   return `${r.zone_name}||${r.mohallah_name}||${r.venue_name}`;
 }
