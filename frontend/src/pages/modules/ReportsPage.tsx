@@ -143,31 +143,64 @@ function venueColumnKey(r: { zone_name: string; mohallah_name: string; venue_nam
   return `${r.zone_name}||${r.mohallah_name}||${r.venue_name}`;
 }
 
-function venueColumnLabel(r: { zone_name: string; mohallah_name: string; venue_name: string }) {
-  return `${r.zone_name}<br/>${r.mohallah_name}<br/><b>${r.venue_name}</b>`;
-}
-
 function miqaatTitleLabel(miqaat: { miqaat_name: string; english_date: string } | undefined, fallbackId: string) {
   return miqaat ? `${formatDateDdMmmYy(miqaat.english_date)} - ${miqaat.miqaat_name}` : `Miqaat #${fallbackId}`;
 }
 
-function buildBulkMiqaatScheduleExcelTableHtml(args: {
+type MiqaatScheduleExportRow = {
+  zone_name: string;
+  mohallah_name: string;
+  venue_name: string;
+  party_name: string;
+  category: string;
+  is_manual: 0 | 1;
+};
+
+function buildVenueDisplayLabels(rows: MiqaatScheduleExportRow[]) {
+  const metaByKey = new Map<string, { zone: string; mohallah: string; venue: string }>();
+  for (const r of rows) {
+    const key = venueColumnKey(r);
+    if (!metaByKey.has(key)) metaByKey.set(key, { zone: r.zone_name, mohallah: r.mohallah_name, venue: r.venue_name });
+  }
+
+  const venueNameCounts = new Map<string, number>();
+  for (const m of metaByKey.values()) {
+    venueNameCounts.set(m.venue, (venueNameCounts.get(m.venue) ?? 0) + 1);
+  }
+
+  const baseLabelByKey = new Map<string, string>();
+  for (const [key, m] of metaByKey.entries()) {
+    const count = venueNameCounts.get(m.venue) ?? 0;
+    baseLabelByKey.set(key, count > 1 ? `${m.venue} (${m.mohallah})` : m.venue);
+  }
+
+  const baseLabelCounts = new Map<string, number>();
+  for (const label of baseLabelByKey.values()) {
+    baseLabelCounts.set(label, (baseLabelCounts.get(label) ?? 0) + 1);
+  }
+
+  const finalLabelByKey = new Map<string, string>();
+  for (const [key, m] of metaByKey.entries()) {
+    const base = baseLabelByKey.get(key) ?? m.venue;
+    const count = baseLabelCounts.get(base) ?? 0;
+    finalLabelByKey.set(key, count > 1 ? `${m.venue} (${m.mohallah}, ${m.zone})` : base);
+  }
+
+  return { metaByKey, labelByKey: finalLabelByKey };
+}
+
+function buildBulkMiqaatVenuePartyGridHtml(args: {
   miqaatTitles: Record<string, string>;
-  rowsByMiqaatId: Record<string, Array<{ zone_name: string; mohallah_name: string; venue_name: string; party_name: string; category: string; is_manual: 0 | 1 }>>;
+  rowsByMiqaatId: Record<string, MiqaatScheduleExportRow[]>;
 }) {
   const allRows = Object.values(args.rowsByMiqaatId).flat();
-  const venueKeyToLabel = new Map<string, string>();
-  for (const r of allRows) {
-    const key = venueColumnKey(r);
-    if (!venueKeyToLabel.has(key)) venueKeyToLabel.set(key, venueColumnLabel(r));
-  }
-  const venueKeys = Array.from(venueKeyToLabel.keys()).sort((a, b) => a.localeCompare(b));
+  const { labelByKey } = buildVenueDisplayLabels(allRows);
+  const venueKeys = Array.from(labelByKey.keys()).sort((a, b) => a.localeCompare(b));
 
   const thead = `<thead>
     <tr>
-      <th style="min-width: 160px;">Miqaat</th>
-      <th style="min-width: 220px;">Party</th>
-      ${venueKeys.map((k) => `<th style="min-width: 180px;">${venueKeyToLabel.get(k) ?? ""}</th>`).join("")}
+      <th style="min-width: 180px;">Miqaat</th>
+      ${venueKeys.map((k) => `<th style="min-width: 180px;">${escapeHtml(labelByKey.get(k) ?? "")}</th>`).join("")}
     </tr>
   </thead>`;
 
@@ -178,96 +211,66 @@ function buildBulkMiqaatScheduleExcelTableHtml(args: {
     const title = args.miqaatTitles[miqaatId] ?? `Miqaat #${miqaatId}`;
     const rows = args.rowsByMiqaatId[miqaatId] ?? [];
 
-    const partyKeys = Array.from(
-      new Set(rows.map((r) => `${r.party_name}||${r.category}`))
-    ).sort((a, b) => a.localeCompare(b));
-
-    const assignment = new Map<string, { venueKey: string; isManual: boolean }>();
+    const partiesByVenue = new Map<string, string[]>();
     for (const r of rows) {
-      const pKey = `${r.party_name}||${r.category}`;
       const vKey = venueColumnKey(r);
-      if (!assignment.has(pKey)) assignment.set(pKey, { venueKey: vKey, isManual: Boolean(r.is_manual) });
+      const list = partiesByVenue.get(vKey) ?? [];
+      list.push(`${r.party_name} (${r.category})`);
+      partiesByVenue.set(vKey, list);
     }
 
-    const rowspan = Math.max(1, partyKeys.length);
-    if (partyKeys.length === 0) {
-      tbodyLines.push(`<tr>
-        <td>${escapeHtml(title)}</td>
-        <td colspan="${2 + venueKeys.length - 1}" style="color:#666;">No schedule rows</td>
-      </tr>`);
-      continue;
-    }
+    const blockRows = Math.max(1, ...venueKeys.map((k) => (partiesByVenue.get(k)?.length ?? 0)));
 
-    partyKeys.forEach((pKey, idx) => {
-      const [partyName, category] = pKey.split("||");
-      const cellValues = venueKeys
-        .map((vk) => {
-          const a = assignment.get(pKey);
-          if (!a || a.venueKey !== vk) return "<td></td>";
-          return `<td style="text-align:center;">&#10003;${a.isManual ? " (M)" : ""}</td>`;
+    for (let i = 0; i < blockRows; i += 1) {
+      const cells = venueKeys
+        .map((k) => {
+          const value = partiesByVenue.get(k)?.[i] ?? "";
+          return `<td>${escapeHtml(value)}</td>`;
         })
         .join("");
 
-      if (idx === 0) {
+      if (i === 0) {
         tbodyLines.push(`<tr>
-          <td rowspan="${rowspan}" style="font-weight:bold;vertical-align:top;">${escapeHtml(title)}</td>
-          <td>${escapeHtml(`${partyName} (${category})`)}</td>
-          ${cellValues}
+          <td rowspan="${blockRows}" style="background:#e7e7e7;font-weight:bold;vertical-align:middle;">${escapeHtml(title)}</td>
+          ${cells}
         </tr>`);
       } else {
-        tbodyLines.push(`<tr>
-          <td>${escapeHtml(`${partyName} (${category})`)}</td>
-          ${cellValues}
-        </tr>`);
+        tbodyLines.push(`<tr>${cells}</tr>`);
       }
-    });
+    }
   }
 
   return `<table>${thead}<tbody>${tbodyLines.join("")}</tbody></table>`;
 }
 
-function buildBulkMiqaatScheduleMatrix(args: {
+function buildBulkMiqaatVenuePartyGridModel(args: {
   miqaatTitles: Record<string, string>;
-  rowsByMiqaatId: Record<string, Array<{ zone_name: string; mohallah_name: string; venue_name: string; party_name: string; category: string; is_manual: 0 | 1 }>>;
+  rowsByMiqaatId: Record<string, MiqaatScheduleExportRow[]>;
 }) {
   const allRows = Object.values(args.rowsByMiqaatId).flat();
-  const venueKeyToHeader = new Map<string, { headerHtml: string; headerText: string }>();
-  for (const r of allRows) {
-    const key = venueColumnKey(r);
-    if (!venueKeyToHeader.has(key)) {
-      venueKeyToHeader.set(key, {
-        headerHtml: venueColumnLabel(r),
-        headerText: `${r.zone_name} / ${r.mohallah_name} / ${r.venue_name}`
-      });
-    }
-  }
-  const venueKeys = Array.from(venueKeyToHeader.keys()).sort((a, b) => a.localeCompare(b));
+  const { labelByKey } = buildVenueDisplayLabels(allRows);
+  const venueKeys = Array.from(labelByKey.keys()).sort((a, b) => a.localeCompare(b));
+  const venueLabels = venueKeys.map((k) => labelByKey.get(k) ?? "");
 
   const miqaatIds = Object.keys(args.rowsByMiqaatId);
   const groups = miqaatIds.map((miqaatId) => {
     const title = args.miqaatTitles[miqaatId] ?? `Miqaat #${miqaatId}`;
     const rows = args.rowsByMiqaatId[miqaatId] ?? [];
-    const partyKeys = Array.from(new Set(rows.map((r) => `${r.party_name}||${r.category}`))).sort((a, b) => a.localeCompare(b));
-    const assignment = new Map<string, { venueKey: string; isManual: boolean }>();
+
+    const partiesByVenue = new Map<string, string[]>();
     for (const r of rows) {
-      const pKey = `${r.party_name}||${r.category}`;
       const vKey = venueColumnKey(r);
-      if (!assignment.has(pKey)) assignment.set(pKey, { venueKey: vKey, isManual: Boolean(r.is_manual) });
+      const list = partiesByVenue.get(vKey) ?? [];
+      list.push(`${r.party_name} (${r.category})`);
+      partiesByVenue.set(vKey, list);
     }
-    const parties = partyKeys.map((pKey) => {
-      const [partyName, category] = pKey.split("||");
-      const a = assignment.get(pKey);
-      return { key: pKey, partyName, category, venueKey: a?.venueKey ?? null, isManual: a?.isManual ?? false };
-    });
-    return { miqaatId, title, parties };
+
+    const blockRows = Math.max(1, ...venueKeys.map((k) => (partiesByVenue.get(k)?.length ?? 0)));
+    const grid = Array.from({ length: blockRows }, (_, idx) => venueKeys.map((k) => partiesByVenue.get(k)?.[idx] ?? ""));
+    return { miqaatId, title, blockRows, grid };
   });
 
-  return {
-    venueKeys,
-    venueHeadersHtml: venueKeys.map((k) => venueKeyToHeader.get(k)?.headerHtml ?? ""),
-    venueHeadersText: venueKeys.map((k) => venueKeyToHeader.get(k)?.headerText ?? ""),
-    groups
-  };
+  return { venueKeys, venueLabels, groups };
 }
 
 function IconExcel({ className = "h-4 w-4" }: { className?: string }) {
@@ -556,7 +559,7 @@ export function ReportsPage() {
         rowsByMiqaatId[id] = env.data as any[];
       }
 
-      const table = buildBulkMiqaatScheduleExcelTableHtml({ miqaatTitles, rowsByMiqaatId });
+      const table = buildBulkMiqaatVenuePartyGridHtml({ miqaatTitles, rowsByMiqaatId });
       openPrintWindow({
         title: "Miqaat Schedules",
         metaLines: [`Zone: ${zoneLabel}`, `Count: ${ids.length}`],
@@ -601,13 +604,13 @@ export function ReportsPage() {
         rowsByMiqaatId[id] = env.data as any[];
       }
 
-      const table = buildBulkMiqaatScheduleExcelTableHtml({ miqaatTitles, rowsByMiqaatId });
+      const table = buildBulkMiqaatVenuePartyGridHtml({ miqaatTitles, rowsByMiqaatId });
 
       const html = buildExportHtmlDocument({
         title: "Miqaat Schedules",
         metaLines: [`Zone: ${zoneLabel}`, `Count: ${ids.length}`],
         bodyHtml: table,
-        hintLine: "Legend: ✓ = assigned, (M) = manual"
+        hintLine: "Columns are venues. Rows list parties under each venue for every selected Miqaat."
       });
       const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
       const filename = `miqaat_schedules_${timestampForFilename()}.xls`;
@@ -649,12 +652,12 @@ export function ReportsPage() {
         rowsByMiqaatId[id] = env.data as any[];
       }
 
-      const matrix = buildBulkMiqaatScheduleMatrix({ miqaatTitles, rowsByMiqaatId });
+      const matrix = buildBulkMiqaatVenuePartyGridModel({ miqaatTitles, rowsByMiqaatId });
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
       doc.setFontSize(16);
       doc.text("Miqaat Schedules", 40, 40);
       doc.setFontSize(10);
-      const metaLines = [`Zone: ${zoneLabel}`, `Count: ${ids.length}`, "Legend: X = assigned, XM = manual"];
+      const metaLines = [`Zone: ${zoneLabel}`, `Count: ${ids.length}`];
       metaLines.forEach((line, index) => {
         doc.text(line, 40, 60 + index * 14);
       });
@@ -662,44 +665,27 @@ export function ReportsPage() {
       const head = [
         [
           "Miqaat",
-          "Party",
-          ...matrix.venueHeadersText.map((t) => {
-            const parts = String(t).split(" / ");
-            return parts[parts.length - 1] || t;
-          })
+          ...matrix.venueLabels
         ]
       ];
 
       const body: any[] = [];
       for (const g of matrix.groups) {
-        const rowspan = Math.max(1, g.parties.length);
-        if (g.parties.length === 0) {
-          body.push([
-            { content: g.title, rowSpan: 1 },
-            { content: "No schedule rows", colSpan: 1 + matrix.venueKeys.length },
-            ...new Array(matrix.venueKeys.length).fill("")
-          ]);
-          continue;
+        const rowspan = Math.max(1, g.blockRows);
+        for (let i = 0; i < rowspan; i += 1) {
+          const rowCells = g.grid[i] ?? new Array(matrix.venueKeys.length).fill("");
+          if (i === 0) body.push([{ content: g.title, rowSpan: rowspan }, ...rowCells]);
+          else body.push(["", ...rowCells]);
         }
-        g.parties.forEach((p, idx) => {
-          const venueCells = matrix.venueKeys.map((vk) => {
-            if (p.venueKey !== vk) return "";
-            return p.isManual ? "XM" : "X";
-          });
-          if (idx === 0) {
-            body.push([{ content: g.title, rowSpan: rowspan }, `${p.partyName} (${p.category})`, ...venueCells]);
-          } else {
-            body.push(["", `${p.partyName} (${p.category})`, ...venueCells]);
-          }
-        });
       }
 
       autoTable(doc, {
         startY: 115,
         head,
         body,
-        styles: { fontSize: 6, cellPadding: 2, valign: "top" },
+        styles: { fontSize: 6, cellPadding: 2, valign: "top", overflow: "linebreak" as any },
         headStyles: { fillColor: [243, 243, 243], textColor: [17, 17, 17] },
+        columnStyles: { 0: { cellWidth: 120 } },
         margin: { left: 40, right: 40 }
       });
 
@@ -773,7 +759,7 @@ export function ReportsPage() {
         </div>
         <div className="mt-4 border-t border-border pt-4">
           <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-lg font-bold">Print Multiple Miqaat Schedules</div>
+            <div className="text-lg font-bold">Multi-Miqaat Schedule Report</div>
             <div className="flex gap-2">
               <Button
                 variant="ghost"
@@ -792,7 +778,7 @@ export function ReportsPage() {
                 {bulkBusy ? "Preparing..." : "Download PDF"}
               </Button>
               <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} onClick={printMultipleMiqaatSchedules}>
-                {bulkBusy ? "Preparing..." : "Print Selected"}
+                {bulkBusy ? "Preparing..." : "Print"}
               </Button>
             </div>
           </div>
@@ -831,11 +817,11 @@ export function ReportsPage() {
               </div>
               {bulkError ? <div className="mt-2 text-sm text-danger">{bulkError}</div> : null}
               <div className="mt-1 text-xs text-textMuted">
-                Tip: the printed output includes one schedule table per selected Miqaat.
+                Tip: this report formats Miqaats as merged row blocks, with venues as columns.
               </div>
             </div>
             <div className="text-sm text-textMuted">
-              Zone filter applies to bulk printing too. Select multiple Miqaats and click Print Selected.
+              Zone filter applies here too. Select multiple Miqaats, then export.
             </div>
           </div>
         </div>
