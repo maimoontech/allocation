@@ -771,6 +771,17 @@ export function ReportsPage() {
               >
                 Clear
               </Button>
+              <Button
+                variant="ghost"
+                disabled={bulkBusy || !miqaatId}
+                onClick={() => {
+                  if (!miqaatId) return;
+                  setBulkError(null);
+                  setBulkMiqaatIds((prev) => Array.from(new Set([...prev, miqaatId])));
+                }}
+              >
+                Add Current Miqaat
+              </Button>
               <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} variant="ghost" onClick={downloadMultipleMiqaatSchedulesExcel}>
                 {bulkBusy ? "Preparing..." : "Download Excel"}
               </Button>
