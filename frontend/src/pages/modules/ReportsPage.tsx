@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
@@ -246,6 +248,50 @@ function buildBulkMiqaatScheduleExcelTableHtml(args: {
   }
 
   return `<table>${thead}<tbody>${tbodyLines.join("")}</tbody></table>`;
+}
+
+function buildBulkMiqaatScheduleMatrix(args: {
+  miqaatTitles: Record<string, string>;
+  rowsByMiqaatId: Record<string, Array<{ zone_name: string; mohallah_name: string; venue_name: string; party_name: string; category: string; is_manual: 0 | 1 }>>;
+}) {
+  const allRows = Object.values(args.rowsByMiqaatId).flat();
+  const venueKeyToHeader = new Map<string, { headerHtml: string; headerText: string }>();
+  for (const r of allRows) {
+    const key = venueColumnKey(r);
+    if (!venueKeyToHeader.has(key)) {
+      venueKeyToHeader.set(key, {
+        headerHtml: venueColumnLabel(r),
+        headerText: `${r.zone_name} / ${r.mohallah_name} / ${r.venue_name}`
+      });
+    }
+  }
+  const venueKeys = Array.from(venueKeyToHeader.keys()).sort((a, b) => a.localeCompare(b));
+
+  const miqaatIds = Object.keys(args.rowsByMiqaatId);
+  const groups = miqaatIds.map((miqaatId) => {
+    const title = args.miqaatTitles[miqaatId] ?? `Miqaat #${miqaatId}`;
+    const rows = args.rowsByMiqaatId[miqaatId] ?? [];
+    const partyKeys = Array.from(new Set(rows.map((r) => `${r.party_name}||${r.category}`))).sort((a, b) => a.localeCompare(b));
+    const assignment = new Map<string, { venueKey: string; isManual: boolean }>();
+    for (const r of rows) {
+      const pKey = `${r.party_name}||${r.category}`;
+      const vKey = venueColumnKey(r);
+      if (!assignment.has(pKey)) assignment.set(pKey, { venueKey: vKey, isManual: Boolean(r.is_manual) });
+    }
+    const parties = partyKeys.map((pKey) => {
+      const [partyName, category] = pKey.split("||");
+      const a = assignment.get(pKey);
+      return { key: pKey, partyName, category, venueKey: a?.venueKey ?? null, isManual: a?.isManual ?? false };
+    });
+    return { miqaatId, title, parties };
+  });
+
+  return {
+    venueKeys,
+    venueHeadersHtml: venueKeys.map((k) => venueKeyToHeader.get(k)?.headerHtml ?? ""),
+    venueHeadersText: venueKeys.map((k) => venueKeyToHeader.get(k)?.headerText ?? ""),
+    groups
+  };
 }
 
 function IconExcel({ className = "h-4 w-4" }: { className?: string }) {
@@ -520,25 +566,25 @@ export function ReportsPage() {
             ? "My Zone"
             : "—";
 
-      const sections: string[] = [];
+      const miqaatTitles: Record<string, string> = {};
+      const rowsByMiqaatId: Record<string, any[]> = {};
+      const miqaats = miqaatsQuery.data ?? [];
+
       for (const id of ids) {
-        const miqaat = (miqaatsQuery.data ?? []).find((m) => String(m.id) === id);
-        const title = miqaat ? `${formatDateDdMmmYy(miqaat.english_date)} - ${miqaat.miqaat_name}` : `Miqaat #${id}`;
+        const miqaat = miqaats.find((m) => String(m.id) === id);
+        miqaatTitles[id] = miqaatTitleLabel(miqaat, id);
         const params = new URLSearchParams();
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        const table = renderMiqaatScheduleTableHtml(env.data as any);
-        sections.push(`<div style="page-break-inside: avoid; margin-bottom: 18px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 14px;">${escapeHtml(title)}</h3>
-          ${table}
-        </div>`);
+        rowsByMiqaatId[id] = env.data as any[];
       }
 
+      const table = buildBulkMiqaatScheduleExcelTableHtml({ miqaatTitles, rowsByMiqaatId });
       openPrintWindow({
         title: "Miqaat Schedules",
         metaLines: [`Zone: ${zoneLabel}`, `Count: ${ids.length}`],
-        bodyHtml: sections.join(""),
+        bodyHtml: table,
         autoPrint: true
       });
     } catch (e: any) {
@@ -590,6 +636,99 @@ export function ReportsPage() {
       const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
       const filename = `miqaat_schedules_${timestampForFilename()}.xls`;
       downloadBlobFile(filename, blob);
+    } catch (e: any) {
+      setBulkError(String(e?.message ?? e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function downloadMultipleMiqaatSchedulesPdf() {
+    setBulkError(null);
+    const ids = bulkMiqaatIds.slice().filter(Boolean);
+    if (ids.length === 0) {
+      setBulkError("Select at least one Miqaat to download.");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const zoneLabel =
+        role === "admin"
+          ? (zoneOptions.find((z) => z.value === zoneId)?.label ?? zoneId)
+          : role === "zonal_head"
+            ? "My Zone"
+            : "—";
+
+      const miqaatTitles: Record<string, string> = {};
+      const rowsByMiqaatId: Record<string, any[]> = {};
+      const miqaats = miqaatsQuery.data ?? [];
+
+      for (const id of ids) {
+        const miqaat = miqaats.find((m) => String(m.id) === id);
+        miqaatTitles[id] = miqaatTitleLabel(miqaat, id);
+        const params = new URLSearchParams();
+        params.set("miqaat_id", id);
+        if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
+        const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
+        rowsByMiqaatId[id] = env.data as any[];
+      }
+
+      const matrix = buildBulkMiqaatScheduleMatrix({ miqaatTitles, rowsByMiqaatId });
+      const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      doc.setFontSize(16);
+      doc.text("Miqaat Schedules", 40, 40);
+      doc.setFontSize(10);
+      const metaLines = [`Zone: ${zoneLabel}`, `Count: ${ids.length}`, "Legend: X = assigned, XM = manual"];
+      metaLines.forEach((line, index) => {
+        doc.text(line, 40, 60 + index * 14);
+      });
+
+      const head = [
+        [
+          "Miqaat",
+          "Party",
+          ...matrix.venueHeadersText.map((t) => {
+            const parts = String(t).split(" / ");
+            return parts[parts.length - 1] || t;
+          })
+        ]
+      ];
+
+      const body: any[] = [];
+      for (const g of matrix.groups) {
+        const rowspan = Math.max(1, g.parties.length);
+        if (g.parties.length === 0) {
+          body.push([
+            { content: g.title, rowSpan: 1 },
+            { content: "No schedule rows", colSpan: 1 + matrix.venueKeys.length },
+            ...new Array(matrix.venueKeys.length).fill("")
+          ]);
+          continue;
+        }
+        g.parties.forEach((p, idx) => {
+          const venueCells = matrix.venueKeys.map((vk) => {
+            if (p.venueKey !== vk) return "";
+            return p.isManual ? "XM" : "X";
+          });
+          if (idx === 0) {
+            body.push([{ content: g.title, rowSpan: rowspan }, `${p.partyName} (${p.category})`, ...venueCells]);
+          } else {
+            body.push(["", `${p.partyName} (${p.category})`, ...venueCells]);
+          }
+        });
+      }
+
+      autoTable(doc, {
+        startY: 115,
+        head,
+        body,
+        styles: { fontSize: 6, cellPadding: 2, valign: "top" },
+        headStyles: { fillColor: [243, 243, 243], textColor: [17, 17, 17] },
+        margin: { left: 40, right: 40 }
+      });
+
+      const filename = `miqaat_schedules_${timestampForFilename()}.pdf`;
+      doc.save(filename);
     } catch (e: any) {
       setBulkError(String(e?.message ?? e));
     } finally {
@@ -672,6 +811,9 @@ export function ReportsPage() {
               </Button>
               <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} variant="ghost" onClick={downloadMultipleMiqaatSchedulesExcel}>
                 {bulkBusy ? "Preparing..." : "Download Excel"}
+              </Button>
+              <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} variant="ghost" onClick={downloadMultipleMiqaatSchedulesPdf}>
+                {bulkBusy ? "Preparing..." : "Download PDF"}
               </Button>
               <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} onClick={printMultipleMiqaatSchedules}>
                 {bulkBusy ? "Preparing..." : "Print Selected"}
