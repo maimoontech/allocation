@@ -3,6 +3,7 @@ import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
 import { useAppSelector } from "../../hooks/storeHooks";
+import { resolveApiUrl } from "../../features/api/api";
 import { useGetZonesQuery } from "../../features/zones/zonesApi";
 import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetPartiesQuery } from "../../features/parties/partiesApi";
@@ -123,6 +124,8 @@ function openPrintWindow(args: {
   }
 }
 
+type ApiEnvelope<T> = { success: boolean; data: T; message?: string };
+
 function downloadExcelFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
   const html = buildExportHtmlDocument({
     title: args.title,
@@ -132,6 +135,30 @@ function downloadExcelFromElement(args: { title: string; metaLines: string[]; fi
   const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
   const filename = `${normalizeFilenamePart(args.filenameBase || args.title)}_${timestampForFilename()}.xls`;
   downloadBlobFile(filename, blob);
+}
+
+function renderMiqaatScheduleTableHtml(rows: Array<{ zone_name: string; venue_name: string; mohallah_name: string; party_name: string; category: string; is_manual: 0 | 1 }>) {
+  const header = `<thead>
+    <tr>
+      <th>Zone</th>
+      <th>Venue</th>
+      <th>Party</th>
+      <th>Manual</th>
+    </tr>
+  </thead>`;
+  const body = `<tbody>${rows
+    .map((r) => {
+      const venue = `${r.venue_name} (${r.mohallah_name})`;
+      const party = `${r.party_name} (${r.category})`;
+      return `<tr>
+        <td>${escapeHtml(r.zone_name)}</td>
+        <td>${escapeHtml(venue)}</td>
+        <td>${escapeHtml(party)}</td>
+        <td>${r.is_manual ? "Yes" : "No"}</td>
+      </tr>`;
+    })
+    .join("")}</tbody>`;
+  return `<table>${header}${body}</table>`;
 }
 
 function IconExcel({ className = "h-4 w-4" }: { className?: string }) {
@@ -267,6 +294,7 @@ function ReportCard(props: {
 
 export function ReportsPage() {
   const user = useAppSelector((s) => s.auth.user);
+  const token = useAppSelector((s) => s.auth.token);
   const role = user?.role ?? "admin";
 
   const zonesQuery = useGetZonesQuery(undefined, { skip: role !== "admin" });
@@ -362,6 +390,77 @@ export function ReportsPage() {
     ];
   }, [miqaatId, miqaatOptions, partyId, partyOptions, quarter, role, year, zoneId, zoneOptions]);
 
+  const [bulkMiqaatIds, setBulkMiqaatIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  const bulkMiqaatOptions = useMemo(() => {
+    const items = miqaatsQuery.data ?? [];
+    return items
+      .slice()
+      .sort((a, b) => b.english_date.localeCompare(a.english_date))
+      .map((m) => ({ id: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
+  }, [miqaatsQuery.data]);
+
+  async function fetchEnvelope<T>(path: string): Promise<ApiEnvelope<T>> {
+    const res = await fetch(resolveApiUrl(path), {
+      headers: token ? { authorization: `Bearer ${token}` } : undefined
+    });
+    const raw = await res.text();
+    try {
+      const json = JSON.parse(raw) as ApiEnvelope<T>;
+      if (!res.ok || !json.success) throw new Error(json.message || "Request failed");
+      return json;
+    } catch {
+      const head = raw.replace(/\s+/g, " ").trim().slice(0, 200);
+      throw new Error(head || "Request failed");
+    }
+  }
+
+  async function printMultipleMiqaatSchedules() {
+    setBulkError(null);
+    const ids = bulkMiqaatIds.slice().filter(Boolean);
+    if (ids.length === 0) {
+      setBulkError("Select at least one Miqaat to print.");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const zoneLabel =
+        role === "admin"
+          ? (zoneOptions.find((z) => z.value === zoneId)?.label ?? zoneId)
+          : role === "zonal_head"
+            ? "My Zone"
+            : "—";
+
+      const sections: string[] = [];
+      for (const id of ids) {
+        const miqaat = (miqaatsQuery.data ?? []).find((m) => String(m.id) === id);
+        const title = miqaat ? `${formatDateDdMmmYy(miqaat.english_date)} - ${miqaat.miqaat_name}` : `Miqaat #${id}`;
+        const params = new URLSearchParams();
+        params.set("miqaat_id", id);
+        if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
+        const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
+        const table = renderMiqaatScheduleTableHtml(env.data as any);
+        sections.push(`<div style="page-break-inside: avoid; margin-bottom: 18px;">
+          <h3 style="margin: 0 0 8px 0; font-size: 14px;">${escapeHtml(title)}</h3>
+          ${table}
+        </div>`);
+      }
+
+      openPrintWindow({
+        title: "Miqaat Schedules",
+        metaLines: [`Zone: ${zoneLabel}`, `Count: ${ids.length}`],
+        bodyHtml: sections.join(""),
+        autoPrint: true
+      });
+    } catch (e: any) {
+      setBulkError(String(e?.message ?? e));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">Reports</div>
@@ -420,6 +519,68 @@ export function ReportsPage() {
             ]}
           />
           <div />
+        </div>
+        <div className="mt-4 border-t border-border pt-4">
+          <div className="mb-2 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="text-lg font-bold">Print Multiple Miqaat Schedules</div>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                disabled={bulkBusy}
+                onClick={() => {
+                  setBulkMiqaatIds([]);
+                  setBulkError(null);
+                }}
+              >
+                Clear
+              </Button>
+              <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} onClick={printMultipleMiqaatSchedules}>
+                {bulkBusy ? "Preparing..." : "Print Selected"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <div className="mb-1 text-sm font-semibold">Miqaats</div>
+              <div className="max-h-48 overflow-auto rounded-input border border-border bg-white p-2">
+                {bulkMiqaatOptions.length === 0 ? (
+                  <div className="text-sm text-textMuted">No miqaats available.</div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {bulkMiqaatOptions.map((m) => {
+                      const checked = bulkMiqaatIds.includes(m.id);
+                      return (
+                        <label key={m.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setBulkError(null);
+                              setBulkMiqaatIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(m.id);
+                                else next.delete(m.id);
+                                return Array.from(next);
+                              });
+                            }}
+                          />
+                          <span>{m.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              {bulkError ? <div className="mt-2 text-sm text-danger">{bulkError}</div> : null}
+              <div className="mt-1 text-xs text-textMuted">
+                Tip: the printed output includes one schedule table per selected Miqaat.
+              </div>
+            </div>
+            <div className="text-sm text-textMuted">
+              Zone filter applies to bulk printing too. Select multiple Miqaats and click Print Selected.
+            </div>
+          </div>
         </div>
       </Card>
 
