@@ -308,6 +308,25 @@ function IconPrint({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+function IconPlus({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </svg>
+  );
+}
+
+function IconClear({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M7 6l1 14h8l1-14" />
+    </svg>
+  );
+}
+
 function ReportCard(props: {
   title: string;
   filenameBase: string;
@@ -683,9 +702,11 @@ export function ReportsPage() {
         startY: 115,
         head,
         body,
-        styles: { fontSize: 6, cellPadding: 2, valign: "top", overflow: "linebreak" as any },
+        styles: { fontSize: 7, cellPadding: 2, valign: "top", overflow: "linebreak" as any },
         headStyles: { fillColor: [243, 243, 243], textColor: [17, 17, 17] },
-        columnStyles: { 0: { cellWidth: 120 } },
+        columnStyles: { 0: { cellWidth: 130 } },
+        horizontalPageBreak: true,
+        horizontalPageBreakRepeat: [0],
         margin: { left: 40, right: 40 }
       });
 
@@ -764,32 +785,59 @@ export function ReportsPage() {
               <Button
                 variant="ghost"
                 disabled={bulkBusy}
+                className="px-3"
+                aria-label="Clear"
+                title="Clear"
                 onClick={() => {
                   setBulkMiqaatIds([]);
                   setBulkError(null);
                 }}
               >
-                Clear
+                <IconClear />
               </Button>
               <Button
                 variant="ghost"
                 disabled={bulkBusy || !miqaatId}
+                className="px-3"
+                aria-label="Add Current Miqaat"
+                title="Add Current Miqaat"
                 onClick={() => {
                   if (!miqaatId) return;
                   setBulkError(null);
                   setBulkMiqaatIds((prev) => Array.from(new Set([...prev, miqaatId])));
                 }}
               >
-                Add Current Miqaat
+                <IconPlus />
               </Button>
-              <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} variant="ghost" onClick={downloadMultipleMiqaatSchedulesExcel}>
-                {bulkBusy ? "Preparing..." : "Download Excel"}
+              <Button
+                disabled={bulkBusy || bulkMiqaatIds.length === 0}
+                variant="ghost"
+                className="px-3"
+                aria-label="Download Excel"
+                title="Download Excel"
+                onClick={downloadMultipleMiqaatSchedulesExcel}
+              >
+                <IconExcel />
               </Button>
-              <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} variant="ghost" onClick={downloadMultipleMiqaatSchedulesPdf}>
-                {bulkBusy ? "Preparing..." : "Download PDF"}
+              <Button
+                disabled={bulkBusy || bulkMiqaatIds.length === 0}
+                variant="ghost"
+                className="px-3"
+                aria-label="Download PDF"
+                title="Download PDF"
+                onClick={downloadMultipleMiqaatSchedulesPdf}
+              >
+                <IconPdf />
               </Button>
-              <Button disabled={bulkBusy || bulkMiqaatIds.length === 0} onClick={printMultipleMiqaatSchedules}>
-                {bulkBusy ? "Preparing..." : "Print"}
+              <Button
+                disabled={bulkBusy || bulkMiqaatIds.length === 0}
+                variant="ghost"
+                className="px-3"
+                aria-label="Print"
+                title="Print"
+                onClick={printMultipleMiqaatSchedules}
+              >
+                <IconPrint />
               </Button>
             </div>
           </div>
