@@ -17,6 +17,7 @@ export type ScheduleRow = {
   party_name: string;
   category: "A" | "B" | "C" | "H";
   is_manual: 0 | 1;
+  all_assigned_venues_completed?: 0 | 1;
   created_at: string;
   performance_submitted?: 0 | 1;
   attended_properly?: 0 | 1;

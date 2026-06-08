@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const env_1 = require("./config/env");
+const response_1 = require("./utils/response");
 const authRoutes_1 = require("./routes/authRoutes");
 const zonesRoutes_1 = require("./routes/zonesRoutes");
 const mohallahsRoutes_1 = require("./routes/mohallahsRoutes");
@@ -36,6 +37,14 @@ app.use("/api/v1/schedules", schedulesRoutes_1.schedulesRoutes);
 app.use("/api/v1/reports", reportsRoutes_1.reportsRoutes);
 app.use("/api/v1/ratings", ratingsRoutes_1.ratingsRoutes);
 app.use("/api/v1/import-export", importExportRoutes_1.importExportRoutes);
+app.use((err, _req, res, _next) => {
+    if (res.headersSent)
+        return;
+    const code = String(err?.code ?? "");
+    if (code === "ER_DUP_ENTRY")
+        return (0, response_1.fail)(res, "Duplicate entry", 409);
+    return (0, response_1.fail)(res, "Internal server error", 500);
+});
 app.listen(env_1.env.port, () => {
     process.stdout.write(`API listening on http://localhost:${env_1.env.port}\\n`);
 });

@@ -8,6 +8,18 @@ export const schedulesRoutes = Router();
 
 schedulesRoutes.use(requireAuth);
 
+function completedPartyMiqaatJoin(scheduleAlias: string) {
+  return `LEFT JOIN (
+    SELECT s2.party_id, s2.miqaat_id, 1 AS all_assigned_venues_completed
+    FROM schedules s2
+    LEFT JOIN performance_ratings pr2 ON pr2.schedule_id = s2.id
+    GROUP BY s2.party_id, s2.miqaat_id
+    HAVING COUNT(DISTINCT s2.id) = COUNT(DISTINCT pr2.schedule_id)
+  ) completed_pairs
+    ON completed_pairs.party_id = ${scheduleAlias}.party_id
+   AND completed_pairs.miqaat_id = ${scheduleAlias}.miqaat_id`;
+}
+
 schedulesRoutes.get("/", async (req, res) => {
   const user = req.user!;
   const miqaatId = req.query.miqaat_id ? Number(req.query.miqaat_id) : null;
@@ -43,6 +55,7 @@ schedulesRoutes.get("/", async (req, res) => {
   const [rows] = await pool.query<any[]>(
     `SELECT s.id, s.miqaat_id, q.miqaat_name, q.english_date, s.venue_id, v.venue_name, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
             s.party_id, p.party_name, p.category, s.is_manual, s.created_at,
+            COALESCE(completed_pairs.all_assigned_venues_completed, 0) AS all_assigned_venues_completed,
             CASE WHEN pr.id IS NULL THEN 0 ELSE 1 END AS performance_submitted,
             pr.attended_properly,
             pr.recitation_score,
@@ -56,6 +69,7 @@ schedulesRoutes.get("/", async (req, res) => {
      JOIN mohallahs m ON m.id = v.mohallah_id
      JOIN zones z ON z.id = m.zone_id
      JOIN parties p ON p.id = s.party_id
+     ${completedPartyMiqaatJoin("s")}
      LEFT JOIN performance_ratings pr ON pr.schedule_id = s.id AND pr.coordinator_id = :coordinator_id
      ${whereSql}
      ORDER BY q.english_date DESC, z.zone_name, m.mohallah_name, v.venue_name, p.party_name`,

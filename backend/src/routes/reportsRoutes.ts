@@ -13,6 +13,18 @@ function getZoneScope(user: any, rawZoneId: unknown) {
   return Number.isFinite(zoneId) ? zoneId : null;
 }
 
+function completedPartyMiqaatJoin(scheduleAlias: string) {
+  return `JOIN (
+    SELECT s2.party_id, s2.miqaat_id
+    FROM schedules s2
+    LEFT JOIN performance_ratings pr2 ON pr2.schedule_id = s2.id
+    GROUP BY s2.party_id, s2.miqaat_id
+    HAVING COUNT(DISTINCT s2.id) = COUNT(DISTINCT pr2.schedule_id)
+  ) completed_pairs
+    ON completed_pairs.party_id = ${scheduleAlias}.party_id
+   AND completed_pairs.miqaat_id = ${scheduleAlias}.miqaat_id`;
+}
+
 reportsRoutes.get("/status-summary", async (req, res) => {
   const user = req.user!;
   const zoneId = getZoneScope(user, req.query.zone_id);
@@ -151,6 +163,7 @@ reportsRoutes.get("/attendance", async (req, res) => {
      JOIN mohallahs m ON m.id = v.mohallah_id
      JOIN zones z ON z.id = m.zone_id
      JOIN parties p ON p.id = s.party_id
+     ${completedPartyMiqaatJoin("s")}
      LEFT JOIN performance_ratings pr ON pr.schedule_id = s.id
      WHERE s.miqaat_id = :miqaat_id${zoneSql}
      ORDER BY z.zone_name, m.mohallah_name, v.venue_name, p.party_name`,
@@ -187,6 +200,7 @@ reportsRoutes.get("/performance", async (req, res) => {
               COUNT(pr.id) AS rated_count
        FROM performance_ratings pr
        JOIN schedules s ON s.id = pr.schedule_id
+       ${completedPartyMiqaatJoin("s")}
        JOIN miqaats q ON q.id = s.miqaat_id
        WHERE s.party_id = :party_id
        GROUP BY q.id, q.miqaat_name, q.english_date
@@ -216,6 +230,7 @@ reportsRoutes.get("/performance", async (req, res) => {
             COUNT(pr.id) AS ratings_count
      FROM performance_ratings pr
      JOIN schedules s ON s.id = pr.schedule_id
+     ${completedPartyMiqaatJoin("s")}
      JOIN parties p ON p.id = s.party_id
      JOIN zones z ON z.id = p.zone_id
      WHERE 1=1${zoneSql}
@@ -255,6 +270,7 @@ reportsRoutes.get("/quarterly", async (req, res) => {
      FROM performance_ratings pr
      JOIN schedules s ON s.id = pr.schedule_id
      JOIN miqaats q ON q.id = s.miqaat_id
+     ${completedPartyMiqaatJoin("s")}
      JOIN parties p ON p.id = s.party_id
      JOIN zones z ON z.id = p.zone_id
      WHERE q.english_date BETWEEN :start AND :end${zoneSql}
