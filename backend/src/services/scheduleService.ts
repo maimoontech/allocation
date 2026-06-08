@@ -92,6 +92,9 @@ export async function generateSchedule(params: {
       for (const r of historyRows) {
         pairVisitCounts.set(`${Number(r.party_id)}:${Number(r.venue_id)}`, Number(r.visit_count ?? 0));
       }
+      // #region debug-point B:history-snapshot
+      void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "B", location: "scheduleService.ts:84", msg: "[DEBUG] loaded party_venue_history snapshot", data: { miqaatId, zoneId, venueCount: venueIds.length, partyCount: partyIds.length, historyCount: historyRows.length, sample: historyRows.slice(0, 12).map((r) => ({ party_id: Number(r.party_id), venue_id: Number(r.venue_id), visit_count: Number(r.visit_count ?? 0) })) }, ts: Date.now() }) }).catch(() => {});
+      // #endregion
     }
 
     const assignedParty = new Set<number>();
@@ -124,6 +127,10 @@ export async function generateSchedule(params: {
         if (byPairVisits !== 0) return byPairVisits;
         return a.id - b.id;
       });
+
+      // #region debug-point A:candidate-ranking
+      void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] ranked candidates for venue", data: { miqaatId, zoneId, venueId, candidateCategory: candidates[0]?.category ?? null, selectedPartyId: available[0]?.id ?? null, topCandidates: available.slice(0, 5).map((p) => ({ partyId: p.id, visitCount: visitCount(p.id, venueId), category: p.category })) }, ts: Date.now() }) }).catch(() => {});
+      // #endregion
 
       return available[0] ?? null;
     }
@@ -168,6 +175,10 @@ export async function generateSchedule(params: {
     fillVenuesToTarget((venue) => Math.max(venue.min_parties, venue.max_parties));
 
     if (assignments.length === 0) throw new Error("NO_ASSIGNMENTS");
+
+    // #region debug-point C:assignment-result
+    void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "C", location: "scheduleService.ts:157", msg: "[DEBUG] generated assignments before insert", data: { miqaatId, zoneId, assignmentCount: assignments.length, assignments: assignments.map((a) => ({ venueId: a.venueId, partyId: a.partyId, pairVisitCount: visitCount(a.partyId, a.venueId) })) }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
 
     for (const a of assignments) {
       await connection.query(
