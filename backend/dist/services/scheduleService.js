@@ -56,14 +56,15 @@ async function generateSchedule(params) {
         }
         const venueIds = venues.map((v) => v.id);
         const partyIds = parties.map((p) => p.id);
-        const visited = new Set();
+        const pairVisitCounts = new Map();
         if (venueIds.length > 0 && partyIds.length > 0) {
-            const [historyRows] = await connection.query(`SELECT party_id, venue_id
+            const [historyRows] = await connection.query(`SELECT party_id, venue_id, visit_count
          FROM party_venue_history
          WHERE party_id IN (${partyIds.map(() => "?").join(",")})
            AND venue_id IN (${venueIds.map(() => "?").join(",")})`, [...partyIds, ...venueIds]);
-            for (const r of historyRows)
-                visited.add(`${Number(r.party_id)}:${Number(r.venue_id)}`);
+            for (const r of historyRows) {
+                pairVisitCounts.set(`${Number(r.party_id)}:${Number(r.venue_id)}`, Number(r.visit_count ?? 0));
+            }
         }
         const assignedParty = new Set();
         const occupancy = new Map();
@@ -79,11 +80,20 @@ async function generateSchedule(params) {
             assignedParty.add(partyId);
             occupancy.set(venueId, (occupancy.get(venueId) ?? 0) + 1);
         }
+        function visitCount(partyId, venueId) {
+            return pairVisitCounts.get(`${partyId}:${venueId}`) ?? 0;
+        }
         function pickParty(candidates, venueId) {
-            const notVisited = candidates.find((p) => !assignedParty.has(p.id) && !visited.has(`${p.id}:${venueId}`));
-            if (notVisited)
-                return notVisited;
-            return candidates.find((p) => !assignedParty.has(p.id)) ?? null;
+            const available = candidates.filter((p) => !assignedParty.has(p.id));
+            if (available.length === 0)
+                return null;
+            available.sort((a, b) => {
+                const byPairVisits = visitCount(a.id, venueId) - visitCount(b.id, venueId);
+                if (byPairVisits !== 0)
+                    return byPairVisits;
+                return a.id - b.id;
+            });
+            return available[0] ?? null;
         }
         const partiesByCategory = {
             A: parties.filter((p) => p.category === "A"),
