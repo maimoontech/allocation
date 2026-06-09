@@ -75,6 +75,13 @@ function activeCategoryOrder() {
     return pairVisitCounts.get(`${partyId}:${venueId}`) ?? 0;
   }
 
+  function hasCoveredAllActiveVenues(partyId) {
+    for (const venueId of venues.map((v) => v.id)) {
+      if (visitCount(partyId, venueId) === 0) return false;
+    }
+    return true;
+  }
+
   function place(venueId, partyId) {
     assignments.push({ venueId, partyId });
     assignedParty.add(partyId);
@@ -82,7 +89,12 @@ function activeCategoryOrder() {
   }
 
   function pickParty(candidates, venueId) {
-    const available = candidates.filter((p) => !assignedParty.has(p.id));
+    const available = candidates.filter((p) => {
+      if (assignedParty.has(p.id)) return false;
+      const pairVisits = visitCount(p.id, venueId);
+      if (pairVisits === 0) return true;
+      return hasCoveredAllActiveVenues(p.id);
+    });
     if (available.length === 0) return null;
     available.sort((a, b) => {
       const byPairVisits = visitCount(a.id, venueId) - visitCount(b.id, venueId);
@@ -128,6 +140,17 @@ function activeCategoryOrder() {
     const venue = venueById.get(a.venueId);
     const party = partyById.get(a.partyId);
     console.log(`${venue.venue_name} -> ${party.party_name} (${party.category}) [visits=${visitCount(a.partyId, a.venueId)}]`);
+  }
+
+  console.log("---");
+  console.log("RULE CHECK");
+  for (const a of assignments) {
+    const pairVisits = visitCount(a.partyId, a.venueId);
+    if (pairVisits > 0 && !hasCoveredAllActiveVenues(a.partyId)) {
+      const venue = venueById.get(a.venueId);
+      const party = partyById.get(a.partyId);
+      console.log(`VIOLATION: ${party.party_name} -> ${venue.venue_name} [visits=${pairVisits}]`);
+    }
   }
 
   await conn.end();

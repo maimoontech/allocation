@@ -23,10 +23,14 @@
 - Instrumentation added to `backend/src/services/scheduleService.ts` for history snapshot, candidate ranking, and assignment result.
 - Read-only DB inspection confirmed existing stored schedules for miqaats `2`, `3`, and `4` in zone `2` are identical.
 - Read-only simulation of the current generator against the same live `party_venue_history` produced a different assignment set, which means the current local code path does not reproduce the old repeated schedule.
+- Direct rule check against live history found 5 parties violating the required rule: they repeat at previously visited venues while still having unvisited active venues in the same zone.
+- Fix applied: candidate selection now rejects a repeated venue for a party unless that party has already covered all active venues.
+- Post-fix read-only simulation produced no rule violations.
 
 ## Verification Conclusion
 - Hypothesis A: Partially rejected for the current local code. The current ranking logic does apply pair visit counts.
 - Hypothesis B: Rejected as sole cause. History is present and non-empty, though skewed.
-- Hypothesis C: Rejected for the current local code path because the simulated output differs from the stored repeated schedules.
+- Hypothesis C: Confirmed for the old algorithm behavior relative to the business rule. Minimizing visit count alone still allows illegal repeats before full venue coverage.
 - Hypothesis D: Rejected. The database already contains repeated schedule rows before reporting.
-- Most likely current explanation: the user is viewing schedules generated before the fix, or the deployed backend has not yet picked up the current generator logic. Next verification step is redeploy + regenerate with overwrite.
+- Root cause: the generator ranked by least visit count but did not enforce the stricter rule that a party must finish all active venues before repeating any previously visited venue.
+- Next verification step is redeploy + regenerate with overwrite for the affected miqaats, then compare the new schedule/report output.

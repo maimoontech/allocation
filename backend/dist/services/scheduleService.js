@@ -86,8 +86,22 @@ async function generateSchedule(params) {
         function visitCount(partyId, venueId) {
             return pairVisitCounts.get(`${partyId}:${venueId}`) ?? 0;
         }
+        function hasCoveredAllActiveVenues(partyId) {
+            for (const venueId of venueIds) {
+                if (visitCount(partyId, venueId) === 0)
+                    return false;
+            }
+            return true;
+        }
         function pickParty(candidates, venueId) {
-            const available = candidates.filter((p) => !assignedParty.has(p.id));
+            const available = candidates.filter((p) => {
+                if (assignedParty.has(p.id))
+                    return false;
+                const pairVisits = visitCount(p.id, venueId);
+                if (pairVisits === 0)
+                    return true;
+                return hasCoveredAllActiveVenues(p.id);
+            });
             if (available.length === 0)
                 return null;
             available.sort((a, b) => {
