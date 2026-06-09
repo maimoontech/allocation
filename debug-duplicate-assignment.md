@@ -32,8 +32,15 @@
   - represents each venue slot as an ordered seat by round,
   - keeps one party per miqaat,
   - rejects illegal repeated venue visits until all active venues are covered,
-  - prefers category order `A -> B -> C` and earlier venue rounds,
   - and reaches all 19 assignments in read-only simulation with zero rule violations.
+- User clarified an additional hard rule for the first pass: every venue should receive Category `A` first when enough `A` parties exist; only after `A` is exhausted should round-1 venues fall back to `B`, then `C`.
+- Live zone counts confirm this is feasible for the affected zone: `7` active venues, `19` active parties, categories `A=8`, `B=7`, `C=4`, `min_total=10`, `max_total=22`.
+- Final staged fix now performs:
+  - round-1 seed matching in `A -> B -> C` order,
+  - minimum-capacity fill next in `A -> B -> C` order,
+  - remaining optional capacity fill last,
+  - while preserving the no-repeat-before-full-coverage rule.
+- Read-only staged simulation after this change still assigns all `19` parties, seeds all `7` round-1 venues with `A`, and reports zero rule violations.
 
 ## Verification Conclusion
 - Hypothesis A: Partially rejected for the current local code. The current ranking logic does apply pair visit counts.
@@ -41,5 +48,5 @@
 - Hypothesis C: Confirmed for the old algorithm behavior relative to the business rule. Minimizing visit count alone still allows illegal repeats before full venue coverage.
 - Hypothesis D: Rejected. The database already contains repeated schedule rows before reporting.
 - Root cause: the original generator was greedy and venue-first. It both allowed illegal repeats and could strand assignable parties, producing only 16 assignments even though a valid 19-party assignment existed.
-- Current fix status: local backend build passes, and post-fix simulation confirms 19/19 parties assigned with no duplicate-venue-rule violations.
+- Current fix status: local backend build passes, and post-fix staged simulation confirms 19/19 parties assigned with no duplicate-venue-rule violations while honoring the round-1 `A -> B -> C` seeding rule.
 - Next verification step is redeploy + regenerate with overwrite for the affected miqaats, then compare the new schedule/report output.

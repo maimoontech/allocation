@@ -147,21 +147,53 @@ async function generateSchedule(params) {
         void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] built global party-seat graph", data: { miqaatId, zoneId, partyCount: matchableParties.length, seatCount: seatList.length, sample: matchableParties.slice(0, 8).map((party) => ({ partyId: party.id, category: party.category, options: party.seatIndexes.length })) }, ts: Date.now() }) }).catch(() => { });
         // #endregion
         const seatToPartyIndex = Array(seatList.length).fill(-1);
-        const tryMatch = (partyIndex, seenSeats) => {
+        const tryMatch = (partyIndex, seenSeats, allowedSeatIndexes) => {
             for (const seatIndex of matchableParties[partyIndex].seatIndexes) {
+                if (!allowedSeatIndexes.has(seatIndex))
+                    continue;
                 if (seenSeats.has(seatIndex))
                     continue;
                 seenSeats.add(seatIndex);
                 const currentPartyIndex = seatToPartyIndex[seatIndex];
-                if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats)) {
+                if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats, allowedSeatIndexes)) {
                     seatToPartyIndex[seatIndex] = partyIndex;
                     return true;
                 }
             }
             return false;
         };
+        const matchSubset = (partyIndexes, allowedSeatIndexes) => {
+            for (const partyIndex of partyIndexes) {
+                if (seatToPartyIndex.includes(partyIndex))
+                    continue;
+                tryMatch(partyIndex, new Set(), allowedSeatIndexes);
+            }
+        };
+        const roundOneSeats = new Set(seatList
+            .map((seat, index) => ({ seat, index }))
+            .filter(({ seat }) => seat.round === 1)
+            .map(({ index }) => index));
+        const minimumFillSeats = new Set(seatList
+            .map((seat, index) => ({ seat, index }))
+            .filter(({ seat }) => {
+            const venue = venues.find((v) => v.id === seat.venueId);
+            return seat.round > 1 && seat.round <= venue.min_parties;
+        })
+            .map(({ index }) => index));
+        const categoryIndexes = {
+            A: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "A").map(({ index }) => index),
+            B: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "B").map(({ index }) => index),
+            C: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "C").map(({ index }) => index)
+        };
+        for (const category of activeCategoryOrder())
+            matchSubset(categoryIndexes[category], roundOneSeats);
+        for (const category of activeCategoryOrder())
+            matchSubset(categoryIndexes[category], minimumFillSeats);
+        const remainingSeats = new Set(seatList.map((_seat, index) => index).filter((index) => seatToPartyIndex[index] < 0));
         for (let partyIndex = 0; partyIndex < matchableParties.length; partyIndex += 1) {
-            tryMatch(partyIndex, new Set());
+            if (seatToPartyIndex.includes(partyIndex))
+                continue;
+            tryMatch(partyIndex, new Set(), remainingSeats);
         }
         seatToPartyIndex.forEach((partyIndex, seatIndex) => {
             if (partyIndex < 0)

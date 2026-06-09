@@ -180,12 +180,13 @@ export async function generateSchedule(params: {
     // #endregion
 
     const seatToPartyIndex = Array<number>(seatList.length).fill(-1);
-    const tryMatch = (partyIndex: number, seenSeats: Set<number>): boolean => {
+    const tryMatch = (partyIndex: number, seenSeats: Set<number>, allowedSeatIndexes: Set<number>): boolean => {
       for (const seatIndex of matchableParties[partyIndex].seatIndexes) {
+        if (!allowedSeatIndexes.has(seatIndex)) continue;
         if (seenSeats.has(seatIndex)) continue;
         seenSeats.add(seatIndex);
         const currentPartyIndex = seatToPartyIndex[seatIndex];
-        if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats)) {
+        if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats, allowedSeatIndexes)) {
           seatToPartyIndex[seatIndex] = partyIndex;
           return true;
         }
@@ -193,8 +194,43 @@ export async function generateSchedule(params: {
       return false;
     };
 
+    const matchSubset = (partyIndexes: number[], allowedSeatIndexes: Set<number>) => {
+      for (const partyIndex of partyIndexes) {
+        if (seatToPartyIndex.includes(partyIndex)) continue;
+        tryMatch(partyIndex, new Set<number>(), allowedSeatIndexes);
+      }
+    };
+
+    const roundOneSeats = new Set(
+      seatList
+        .map((seat, index) => ({ seat, index }))
+        .filter(({ seat }) => seat.round === 1)
+        .map(({ index }) => index)
+    );
+    const minimumFillSeats = new Set(
+      seatList
+        .map((seat, index) => ({ seat, index }))
+        .filter(({ seat }) => {
+          const venue = venues.find((v) => v.id === seat.venueId)!;
+          return seat.round > 1 && seat.round <= venue.min_parties;
+        })
+        .map(({ index }) => index)
+    );
+    const categoryIndexes: Record<ActiveCategory, number[]> = {
+      A: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "A").map(({ index }) => index),
+      B: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "B").map(({ index }) => index),
+      C: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "C").map(({ index }) => index)
+    };
+
+    for (const category of activeCategoryOrder()) matchSubset(categoryIndexes[category], roundOneSeats);
+    for (const category of activeCategoryOrder()) matchSubset(categoryIndexes[category], minimumFillSeats);
+
+    const remainingSeats = new Set(
+      seatList.map((_seat, index) => index).filter((index) => seatToPartyIndex[index] < 0)
+    );
     for (let partyIndex = 0; partyIndex < matchableParties.length; partyIndex += 1) {
-      tryMatch(partyIndex, new Set<number>());
+      if (seatToPartyIndex.includes(partyIndex)) continue;
+      tryMatch(partyIndex, new Set<number>(), remainingSeats);
     }
 
     seatToPartyIndex.forEach((partyIndex, seatIndex) => {
