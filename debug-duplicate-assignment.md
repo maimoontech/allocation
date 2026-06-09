@@ -41,12 +41,16 @@
   - remaining optional capacity fill last,
   - while preserving the no-repeat-before-full-coverage rule.
 - Read-only staged simulation after this change still assigns all `19` parties, seeds all `7` round-1 venues with `A`, and reports zero rule violations.
+- User reported the issue still reproduced after regenerating all `7` Hyderi miqaats.
+- New database evidence showed the real remaining defect: although each party had `7` assignments, many parties had only `2-6` distinct venues across those `7` miqaats.
+- Root cause refinement: the allocator was using **lifetime** `party_venue_history` to decide whether repeats were allowed. If a party had completed venue coverage in older history, the current 7-miqaat run could repeat venues immediately.
+- Final fix now derives a **current cycle coverage set** for each party from prior miqaats in chronological order and resets that set only after all active venues have been covered in the current cycle.
 
 ## Verification Conclusion
 - Hypothesis A: Partially rejected for the current local code. The current ranking logic does apply pair visit counts.
 - Hypothesis B: Rejected as sole cause. History is present and non-empty, though skewed.
 - Hypothesis C: Confirmed for the old algorithm behavior relative to the business rule. Minimizing visit count alone still allows illegal repeats before full venue coverage.
 - Hypothesis D: Rejected. The database already contains repeated schedule rows before reporting.
-- Root cause: the original generator was greedy and venue-first. It both allowed illegal repeats and could strand assignable parties, producing only 16 assignments even though a valid 19-party assignment existed.
-- Current fix status: local backend build passes, and post-fix staged simulation confirms 19/19 parties assigned with no duplicate-venue-rule violations while honoring the round-1 `A -> B -> C` seeding rule.
+- Root cause: there were two distinct scheduling bugs. First, the generator was greedy and venue-first. Second, repeat eligibility was based on lifetime history instead of the party's current venue-coverage cycle across prior miqaats.
+- Current fix status: local backend build passes, and the repeat gate now uses current-cycle venue coverage derived from prior miqaats rather than lifetime history.
 - Next verification step is redeploy + regenerate with overwrite for the affected miqaats, then compare the new schedule/report output.

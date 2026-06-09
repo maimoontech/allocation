@@ -52,6 +52,16 @@ export async function generateSchedule(params: {
     if (venues.length === 0) throw new Error("NO_VENUES");
     if (parties.length === 0) throw new Error("NO_PARTIES");
 
+    const [[miqaatRow]] = await connection.query<any[]>(
+      `SELECT english_date
+       FROM miqaats
+       WHERE id = :miqaat_id
+       LIMIT 1`,
+      { miqaat_id: miqaatId }
+    );
+    const currentMiqaatDate = String(miqaatRow?.english_date ?? "");
+    if (!currentMiqaatDate) throw new Error("INVALID_MIQAAT");
+
     const [existingRows] = await connection.query<any[]>(
       `SELECT COUNT(*) AS cnt
        FROM schedules s
@@ -81,6 +91,7 @@ export async function generateSchedule(params: {
     const partyIds = parties.map((p) => p.id);
 
     const pairVisitCounts = new Map<string, number>();
+    const currentCycleCoveredByParty = new Map<number, Set<number>>();
     if (venueIds.length > 0 && partyIds.length > 0) {
       const [historyRows] = await connection.query<any[]>(
         `SELECT party_id, venue_id, visit_count
@@ -92,8 +103,38 @@ export async function generateSchedule(params: {
       for (const r of historyRows) {
         pairVisitCounts.set(`${Number(r.party_id)}:${Number(r.venue_id)}`, Number(r.visit_count ?? 0));
       }
+
+      const [priorScheduleRows] = await connection.query<any[]>(
+        `SELECT s.party_id, s.venue_id, q.english_date, q.id AS prior_miqaat_id, s.id
+         FROM schedules s
+         JOIN miqaats q ON q.id = s.miqaat_id
+         JOIN venues v ON v.id = s.venue_id
+         JOIN mohallahs m ON m.id = v.mohallah_id
+         WHERE m.zone_id = ?
+           AND s.party_id IN (${partyIds.map(() => "?").join(",")})
+           AND (
+             q.english_date < ? OR
+             (q.english_date = ? AND q.id < ?)
+           )
+         ORDER BY q.english_date, q.id, s.id`,
+        [zoneId, ...partyIds, currentMiqaatDate, currentMiqaatDate, miqaatId]
+      );
+
+      for (const party of parties) currentCycleCoveredByParty.set(party.id, new Set<number>());
+      for (const row of priorScheduleRows) {
+        const partyId = Number(row.party_id);
+        const venueId = Number(row.venue_id);
+        const covered = currentCycleCoveredByParty.get(partyId) ?? new Set<number>();
+        covered.add(venueId);
+        if (covered.size >= venueIds.length) {
+          currentCycleCoveredByParty.set(partyId, new Set<number>());
+        } else {
+          currentCycleCoveredByParty.set(partyId, covered);
+        }
+      }
+
       // #region debug-point B:history-snapshot
-      void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "B", location: "scheduleService.ts:84", msg: "[DEBUG] loaded party_venue_history snapshot", data: { miqaatId, zoneId, venueCount: venueIds.length, partyCount: partyIds.length, historyCount: historyRows.length, sample: historyRows.slice(0, 12).map((r) => ({ party_id: Number(r.party_id), venue_id: Number(r.venue_id), visit_count: Number(r.visit_count ?? 0) })) }, ts: Date.now() }) }).catch(() => {});
+      void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "B", location: "scheduleService.ts:84", msg: "[DEBUG] loaded history and derived current cycle coverage", data: { miqaatId, zoneId, venueCount: venueIds.length, partyCount: partyIds.length, historyCount: historyRows.length, priorScheduleCount: priorScheduleRows.length, sampleCycleCoverage: Array.from(currentCycleCoveredByParty.entries()).slice(0, 8).map(([partyId, covered]) => ({ partyId, coveredVenueIds: Array.from(covered.values()) })) }, ts: Date.now() }) }).catch(() => {});
       // #endregion
     }
 
@@ -118,13 +159,6 @@ export async function generateSchedule(params: {
       return pairVisitCounts.get(`${partyId}:${venueId}`) ?? 0;
     }
 
-    function hasCoveredAllActiveVenues(partyId: number) {
-      for (const venueId of venueIds) {
-        if (visitCount(partyId, venueId) === 0) return false;
-      }
-      return true;
-    }
-
     const partiesByCategory: Record<ActiveCategory, Party[]> = {
       A: parties.filter((p) => p.category === "A"),
       B: parties.filter((p) => p.category === "B"),
@@ -132,9 +166,8 @@ export async function generateSchedule(params: {
     };
 
     function canAssignPartyToVenue(partyId: number, venueId: number) {
-      const pairVisits = visitCount(partyId, venueId);
-      if (pairVisits === 0) return true;
-      return hasCoveredAllActiveVenues(partyId);
+      const covered = currentCycleCoveredByParty.get(partyId);
+      return !covered?.has(venueId);
     }
 
     const seatList: Array<{ venueId: number; round: number }> = [];
