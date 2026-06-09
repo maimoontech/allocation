@@ -125,66 +125,82 @@ export async function generateSchedule(params: {
       return true;
     }
 
-    function pickParty(candidates: Party[], venueId: number) {
-      const available = candidates.filter((p) => {
-        if (assignedParty.has(p.id)) return false;
-        const pairVisits = visitCount(p.id, venueId);
-        if (pairVisits === 0) return true;
-        return hasCoveredAllActiveVenues(p.id);
-      });
-      if (available.length === 0) return null;
-
-      available.sort((a, b) => {
-        const byPairVisits = visitCount(a.id, venueId) - visitCount(b.id, venueId);
-        if (byPairVisits !== 0) return byPairVisits;
-        return a.id - b.id;
-      });
-
-      // #region debug-point A:candidate-ranking
-      void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] ranked candidates for venue", data: { miqaatId, zoneId, venueId, candidateCategory: candidates[0]?.category ?? null, selectedPartyId: available[0]?.id ?? null, topCandidates: available.slice(0, 5).map((p) => ({ partyId: p.id, visitCount: visitCount(p.id, venueId), category: p.category })) }, ts: Date.now() }) }).catch(() => {});
-      // #endregion
-
-      return available[0] ?? null;
-    }
-
     const partiesByCategory: Record<ActiveCategory, Party[]> = {
       A: parties.filter((p) => p.category === "A"),
       B: parties.filter((p) => p.category === "B"),
       C: parties.filter((p) => p.category === "C")
     };
 
-    function pickByPriority(venueId: number) {
-      for (const category of activeCategoryOrder()) {
-        const picked = pickParty(partiesByCategory[category], venueId);
-        if (picked) return picked;
-      }
-      return null;
+    function canAssignPartyToVenue(partyId: number, venueId: number) {
+      const pairVisits = visitCount(partyId, venueId);
+      if (pairVisits === 0) return true;
+      return hasCoveredAllActiveVenues(partyId);
     }
 
-    function fillVenuesToTarget(targetForVenue: (venue: Venue) => number) {
-      let progress = true;
-      while (progress) {
-        progress = false;
-        for (const venue of venues) {
-          const target = Math.min(Math.max(0, targetForVenue(venue)), venue.max_parties);
-          if ((occupancy.get(venue.id) ?? 0) >= target) continue;
-          if (!canPlace(venue.id)) continue;
-
-          const picked = pickByPriority(venue.id);
-          if (!picked) continue;
-
-          place(venue.id, picked.id);
-          progress = true;
+    const seatList: Array<{ venueId: number; round: number }> = [];
+    const maxRounds = Math.max(...venues.map((venue) => venue.max_parties));
+    for (let round = 1; round <= maxRounds; round += 1) {
+      for (const venue of venues) {
+        if (round <= venue.max_parties) {
+          seatList.push({ venueId: venue.id, round });
         }
       }
     }
 
-    // First ensure each active venue gets a first assignment, preferring A then B then C.
-    fillVenuesToTarget(() => 1);
+    const matchableParties = parties
+      .map((party) => {
+        const seatIndexes = seatList
+          .map((seat, index) => ({ seat, index }))
+          .filter(({ seat }) => canAssignPartyToVenue(party.id, seat.venueId))
+          .sort((a, b) => {
+            const byRound = a.seat.round - b.seat.round;
+            if (byRound !== 0) return byRound;
+            const byVisit = visitCount(party.id, a.seat.venueId) - visitCount(party.id, b.seat.venueId);
+            if (byVisit !== 0) return byVisit;
+            return a.seat.venueId - b.seat.venueId;
+          })
+          .map(({ index }) => index);
 
-    // Then honor venue minimum capacity before filling additional optional capacity.
-    fillVenuesToTarget((venue) => Math.max(1, venue.min_parties));
-    fillVenuesToTarget((venue) => Math.max(venue.min_parties, venue.max_parties));
+        return {
+          ...party,
+          seatIndexes
+        };
+      })
+      .filter((party) => party.seatIndexes.length > 0)
+      .sort((a, b) => {
+        const byCategory = categoryRank(a.category) - categoryRank(b.category);
+        if (byCategory !== 0) return byCategory;
+        const byOptions = a.seatIndexes.length - b.seatIndexes.length;
+        if (byOptions !== 0) return byOptions;
+        return a.id - b.id;
+      });
+
+    // #region debug-point A:candidate-ranking
+    void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] built global party-seat graph", data: { miqaatId, zoneId, partyCount: matchableParties.length, seatCount: seatList.length, sample: matchableParties.slice(0, 8).map((party) => ({ partyId: party.id, category: party.category, options: party.seatIndexes.length })) }, ts: Date.now() }) }).catch(() => {});
+    // #endregion
+
+    const seatToPartyIndex = Array<number>(seatList.length).fill(-1);
+    const tryMatch = (partyIndex: number, seenSeats: Set<number>): boolean => {
+      for (const seatIndex of matchableParties[partyIndex].seatIndexes) {
+        if (seenSeats.has(seatIndex)) continue;
+        seenSeats.add(seatIndex);
+        const currentPartyIndex = seatToPartyIndex[seatIndex];
+        if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats)) {
+          seatToPartyIndex[seatIndex] = partyIndex;
+          return true;
+        }
+      }
+      return false;
+    };
+
+    for (let partyIndex = 0; partyIndex < matchableParties.length; partyIndex += 1) {
+      tryMatch(partyIndex, new Set<number>());
+    }
+
+    seatToPartyIndex.forEach((partyIndex, seatIndex) => {
+      if (partyIndex < 0) return;
+      place(seatList[seatIndex].venueId, matchableParties[partyIndex].id);
+    });
 
     if (assignments.length === 0) throw new Error("NO_ASSIGNMENTS");
 

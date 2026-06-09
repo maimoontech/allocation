@@ -26,11 +26,20 @@
 - Direct rule check against live history found 5 parties violating the required rule: they repeat at previously visited venues while still having unvisited active venues in the same zone.
 - Fix applied: candidate selection now rejects a repeated venue for a party unless that party has already covered all active venues.
 - Post-fix read-only simulation produced no rule violations.
+- New evidence: under the strict no-repeat rule, a valid assignment for all 19 active parties exists with current live history (`MAX_MATCHING=19`), so the reduced 16-party result was an algorithm failure, not a data limitation.
+- Intermediate fix using hard per-category/per-phase matching still stranded parties and only reached 15 assignments.
+- Final fix replaces greedy/per-phase allocation with a global seat-matching allocator that:
+  - represents each venue slot as an ordered seat by round,
+  - keeps one party per miqaat,
+  - rejects illegal repeated venue visits until all active venues are covered,
+  - prefers category order `A -> B -> C` and earlier venue rounds,
+  - and reaches all 19 assignments in read-only simulation with zero rule violations.
 
 ## Verification Conclusion
 - Hypothesis A: Partially rejected for the current local code. The current ranking logic does apply pair visit counts.
 - Hypothesis B: Rejected as sole cause. History is present and non-empty, though skewed.
 - Hypothesis C: Confirmed for the old algorithm behavior relative to the business rule. Minimizing visit count alone still allows illegal repeats before full venue coverage.
 - Hypothesis D: Rejected. The database already contains repeated schedule rows before reporting.
-- Root cause: the generator ranked by least visit count but did not enforce the stricter rule that a party must finish all active venues before repeating any previously visited venue.
+- Root cause: the original generator was greedy and venue-first. It both allowed illegal repeats and could strand assignable parties, producing only 16 assignments even though a valid 19-party assignment existed.
+- Current fix status: local backend build passes, and post-fix simulation confirms 19/19 parties assigned with no duplicate-venue-rule violations.
 - Next verification step is redeploy + regenerate with overwrite for the affected miqaats, then compare the new schedule/report output.
