@@ -65,6 +65,7 @@ async function generateSchedule(params) {
         const partyIds = parties.map((p) => p.id);
         const pairVisitCounts = new Map();
         const currentCycleCoveredByParty = new Map();
+        const lastVenueByParty = new Map();
         if (venueIds.length > 0 && partyIds.length > 0) {
             const [pairCountRows] = await connection.query(`SELECT s.party_id, s.venue_id, COUNT(*) AS visit_count
          FROM schedules s
@@ -94,6 +95,7 @@ async function generateSchedule(params) {
             for (const row of priorScheduleRows) {
                 const partyId = Number(row.party_id);
                 const venueId = Number(row.venue_id);
+                lastVenueByParty.set(partyId, venueId);
                 const covered = currentCycleCoveredByParty.get(partyId) ?? new Set();
                 covered.add(venueId);
                 if (covered.size >= venueIds.length) {
@@ -130,6 +132,8 @@ async function generateSchedule(params) {
             C: parties.filter((p) => p.category === "C")
         };
         function canAssignPartyToVenue(partyId, venueId) {
+            if (venueIds.length > 1 && lastVenueByParty.get(partyId) === venueId)
+                return false;
             const covered = currentCycleCoveredByParty.get(partyId);
             return !covered?.has(venueId);
         }

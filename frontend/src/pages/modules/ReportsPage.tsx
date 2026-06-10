@@ -156,6 +156,32 @@ type MiqaatScheduleExportRow = {
   is_manual: 0 | 1;
 };
 
+function normalizeExportRows(rows: MiqaatScheduleExportRow[]) {
+  const seen = new Set<string>();
+  const deduped: MiqaatScheduleExportRow[] = [];
+  for (const row of rows) {
+    const key = [
+      row.zone_name,
+      row.mohallah_name,
+      row.venue_name,
+      row.party_name,
+      row.category
+    ].join("||");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+  }
+  return deduped.sort((a, b) => {
+    const byZone = a.zone_name.localeCompare(b.zone_name);
+    if (byZone !== 0) return byZone;
+    const byMohallah = a.mohallah_name.localeCompare(b.mohallah_name);
+    if (byMohallah !== 0) return byMohallah;
+    const byVenue = a.venue_name.localeCompare(b.venue_name);
+    if (byVenue !== 0) return byVenue;
+    return a.party_name.localeCompare(b.party_name);
+  });
+}
+
 function buildVenueDisplayLabels(rows: MiqaatScheduleExportRow[]) {
   const metaByKey = new Map<string, { zone: string; mohallah: string; venue: string }>();
   for (const r of rows) {
@@ -575,7 +601,7 @@ export function ReportsPage() {
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        rowsByMiqaatId[id] = env.data as any[];
+        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]);
       }
 
       const table = buildBulkMiqaatVenuePartyGridHtml({ miqaatTitles, rowsByMiqaatId });
@@ -620,7 +646,7 @@ export function ReportsPage() {
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        rowsByMiqaatId[id] = env.data as any[];
+        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]);
       }
 
       const table = buildBulkMiqaatVenuePartyGridHtml({ miqaatTitles, rowsByMiqaatId });
@@ -668,7 +694,7 @@ export function ReportsPage() {
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        rowsByMiqaatId[id] = env.data as any[];
+        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]);
       }
 
       const matrix = buildBulkMiqaatVenuePartyGridModel({ miqaatTitles, rowsByMiqaatId });
