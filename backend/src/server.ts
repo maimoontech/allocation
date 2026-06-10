@@ -14,6 +14,13 @@ import { ratingsRoutes } from "./routes/ratingsRoutes";
 import { importExportRoutes } from "./routes/importExportRoutes";
 
 const app = express();
+const backendPackage = require("../package.json") as { version?: string };
+const backendBuildId =
+  process.env.RENDER_GIT_COMMIT ||
+  process.env.RENDER_GIT_BRANCH ||
+  process.env.RAILWAY_GIT_COMMIT_SHA ||
+  process.env.COMMIT_SHA ||
+  "local";
 
 app.use(
   cors({
@@ -25,7 +32,16 @@ app.use(
 );
 app.use(express.json({ limit: "5mb" }));
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) =>
+  res.json({
+    ok: true,
+    service: "backend",
+    version: backendPackage.version ?? "unknown",
+    build: backendBuildId,
+    db_host: env.db.host,
+    db_name: env.db.name
+  })
+);
 
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/zones", zonesRoutes);

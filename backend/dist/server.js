@@ -18,6 +18,12 @@ const reportsRoutes_1 = require("./routes/reportsRoutes");
 const ratingsRoutes_1 = require("./routes/ratingsRoutes");
 const importExportRoutes_1 = require("./routes/importExportRoutes");
 const app = (0, express_1.default)();
+const backendPackage = require("../package.json");
+const backendBuildId = process.env.RENDER_GIT_COMMIT ||
+    process.env.RENDER_GIT_BRANCH ||
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    process.env.COMMIT_SHA ||
+    "local";
 app.use((0, cors_1.default)({
     origin(origin, callback) {
         if (!origin || env_1.env.cors.allowedOrigins.includes(origin))
@@ -26,7 +32,14 @@ app.use((0, cors_1.default)({
     }
 }));
 app.use(express_1.default.json({ limit: "5mb" }));
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => res.json({
+    ok: true,
+    service: "backend",
+    version: backendPackage.version ?? "unknown",
+    build: backendBuildId,
+    db_host: env_1.env.db.host,
+    db_name: env_1.env.db.name
+}));
 app.use("/api/v1/auth", authRoutes_1.authRoutes);
 app.use("/api/v1/zones", zonesRoutes_1.zonesRoutes);
 app.use("/api/v1/mohallahs", mohallahsRoutes_1.mohallahsRoutes);

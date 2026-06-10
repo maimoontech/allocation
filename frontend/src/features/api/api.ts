@@ -3,12 +3,24 @@ import type { RootState } from "../../store";
 
 const defaultApiBaseUrl = import.meta.env.DEV ? "/api/v1" : "https://allocation-msl6.onrender.com/api/v1";
 export const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || defaultApiBaseUrl;
+const apiRootUrl = apiBaseUrl.replace(/\/api\/v1\/?$/i, "");
 
 export function resolveApiUrl(path: string) {
   if (/^https?:\/\//i.test(path)) return path;
   if (/^https?:\/\//i.test(apiBaseUrl)) return new URL(path, `${apiBaseUrl.replace(/\/$/, "")}/`).toString();
   const origin = window.location.origin;
   const base = new URL(apiBaseUrl.startsWith("/") ? apiBaseUrl : `/${apiBaseUrl}`, origin);
+  return new URL(path, base).toString();
+}
+
+export function resolveBackendUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  if (/^https?:\/\//i.test(apiRootUrl || apiBaseUrl)) {
+    return new URL(path, `${(apiRootUrl || apiBaseUrl).replace(/\/$/, "")}/`).toString();
+  }
+  const origin = window.location.origin;
+  const basePath = (apiRootUrl || apiBaseUrl).startsWith("/") ? (apiRootUrl || apiBaseUrl) : `/${apiRootUrl || apiBaseUrl}`;
+  const base = new URL(basePath, origin);
   return new URL(path, base).toString();
 }
 
