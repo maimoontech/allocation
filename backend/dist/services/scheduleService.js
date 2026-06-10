@@ -37,7 +37,7 @@ async function generateSchedule(params) {
             throw new Error("NO_VENUES");
         if (parties.length === 0)
             throw new Error("NO_PARTIES");
-        const [[miqaatRow]] = await connection.query(`SELECT english_date
+        const [[miqaatRow]] = await connection.query(`SELECT DATE_FORMAT(english_date, '%Y-%m-%d') AS english_date
        FROM miqaats
        WHERE id = :miqaat_id
        LIMIT 1`, { miqaat_id: miqaatId });

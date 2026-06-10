@@ -53,7 +53,7 @@ export async function generateSchedule(params: {
     if (parties.length === 0) throw new Error("NO_PARTIES");
 
     const [[miqaatRow]] = await connection.query<any[]>(
-      `SELECT english_date
+      `SELECT DATE_FORMAT(english_date, '%Y-%m-%d') AS english_date
        FROM miqaats
        WHERE id = :miqaat_id
        LIMIT 1`,
