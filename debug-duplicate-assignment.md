@@ -45,6 +45,11 @@
 - New database evidence showed the real remaining defect: although each party had `7` assignments, many parties had only `2-6` distinct venues across those `7` miqaats.
 - Root cause refinement: the allocator was using **lifetime** `party_venue_history` to decide whether repeats were allowed. If a party had completed venue coverage in older history, the current 7-miqaat run could repeat venues immediately.
 - Final fix now derives a **current cycle coverage set** for each party from prior miqaats in chronological order and resets that set only after all active venues have been covered in the current cycle.
+- Latest live DB evidence after user reproduced on Render/Vercel:
+  - Hyderi currently has miqaats `2-6` saved with `19/19` assignments each.
+  - Those saved rows still contain `12` duplicate-venue rule violations across parties.
+  - A read-only preview of the **current local code** for miqaat `3` against the same prior Hyderi state produces a different schedule that does **not** place `Hizbe Fatemi B` on `Najmi Masjid`, `Mudreka - Aziz` on `Husami Masjid`, or `Hizbe Zainy B` on already-covered venues.
+  - Therefore the deployed backend/database state is not reflecting the latest local scheduling logic.
 
 ## Verification Conclusion
 - Hypothesis A: Partially rejected for the current local code. The current ranking logic does apply pair visit counts.
@@ -53,4 +58,5 @@
 - Hypothesis D: Rejected. The database already contains repeated schedule rows before reporting.
 - Root cause: there were two distinct scheduling bugs. First, the generator was greedy and venue-first. Second, repeat eligibility was based on lifetime history instead of the party's current venue-coverage cycle across prior miqaats.
 - Current fix status: local backend build passes, and the repeat gate now uses current-cycle venue coverage derived from prior miqaats rather than lifetime history.
+- Current deployment conclusion: the saved Render schedules still match older backend behavior, not the latest local code path.
 - Next verification step is redeploy + regenerate with overwrite for the affected miqaats, then compare the new schedule/report output.
