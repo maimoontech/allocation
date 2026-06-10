@@ -66,11 +66,15 @@ async function generateSchedule(params) {
         const pairVisitCounts = new Map();
         const currentCycleCoveredByParty = new Map();
         if (venueIds.length > 0 && partyIds.length > 0) {
-            const [historyRows] = await connection.query(`SELECT party_id, venue_id, visit_count
-         FROM party_venue_history
-         WHERE party_id IN (${partyIds.map(() => "?").join(",")})
-           AND venue_id IN (${venueIds.map(() => "?").join(",")})`, [...partyIds, ...venueIds]);
-            for (const r of historyRows) {
+            const [pairCountRows] = await connection.query(`SELECT s.party_id, s.venue_id, COUNT(*) AS visit_count
+         FROM schedules s
+         JOIN venues v ON v.id = s.venue_id
+         JOIN mohallahs m ON m.id = v.mohallah_id
+         WHERE m.zone_id = ?
+           AND s.party_id IN (${partyIds.map(() => "?").join(",")})
+           AND s.venue_id IN (${venueIds.map(() => "?").join(",")})
+         GROUP BY s.party_id, s.venue_id`, [zoneId, ...partyIds, ...venueIds]);
+            for (const r of pairCountRows) {
                 pairVisitCounts.set(`${Number(r.party_id)}:${Number(r.venue_id)}`, Number(r.visit_count ?? 0));
             }
             const [priorScheduleRows] = await connection.query(`SELECT s.party_id, s.venue_id, q.english_date, q.id AS prior_miqaat_id, s.id
@@ -100,7 +104,7 @@ async function generateSchedule(params) {
                 }
             }
             // #region debug-point B:history-snapshot
-            void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "B", location: "scheduleService.ts:84", msg: "[DEBUG] loaded history and derived current cycle coverage", data: { miqaatId, zoneId, venueCount: venueIds.length, partyCount: partyIds.length, historyCount: historyRows.length, priorScheduleCount: priorScheduleRows.length, sampleCycleCoverage: Array.from(currentCycleCoveredByParty.entries()).slice(0, 8).map(([partyId, covered]) => ({ partyId, coveredVenueIds: Array.from(covered.values()) })) }, ts: Date.now() }) }).catch(() => { });
+            void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "B", location: "scheduleService.ts:84", msg: "[DEBUG] derived pair counts and current cycle coverage from schedules", data: { miqaatId, zoneId, venueCount: venueIds.length, partyCount: partyIds.length, pairCountRows: pairCountRows.length, priorScheduleCount: priorScheduleRows.length, sampleCycleCoverage: Array.from(currentCycleCoveredByParty.entries()).slice(0, 8).map(([partyId, covered]) => ({ partyId, coveredVenueIds: Array.from(covered.values()) })) }, ts: Date.now() }) }).catch(() => { });
             // #endregion
         }
         const assignedParty = new Set();
@@ -240,10 +244,16 @@ async function generateSchedule(params) {
                 created_by_role: createdBy.role,
                 created_by_id: createdBy.id
             });
-            await connection.query(`INSERT INTO party_venue_history (party_id, venue_id, visit_count, first_visited_at, last_visited_at)
-         VALUES (:party_id, :venue_id, 1, NOW(), NOW())
-         ON DUPLICATE KEY UPDATE visit_count = visit_count + 1, last_visited_at = NOW()`, { party_id: a.partyId, venue_id: a.venueId });
         }
+        await connection.query(`DELETE FROM party_venue_history
+       WHERE party_id IN (${partyIds.map(() => "?").join(",")})
+         AND venue_id IN (${venueIds.map(() => "?").join(",")})`, [...partyIds, ...venueIds]);
+        await connection.query(`INSERT INTO party_venue_history (party_id, venue_id, visit_count, first_visited_at, last_visited_at)
+       SELECT s.party_id, s.venue_id, COUNT(*) AS visit_count, MIN(s.created_at) AS first_visited_at, MAX(s.created_at) AS last_visited_at
+       FROM schedules s
+       WHERE s.party_id IN (${partyIds.map(() => "?").join(",")})
+         AND s.venue_id IN (${venueIds.map(() => "?").join(",")})
+       GROUP BY s.party_id, s.venue_id`, [...partyIds, ...venueIds]);
         await connection.commit();
         return { assignments };
     }
