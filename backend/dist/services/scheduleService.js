@@ -142,96 +142,103 @@ async function generateSchedule(params) {
         for (let round = 1; round <= maxRounds; round += 1) {
             for (const venue of venues) {
                 if (round <= venue.max_parties) {
-                    seatList.push({ venueId: venue.id, round });
+                    const stage = round === 1 ? 1 : round <= venue.min_parties ? 2 : 3;
+                    seatList.push({ venueId: venue.id, round, stage });
                 }
             }
         }
-        const matchableParties = parties
-            .map((party) => {
-            const seatIndexes = seatList
-                .map((seat, index) => ({ seat, index }))
-                .filter(({ seat }) => canAssignPartyToVenue(party.id, seat.venueId))
-                .sort((a, b) => {
-                const byRound = a.seat.round - b.seat.round;
-                if (byRound !== 0)
-                    return byRound;
-                const byVisit = visitCount(party.id, a.seat.venueId) - visitCount(party.id, b.seat.venueId);
-                if (byVisit !== 0)
-                    return byVisit;
-                return a.seat.venueId - b.seat.venueId;
+        function buildMatchableParties(candidateParties, canUseSeat, preferUnvisited) {
+            return candidateParties
+                .map((party) => {
+                const seatIndexes = seatList
+                    .map((seat, index) => ({ seat, index }))
+                    .filter(({ seat }) => canUseSeat(party.id, seat.venueId))
+                    .sort((a, b) => {
+                    if (preferUnvisited) {
+                        const revisitPenaltyA = canAssignPartyToVenue(party.id, a.seat.venueId) ? 0 : 1;
+                        const revisitPenaltyB = canAssignPartyToVenue(party.id, b.seat.venueId) ? 0 : 1;
+                        if (revisitPenaltyA !== revisitPenaltyB)
+                            return revisitPenaltyA - revisitPenaltyB;
+                    }
+                    const byStage = a.seat.stage - b.seat.stage;
+                    if (byStage !== 0)
+                        return byStage;
+                    const byRound = a.seat.round - b.seat.round;
+                    if (byRound !== 0)
+                        return byRound;
+                    const byVisit = visitCount(party.id, a.seat.venueId) - visitCount(party.id, b.seat.venueId);
+                    if (byVisit !== 0)
+                        return byVisit;
+                    return a.seat.venueId - b.seat.venueId;
+                })
+                    .map(({ index }) => index);
+                return {
+                    ...party,
+                    seatIndexes
+                };
             })
-                .map(({ index }) => index);
-            return {
-                ...party,
-                seatIndexes
-            };
-        })
-            .filter((party) => party.seatIndexes.length > 0)
-            .sort((a, b) => {
-            const byCategory = categoryRank(a.category) - categoryRank(b.category);
-            if (byCategory !== 0)
-                return byCategory;
-            const byOptions = a.seatIndexes.length - b.seatIndexes.length;
-            if (byOptions !== 0)
-                return byOptions;
-            return a.id - b.id;
-        });
-        // #region debug-point A:candidate-ranking
-        void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] built global party-seat graph", data: { miqaatId, zoneId, partyCount: matchableParties.length, seatCount: seatList.length, sample: matchableParties.slice(0, 8).map((party) => ({ partyId: party.id, category: party.category, options: party.seatIndexes.length })) }, ts: Date.now() }) }).catch(() => { });
-        // #endregion
-        const seatToPartyIndex = Array(seatList.length).fill(-1);
-        const tryMatch = (partyIndex, seenSeats, allowedSeatIndexes) => {
-            for (const seatIndex of matchableParties[partyIndex].seatIndexes) {
-                if (!allowedSeatIndexes.has(seatIndex))
-                    continue;
-                if (seenSeats.has(seatIndex))
-                    continue;
-                seenSeats.add(seatIndex);
-                const currentPartyIndex = seatToPartyIndex[seatIndex];
-                if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats, allowedSeatIndexes)) {
-                    seatToPartyIndex[seatIndex] = partyIndex;
-                    return true;
+                .filter((party) => party.seatIndexes.length > 0)
+                .sort((a, b) => {
+                const byCategory = categoryRank(a.category) - categoryRank(b.category);
+                if (byCategory !== 0)
+                    return byCategory;
+                const byOptions = a.seatIndexes.length - b.seatIndexes.length;
+                if (byOptions !== 0)
+                    return byOptions;
+                return a.id - b.id;
+            });
+        }
+        function maximizeAssignments(matchableParties, allowedSeatIndexes) {
+            const seatToPartyIndex = Array(seatList.length).fill(-1);
+            const tryMatch = (partyIndex, seenSeats) => {
+                for (const seatIndex of matchableParties[partyIndex].seatIndexes) {
+                    if (!allowedSeatIndexes.has(seatIndex))
+                        continue;
+                    if (seenSeats.has(seatIndex))
+                        continue;
+                    seenSeats.add(seatIndex);
+                    const currentPartyIndex = seatToPartyIndex[seatIndex];
+                    if (currentPartyIndex === -1 || tryMatch(currentPartyIndex, seenSeats)) {
+                        seatToPartyIndex[seatIndex] = partyIndex;
+                        return true;
+                    }
                 }
-            }
-            return false;
-        };
-        const matchSubset = (partyIndexes, allowedSeatIndexes) => {
-            for (const partyIndex of partyIndexes) {
+                return false;
+            };
+            for (let partyIndex = 0; partyIndex < matchableParties.length; partyIndex += 1) {
                 if (seatToPartyIndex.includes(partyIndex))
                     continue;
-                tryMatch(partyIndex, new Set(), allowedSeatIndexes);
+                tryMatch(partyIndex, new Set());
             }
-        };
-        const roundOneSeats = new Set(seatList
-            .map((seat, index) => ({ seat, index }))
-            .filter(({ seat }) => seat.round === 1)
-            .map(({ index }) => index));
-        const minimumFillSeats = new Set(seatList
-            .map((seat, index) => ({ seat, index }))
-            .filter(({ seat }) => {
-            const venue = venues.find((v) => v.id === seat.venueId);
-            return seat.round > 1 && seat.round <= venue.min_parties;
-        })
-            .map(({ index }) => index));
-        const categoryIndexes = {
-            A: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "A").map(({ index }) => index),
-            B: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "B").map(({ index }) => index),
-            C: matchableParties.map((party, index) => ({ party, index })).filter(({ party }) => party.category === "C").map(({ index }) => index)
-        };
-        for (const category of activeCategoryOrder())
-            matchSubset(categoryIndexes[category], roundOneSeats);
-        for (const category of activeCategoryOrder())
-            matchSubset(categoryIndexes[category], minimumFillSeats);
-        const remainingSeats = new Set(seatList.map((_seat, index) => index).filter((index) => seatToPartyIndex[index] < 0));
-        for (let partyIndex = 0; partyIndex < matchableParties.length; partyIndex += 1) {
-            if (seatToPartyIndex.includes(partyIndex))
-                continue;
-            tryMatch(partyIndex, new Set(), remainingSeats);
+            return seatToPartyIndex;
         }
-        seatToPartyIndex.forEach((partyIndex, seatIndex) => {
+        const allSeatIndexes = new Set(seatList.map((_seat, index) => index));
+        const strictMatchableParties = buildMatchableParties(parties, canAssignPartyToVenue, false);
+        // #region debug-point A:candidate-ranking
+        void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] built global party-seat graph", data: { miqaatId, zoneId, partyCount: strictMatchableParties.length, seatCount: seatList.length, sample: strictMatchableParties.slice(0, 8).map((party) => ({ partyId: party.id, category: party.category, options: party.seatIndexes.length })) }, ts: Date.now() }) }).catch(() => { });
+        // #endregion
+        const strictSeatToPartyIndex = maximizeAssignments(strictMatchableParties, allSeatIndexes);
+        const strictlyAssignedPartyIds = new Set();
+        strictSeatToPartyIndex.forEach((partyIndex) => {
             if (partyIndex < 0)
                 return;
-            place(seatList[seatIndex].venueId, matchableParties[partyIndex].id);
+            strictlyAssignedPartyIds.add(strictMatchableParties[partyIndex].id);
+        });
+        const relaxedCandidateParties = parties.filter((party) => !strictlyAssignedPartyIds.has(party.id));
+        const remainingSeatIndexes = new Set(strictSeatToPartyIndex.map((partyIndex, index) => (partyIndex < 0 ? index : -1)).filter((index) => index >= 0));
+        const relaxedMatchableParties = buildMatchableParties(relaxedCandidateParties, () => true, true);
+        const relaxedSeatToPartyIndex = relaxedMatchableParties.length > 0 && remainingSeatIndexes.size > 0
+            ? maximizeAssignments(relaxedMatchableParties, remainingSeatIndexes)
+            : Array(seatList.length).fill(-1);
+        strictSeatToPartyIndex.forEach((partyIndex, seatIndex) => {
+            if (partyIndex < 0)
+                return;
+            place(seatList[seatIndex].venueId, strictMatchableParties[partyIndex].id);
+        });
+        relaxedSeatToPartyIndex.forEach((partyIndex, seatIndex) => {
+            if (partyIndex < 0)
+                return;
+            place(seatList[seatIndex].venueId, relaxedMatchableParties[partyIndex].id);
         });
         if (assignments.length === 0)
             throw new Error("NO_ASSIGNMENTS");
