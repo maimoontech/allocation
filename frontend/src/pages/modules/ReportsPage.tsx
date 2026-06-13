@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Card } from "../../components/ui/Card";
@@ -12,6 +12,9 @@ import { useGetPartiesQuery } from "../../features/parties/partiesApi";
 import { useGetVenuesQuery } from "../../features/venues/venuesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
 import {
+  type AttendanceRow,
+  type MiqaatScheduleRow,
+  type ZoneScheduleSummaryRow,
   useGetAttendanceReportQuery,
   useGetManuallyEditedQuery,
   useGetMiqaatScheduleQuery,
@@ -468,22 +471,24 @@ export function ReportsPage() {
   const initialQuarter = Math.floor(now.getMonth() / 3) + 1;
   const [year, setYear] = useState<string>(String(initialYear));
   const [quarter, setQuarter] = useState<string>(String(initialQuarter));
+  const isAllMiqaats = miqaatId === "all";
+  const singleMiqaatId = miqaatId && !isAllMiqaats ? Number(miqaatId) : undefined;
 
   const effectiveZoneId = role === "zonal_head" ? user?.zoneId : zoneId === "all" ? undefined : Number(zoneId);
   const venuesQuery = useGetVenuesQuery(effectiveZoneId ? { zone_id: effectiveZoneId } : undefined);
 
   const statusQuery = useGetStatusSummaryQuery(effectiveZoneId ? { zone_id: effectiveZoneId } : undefined);
   const miqaatScheduleQuery = useGetMiqaatScheduleQuery(
-    miqaatId ? { miqaat_id: Number(miqaatId), zone_id: effectiveZoneId } : (undefined as any),
-    { skip: !miqaatId }
+    singleMiqaatId ? { miqaat_id: singleMiqaatId, zone_id: effectiveZoneId } : (undefined as any),
+    { skip: !singleMiqaatId }
   );
   const zoneScheduleQuery = useGetZoneScheduleSummaryQuery(
-    miqaatId ? { miqaat_id: Number(miqaatId), zone_id: effectiveZoneId } : (undefined as any),
-    { skip: !miqaatId }
+    singleMiqaatId ? { miqaat_id: singleMiqaatId, zone_id: effectiveZoneId } : (undefined as any),
+    { skip: !singleMiqaatId }
   );
   const attendanceQuery = useGetAttendanceReportQuery(
-    miqaatId ? { miqaat_id: Number(miqaatId), zone_id: effectiveZoneId } : (undefined as any),
-    { skip: !miqaatId }
+    singleMiqaatId ? { miqaat_id: singleMiqaatId, zone_id: effectiveZoneId } : (undefined as any),
+    { skip: !singleMiqaatId }
   );
   const performanceSummaryQuery = useGetPerformanceSummaryQuery(
     effectiveZoneId ? { zone_id: effectiveZoneId } : undefined
@@ -501,7 +506,9 @@ export function ReportsPage() {
     { skip: !year || !quarter }
   );
   const manuallyEditedQuery = useGetManuallyEditedQuery(
-    miqaatId || effectiveZoneId ? { miqaat_id: miqaatId ? Number(miqaatId) : undefined, zone_id: effectiveZoneId } : undefined
+    isAllMiqaats || singleMiqaatId || effectiveZoneId
+      ? { miqaat_id: singleMiqaatId, zone_id: effectiveZoneId }
+      : undefined
   );
 
   const zoneOptions = useMemo(() => {
@@ -519,7 +526,11 @@ export function ReportsPage() {
       .slice()
       .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
-    return [{ value: "", label: "Select miqaat" }, ...opts];
+    return [
+      { value: "", label: "Select miqaat" },
+      { value: "all", label: "All miqaats" },
+      ...opts
+    ];
   }, [miqaatsQuery.data]);
 
   const partyOptions = useMemo(() => {
@@ -562,6 +573,20 @@ export function ReportsPage() {
     return true;
   }
 
+  const [allMiqaatReportState, setAllMiqaatReportState] = useState<{
+    loading: boolean;
+    error: string | null;
+    miqaatScheduleRows: Array<MiqaatScheduleRow & { miqaat_name: string; english_date: string; hijri_date?: string | null }>;
+    zoneScheduleRows: Array<ZoneScheduleSummaryRow & { miqaat_name: string; english_date: string; hijri_date?: string | null }>;
+    attendanceRows: Array<AttendanceRow & { miqaat_name: string; english_date: string; hijri_date?: string | null }>;
+  }>({
+    loading: false,
+    error: null,
+    miqaatScheduleRows: [],
+    zoneScheduleRows: [],
+    attendanceRows: []
+  });
+
   const filteredMiqaatScheduleRows = useMemo(
     () => (miqaatScheduleQuery.data ?? []).filter((row) => matchesSelectedVenue(row)),
     [miqaatScheduleQuery.data, selectedVenue]
@@ -575,6 +600,50 @@ export function ReportsPage() {
   const filteredAttendanceRows = useMemo(
     () => (attendanceQuery.data ?? []).filter((row) => matchesSelectedVenue(row)),
     [attendanceQuery.data, selectedVenue]
+  );
+
+  const displayMiqaatScheduleRows = useMemo(() => {
+    if (isAllMiqaats) return allMiqaatReportState.miqaatScheduleRows;
+    return filteredMiqaatScheduleRows.map((row) => ({
+      ...row,
+      miqaat_name: selectedMiqaat?.miqaat_name ?? "—",
+      english_date: selectedMiqaat?.english_date ?? "",
+      hijri_date: selectedMiqaat?.hijri_date
+    }));
+  }, [allMiqaatReportState.miqaatScheduleRows, filteredMiqaatScheduleRows, isAllMiqaats, selectedMiqaat]);
+
+  const displayZoneScheduleRows = useMemo(() => {
+    if (isAllMiqaats) return allMiqaatReportState.zoneScheduleRows;
+    return filteredZoneScheduleRows.map((row) => ({
+      ...row,
+      miqaat_name: selectedMiqaat?.miqaat_name ?? "—",
+      english_date: selectedMiqaat?.english_date ?? "",
+      hijri_date: selectedMiqaat?.hijri_date
+    }));
+  }, [allMiqaatReportState.zoneScheduleRows, filteredZoneScheduleRows, isAllMiqaats, selectedMiqaat]);
+
+  const displayAttendanceRows = useMemo(() => {
+    if (isAllMiqaats) return allMiqaatReportState.attendanceRows;
+    return filteredAttendanceRows.map((row) => ({
+      ...row,
+      miqaat_name: selectedMiqaat?.miqaat_name ?? "—",
+      english_date: selectedMiqaat?.english_date ?? "",
+      hijri_date: selectedMiqaat?.hijri_date
+    }));
+  }, [allMiqaatReportState.attendanceRows, filteredAttendanceRows, isAllMiqaats, selectedMiqaat]);
+
+  const venueAssignedRows = useMemo(
+    () =>
+      displayMiqaatScheduleRows
+        .slice()
+        .sort((a, b) => {
+          const byDate = b.english_date.localeCompare(a.english_date);
+          if (byDate !== 0) return byDate;
+          const byVenue = a.venue_name.localeCompare(b.venue_name);
+          if (byVenue !== 0) return byVenue;
+          return a.party_name.localeCompare(b.party_name);
+        }),
+    [displayMiqaatScheduleRows]
   );
 
   const exportMetaLines = useMemo(() => {
@@ -623,6 +692,133 @@ export function ReportsPage() {
       throw new Error(head || "Request failed");
     }
   }
+
+  useEffect(() => {
+    if (!isAllMiqaats) {
+      setAllMiqaatReportState({
+        loading: false,
+        error: null,
+        miqaatScheduleRows: [],
+        zoneScheduleRows: [],
+        attendanceRows: []
+      });
+      return;
+    }
+
+    const miqaats = miqaatsQuery.data ?? [];
+    if (miqaats.length === 0) {
+      setAllMiqaatReportState({
+        loading: false,
+        error: null,
+        miqaatScheduleRows: [],
+        zoneScheduleRows: [],
+        attendanceRows: []
+      });
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAllMiqaatReports() {
+      setAllMiqaatReportState((prev) => ({ ...prev, loading: true, error: null }));
+      try {
+        const results = await Promise.all(
+          miqaats.map(async (miqaat) => {
+            const params = new URLSearchParams();
+            params.set("miqaat_id", String(miqaat.id));
+            if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
+            const [scheduleEnv, zoneEnv, attendanceEnv] = await Promise.all([
+              fetchEnvelope<MiqaatScheduleRow[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`),
+              fetchEnvelope<ZoneScheduleSummaryRow[]>(`/api/v1/reports/zone-schedule?${params.toString()}`),
+              fetchEnvelope<AttendanceRow[]>(`/api/v1/reports/attendance?${params.toString()}`)
+            ]);
+            return {
+              miqaat,
+              scheduleRows: scheduleEnv.data,
+              zoneRows: zoneEnv.data,
+              attendanceRows: attendanceEnv.data
+            };
+          })
+        );
+
+        if (cancelled) return;
+
+        const miqaatScheduleRows = results
+          .flatMap(({ miqaat, scheduleRows }) =>
+            scheduleRows.map((row) => ({
+              ...row,
+              miqaat_name: miqaat.miqaat_name,
+              english_date: miqaat.english_date,
+              hijri_date: miqaat.hijri_date
+            }))
+          )
+          .filter((row) => matchesSelectedVenue(row))
+          .sort((a, b) => {
+            const byDate = b.english_date.localeCompare(a.english_date);
+            if (byDate !== 0) return byDate;
+            const byVenue = a.venue_name.localeCompare(b.venue_name);
+            if (byVenue !== 0) return byVenue;
+            return a.party_name.localeCompare(b.party_name);
+          });
+
+        const zoneScheduleRows = results
+          .flatMap(({ miqaat, zoneRows }) =>
+            zoneRows.map((row) => ({
+              ...row,
+              miqaat_name: miqaat.miqaat_name,
+              english_date: miqaat.english_date,
+              hijri_date: miqaat.hijri_date
+            }))
+          )
+          .filter((row) => matchesSelectedVenue(row))
+          .sort((a, b) => {
+            const byDate = b.english_date.localeCompare(a.english_date);
+            if (byDate !== 0) return byDate;
+            return a.venue_name.localeCompare(b.venue_name);
+          });
+
+        const attendanceRows = results
+          .flatMap(({ miqaat, attendanceRows }) =>
+            attendanceRows.map((row) => ({
+              ...row,
+              miqaat_name: miqaat.miqaat_name,
+              english_date: miqaat.english_date,
+              hijri_date: miqaat.hijri_date
+            }))
+          )
+          .filter((row) => matchesSelectedVenue(row))
+          .sort((a, b) => {
+            const byDate = b.english_date.localeCompare(a.english_date);
+            if (byDate !== 0) return byDate;
+            const byVenue = a.venue_name.localeCompare(b.venue_name);
+            if (byVenue !== 0) return byVenue;
+            return a.party_name.localeCompare(b.party_name);
+          });
+
+        setAllMiqaatReportState({
+          loading: false,
+          error: null,
+          miqaatScheduleRows,
+          zoneScheduleRows,
+          attendanceRows
+        });
+      } catch (e: any) {
+        if (cancelled) return;
+        setAllMiqaatReportState({
+          loading: false,
+          error: String(e?.message ?? e),
+          miqaatScheduleRows: [],
+          zoneScheduleRows: [],
+          attendanceRows: []
+        });
+      }
+    }
+
+    loadAllMiqaatReports();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAllMiqaats, miqaatsQuery.data, effectiveZoneId, selectedVenue, token]);
 
   async function printMultipleMiqaatSchedules() {
     setBulkError(null);
@@ -874,12 +1070,12 @@ export function ReportsPage() {
               </Button>
               <Button
                 variant="ghost"
-                disabled={bulkBusy || !miqaatId}
+                disabled={bulkBusy || !miqaatId || isAllMiqaats}
                 className="px-3"
                 aria-label="Add Current Miqaat"
                 title="Add Current Miqaat"
                 onClick={() => {
-                  if (!miqaatId) return;
+                  if (!miqaatId || isAllMiqaats) return;
                   setBulkError(null);
                   setBulkMiqaatIds((prev) => Array.from(new Set([...prev, miqaatId])));
                 }}
@@ -996,10 +1192,50 @@ export function ReportsPage() {
           title="Miqaat Schedule"
           filenameBase="miqaat_schedule"
           metaLines={exportMetaLines}
-          disabled={!miqaatId || miqaatScheduleQuery.isLoading || miqaatScheduleQuery.isError}
+          disabled={
+            (!miqaatId && !isAllMiqaats) ||
+            (isAllMiqaats ? allMiqaatReportState.loading || !!allMiqaatReportState.error : miqaatScheduleQuery.isLoading || miqaatScheduleQuery.isError)
+          }
         >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view schedule report.</div>
+          ) : isAllMiqaats ? (
+            allMiqaatReportState.loading ? (
+              <div className="text-sm text-textMuted">Loading...</div>
+            ) : allMiqaatReportState.error ? (
+              <div className="text-sm text-danger">{allMiqaatReportState.error}</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="py-2 pr-3">Miqaat</th>
+                      <th className="py-2 pr-3">Zone</th>
+                      <th className="py-2 pr-3">Venue</th>
+                      <th className="py-2 pr-3">Party</th>
+                      <th className="py-2 pr-3">Manual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayMiqaatScheduleRows.map((r) => (
+                      <tr key={`${r.english_date}-${r.id}`} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3">
+                          {formatDateDdMmmYy(r.english_date)} - {r.miqaat_name}
+                        </td>
+                        <td className="py-2 pr-3">{r.zone_name}</td>
+                        <td className="py-2 pr-3">
+                          {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
+                        </td>
+                        <td className="py-2 pr-3 font-semibold">
+                          {r.party_name} ({r.category})
+                        </td>
+                        <td className="py-2 pr-3">{r.is_manual ? "Yes" : "No"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           ) : miqaatScheduleQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : miqaatScheduleQuery.isError ? (
@@ -1016,7 +1252,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMiqaatScheduleRows.map((r) => (
+                  {displayMiqaatScheduleRows.map((r) => (
                     <tr key={r.id} className="border-b border-border last:border-0">
                       <td className="py-2 pr-3">{r.zone_name}</td>
                       <td className="py-2 pr-3">
@@ -1038,10 +1274,48 @@ export function ReportsPage() {
           title="Venue Assigned Parties"
           filenameBase="venue_assigned_parties"
           metaLines={exportMetaLines}
-          disabled={!miqaatId || miqaatScheduleQuery.isLoading || miqaatScheduleQuery.isError}
+          disabled={
+            (!miqaatId && !isAllMiqaats) ||
+            (isAllMiqaats ? allMiqaatReportState.loading || !!allMiqaatReportState.error : miqaatScheduleQuery.isLoading || miqaatScheduleQuery.isError)
+          }
         >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view venue assigned parties.</div>
+          ) : isAllMiqaats ? (
+            allMiqaatReportState.loading ? (
+              <div className="text-sm text-textMuted">Loading...</div>
+            ) : allMiqaatReportState.error ? (
+              <div className="text-sm text-danger">{allMiqaatReportState.error}</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="py-2 pr-3">Miqaat Name</th>
+                      <th className="py-2 pr-3">English Date</th>
+                      <th className="py-2 pr-3">Hijri Date</th>
+                      <th className="py-2 pr-3">Venue</th>
+                      <th className="py-2 pr-3">Party</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {venueAssignedRows.map((r) => (
+                      <tr key={`${r.english_date}-${r.id}`} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3">{r.miqaat_name}</td>
+                        <td className="py-2 pr-3">{formatDateDdMmmYy(r.english_date)}</td>
+                        <td className="py-2 pr-3">{r.hijri_date || "—"}</td>
+                        <td className="py-2 pr-3 font-semibold">
+                          {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
+                        </td>
+                        <td className="py-2 pr-3">
+                          {r.party_name} <span className="text-textMuted">({r.category})</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           ) : miqaatScheduleQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : miqaatScheduleQuery.isError ? (
@@ -1059,14 +1333,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMiqaatScheduleRows
-                    .slice()
-                    .sort((a, b) => {
-                      const byVenue = a.venue_name.localeCompare(b.venue_name);
-                      if (byVenue !== 0) return byVenue;
-                      return a.party_name.localeCompare(b.party_name);
-                    })
-                    .map((r) => (
+                  {venueAssignedRows.map((r) => (
                       <tr key={r.id} className="border-b border-border last:border-0">
                         <td className="py-2 pr-3">{selectedMiqaat?.miqaat_name ?? "—"}</td>
                         <td className="py-2 pr-3">{selectedMiqaat ? formatDateDdMmmYy(selectedMiqaat.english_date) : "—"}</td>
@@ -1091,10 +1358,54 @@ export function ReportsPage() {
           title="Zone-wise Schedule Summary"
           filenameBase="zone_schedule_summary"
           metaLines={exportMetaLines}
-          disabled={!miqaatId || zoneScheduleQuery.isLoading || zoneScheduleQuery.isError}
+          disabled={
+            (!miqaatId && !isAllMiqaats) ||
+            (isAllMiqaats ? allMiqaatReportState.loading || !!allMiqaatReportState.error : zoneScheduleQuery.isLoading || zoneScheduleQuery.isError)
+          }
         >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view zone-wise summary.</div>
+          ) : isAllMiqaats ? (
+            allMiqaatReportState.loading ? (
+              <div className="text-sm text-textMuted">Loading...</div>
+            ) : allMiqaatReportState.error ? (
+              <div className="text-sm text-danger">{allMiqaatReportState.error}</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="py-2 pr-3">Miqaat</th>
+                      <th className="py-2 pr-3">Zone</th>
+                      <th className="py-2 pr-3">Venue</th>
+                      <th className="py-2 pr-3">Total</th>
+                      <th className="py-2 pr-3">A</th>
+                      <th className="py-2 pr-3">B</th>
+                      <th className="py-2 pr-3">C</th>
+                      <th className="py-2 pr-3">Manual</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayZoneScheduleRows.map((r, idx) => (
+                      <tr key={`${r.english_date}-${r.venue_name}-${idx}`} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3">
+                          {formatDateDdMmmYy(r.english_date)} - {r.miqaat_name}
+                        </td>
+                        <td className="py-2 pr-3">{r.zone_name}</td>
+                        <td className="py-2 pr-3">
+                          {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
+                        </td>
+                        <td className="py-2 pr-3 font-semibold">{r.total_parties}</td>
+                        <td className="py-2 pr-3">{r.cat_a}</td>
+                        <td className="py-2 pr-3">{r.cat_b}</td>
+                        <td className="py-2 pr-3">{r.cat_c}</td>
+                        <td className="py-2 pr-3">{r.manual_count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           ) : zoneScheduleQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : zoneScheduleQuery.isError ? (
@@ -1114,7 +1425,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredZoneScheduleRows.map((r, idx) => (
+                  {displayZoneScheduleRows.map((r, idx) => (
                     <tr key={idx} className="border-b border-border last:border-0">
                       <td className="py-2 pr-3">{r.zone_name}</td>
                       <td className="py-2 pr-3">
@@ -1137,10 +1448,54 @@ export function ReportsPage() {
           title="Attendance Feedback Log"
           filenameBase="attendance_feedback_log"
           metaLines={exportMetaLines}
-          disabled={!miqaatId || attendanceQuery.isLoading || attendanceQuery.isError}
+          disabled={
+            (!miqaatId && !isAllMiqaats) ||
+            (isAllMiqaats ? allMiqaatReportState.loading || !!allMiqaatReportState.error : attendanceQuery.isLoading || attendanceQuery.isError)
+          }
         >
           {!miqaatId ? (
             <div className="text-sm text-textMuted">Select a Miqaat to view attendance report.</div>
+          ) : isAllMiqaats ? (
+            allMiqaatReportState.loading ? (
+              <div className="text-sm text-textMuted">Loading...</div>
+            ) : allMiqaatReportState.error ? (
+              <div className="text-sm text-danger">{allMiqaatReportState.error}</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="py-2 pr-3">Miqaat</th>
+                      <th className="py-2 pr-3">Venue</th>
+                      <th className="py-2 pr-3">Party</th>
+                      <th className="py-2 pr-3">Attended</th>
+                      <th className="py-2 pr-3">Overall</th>
+                      <th className="py-2 pr-3">Comment</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayAttendanceRows.map((r) => (
+                      <tr key={`${r.english_date}-${r.schedule_id}`} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3">
+                          {formatDateDdMmmYy(r.english_date)} - {r.miqaat_name}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
+                        </td>
+                        <td className="py-2 pr-3 font-semibold">
+                          {r.party_name} ({r.category})
+                        </td>
+                        <td className="py-2 pr-3">
+                          {r.attended_properly === null ? "—" : r.attended_properly ? "Yes" : "No"}
+                        </td>
+                        <td className="py-2 pr-3">{r.overall_score ?? "—"}</td>
+                        <td className="py-2 pr-3">{r.comments ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           ) : attendanceQuery.isLoading ? (
             <div className="text-sm text-textMuted">Loading...</div>
           ) : attendanceQuery.isError ? (
@@ -1158,7 +1513,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAttendanceRows.map((r) => (
+                  {displayAttendanceRows.map((r) => (
                     <tr key={r.schedule_id} className="border-b border-border last:border-0">
                       <td className="py-2 pr-3">
                         {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
