@@ -9,6 +9,7 @@ import { resolveApiUrl } from "../../features/api/api";
 import { useGetZonesQuery } from "../../features/zones/zonesApi";
 import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetPartiesQuery } from "../../features/parties/partiesApi";
+import { useGetVenuesQuery } from "../../features/venues/venuesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
 import {
   useGetAttendanceReportQuery,
@@ -457,6 +458,7 @@ export function ReportsPage() {
   const zonesQuery = useGetZonesQuery(undefined, { skip: role !== "admin" });
   const miqaatsQuery = useGetMiqaatsQuery();
   const partiesQuery = useGetPartiesQuery(undefined);
+  const [venueId, setVenueId] = useState<string>("");
 
   const [zoneId, setZoneId] = useState<string>("all");
   const [miqaatId, setMiqaatId] = useState<string>("");
@@ -468,6 +470,7 @@ export function ReportsPage() {
   const [quarter, setQuarter] = useState<string>(String(initialQuarter));
 
   const effectiveZoneId = role === "zonal_head" ? user?.zoneId : zoneId === "all" ? undefined : Number(zoneId);
+  const venuesQuery = useGetVenuesQuery(effectiveZoneId ? { zone_id: effectiveZoneId } : undefined);
 
   const statusQuery = useGetStatusSummaryQuery(effectiveZoneId ? { zone_id: effectiveZoneId } : undefined);
   const miqaatScheduleQuery = useGetMiqaatScheduleQuery(
@@ -529,9 +532,49 @@ export function ReportsPage() {
     return [{ value: "", label: "Select party" }, ...opts];
   }, [partiesQuery.data, effectiveZoneId]);
 
+  const venueOptions = useMemo(() => {
+    const items = venuesQuery.data ?? [];
+    const opts = items
+      .slice()
+      .sort((a, b) => {
+        const byVenue = a.venue_name.localeCompare(b.venue_name);
+        if (byVenue !== 0) return byVenue;
+        return a.mohallah_name.localeCompare(b.mohallah_name);
+      })
+      .map((v) => ({ value: String(v.id), label: `${v.venue_name} (${v.mohallah_name})` }));
+    return [{ value: "", label: "All venues" }, ...opts];
+  }, [venuesQuery.data]);
+
   const selectedMiqaat = useMemo(
     () => (miqaatsQuery.data ?? []).find((item) => String(item.id) === miqaatId),
     [miqaatId, miqaatsQuery.data]
+  );
+
+  const selectedVenue = useMemo(
+    () => (venuesQuery.data ?? []).find((item) => String(item.id) === venueId),
+    [venueId, venuesQuery.data]
+  );
+
+  function matchesSelectedVenue(row: { venue_name: string; mohallah_name?: string | null }) {
+    if (!selectedVenue) return true;
+    if (row.venue_name !== selectedVenue.venue_name) return false;
+    if (typeof row.mohallah_name === "string" && row.mohallah_name !== selectedVenue.mohallah_name) return false;
+    return true;
+  }
+
+  const filteredMiqaatScheduleRows = useMemo(
+    () => (miqaatScheduleQuery.data ?? []).filter((row) => matchesSelectedVenue(row)),
+    [miqaatScheduleQuery.data, selectedVenue]
+  );
+
+  const filteredZoneScheduleRows = useMemo(
+    () => (zoneScheduleQuery.data ?? []).filter((row) => matchesSelectedVenue(row)),
+    [zoneScheduleQuery.data, selectedVenue]
+  );
+
+  const filteredAttendanceRows = useMemo(
+    () => (attendanceQuery.data ?? []).filter((row) => matchesSelectedVenue(row)),
+    [attendanceQuery.data, selectedVenue]
   );
 
   const exportMetaLines = useMemo(() => {
@@ -543,14 +586,16 @@ export function ReportsPage() {
           : "—";
     const miqaatLabel = miqaatOptions.find((m) => m.value === miqaatId)?.label ?? "—";
     const partyLabel = partyOptions.find((p) => p.value === partyId)?.label ?? "—";
+    const venueLabel = venueOptions.find((v) => v.value === venueId)?.label ?? "All venues";
     return [
       `Zone: ${zoneLabel}`,
       `Miqaat: ${miqaatLabel}`,
       `Party: ${partyLabel}`,
+      `Venue: ${venueLabel}`,
       `Year: ${year}`,
       `Quarter: Q${quarter}`
     ];
-  }, [miqaatId, miqaatOptions, partyId, partyOptions, quarter, role, year, zoneId, zoneOptions]);
+  }, [miqaatId, miqaatOptions, partyId, partyOptions, quarter, role, venueId, venueOptions, year, zoneId, zoneOptions]);
 
   const [bulkMiqaatIds, setBulkMiqaatIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -606,7 +651,7 @@ export function ReportsPage() {
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]);
+        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]).filter((row) => matchesSelectedVenue(row));
       }
 
       const table = buildBulkMiqaatVenuePartyGridHtml({ miqaatTitles, rowsByMiqaatId });
@@ -651,7 +696,7 @@ export function ReportsPage() {
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]);
+        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]).filter((row) => matchesSelectedVenue(row));
       }
 
       const table = buildBulkMiqaatVenuePartyGridHtml({ miqaatTitles, rowsByMiqaatId });
@@ -699,7 +744,7 @@ export function ReportsPage() {
         params.set("miqaat_id", id);
         if (effectiveZoneId) params.set("zone_id", String(effectiveZoneId));
         const env = await fetchEnvelope<any[]>(`/api/v1/reports/miqaat-schedule?${params.toString()}`);
-        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]);
+        rowsByMiqaatId[id] = normalizeExportRows(env.data as MiqaatScheduleExportRow[]).filter((row) => matchesSelectedVenue(row));
       }
 
       const matrix = buildBulkMiqaatVenuePartyGridModel({ miqaatTitles, rowsByMiqaatId });
@@ -776,7 +821,7 @@ export function ReportsPage() {
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           {role === "admin" ? (
             <Select label="Zone" value={zoneId} onChange={(e) => setZoneId(e.target.value)} options={zoneOptions} />
           ) : (
@@ -784,6 +829,7 @@ export function ReportsPage() {
           )}
           <Select label="Miqaat" value={miqaatId} onChange={(e) => setMiqaatId(e.target.value)} options={miqaatOptions} />
           <Select label="Party" value={partyId} onChange={(e) => setPartyId(e.target.value)} options={partyOptions} />
+          <Select label="Venue" value={venueId} onChange={(e) => setVenueId(e.target.value)} options={venueOptions} />
         </div>
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
           <Select
@@ -970,7 +1016,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(miqaatScheduleQuery.data ?? []).map((r) => (
+                  {filteredMiqaatScheduleRows.map((r) => (
                     <tr key={r.id} className="border-b border-border last:border-0">
                       <td className="py-2 pr-3">{r.zone_name}</td>
                       <td className="py-2 pr-3">
@@ -1013,7 +1059,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(miqaatScheduleQuery.data ?? [])
+                  {filteredMiqaatScheduleRows
                     .slice()
                     .sort((a, b) => {
                       const byVenue = a.venue_name.localeCompare(b.venue_name);
@@ -1068,7 +1114,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(zoneScheduleQuery.data ?? []).map((r, idx) => (
+                  {filteredZoneScheduleRows.map((r, idx) => (
                     <tr key={idx} className="border-b border-border last:border-0">
                       <td className="py-2 pr-3">{r.zone_name}</td>
                       <td className="py-2 pr-3">
@@ -1112,7 +1158,7 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(attendanceQuery.data ?? []).map((r) => (
+                  {filteredAttendanceRows.map((r) => (
                     <tr key={r.schedule_id} className="border-b border-border last:border-0">
                       <td className="py-2 pr-3">
                         {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
