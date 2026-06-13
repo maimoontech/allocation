@@ -43,10 +43,18 @@
 - This preserves the intended SQL comparison semantics for:
   - `q.english_date < ?`
   - `q.english_date = ? AND q.id < ?`
+- Replaced the staged matching tail with a two-pass allocator:
+  - pass 1: maximize assignments while keeping the strict no-repeat-before-full-coverage rule
+  - pass 2: only for still-unassigned active parties, allow repeat venues on remaining open seats
+  - this matches the user's clarified requirement: apply all rules first, then break the repeat rule only if needed to place all active parties
 
 ## Verification
 - Backend diagnostics: clean.
 - Backend build: pass.
+- Dry-run preview for `miqaat 9` on production data:
+  - strict pass assigns `18`
+  - relaxed fallback assigns `1`
+  - final preview assigns `19/19`
 
 ## Next User Verification
 - Redeploy backend.
