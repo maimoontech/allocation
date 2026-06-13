@@ -143,6 +143,38 @@ function downloadExcelFromElement(args: { title: string; metaLines: string[]; fi
   downloadBlobFile(filename, blob);
 }
 
+function downloadPdfFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
+  const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+  doc.setFontSize(16);
+  doc.text(args.title, 40, 40);
+  doc.setFontSize(10);
+  args.metaLines.filter(Boolean).forEach((line, index) => {
+    doc.text(line, 40, 60 + index * 14);
+  });
+
+  const table = args.element.querySelector("table");
+  if (table) {
+    autoTable(doc, {
+      html: table as HTMLTableElement,
+      startY: 60 + args.metaLines.filter(Boolean).length * 14 + 14,
+      styles: { fontSize: 8, cellPadding: 4, valign: "top" },
+      headStyles: { fillColor: [243, 243, 243], textColor: [17, 17, 17] },
+      margin: { left: 40, right: 40, bottom: 40 }
+    });
+  } else {
+    const lines = Array.from(args.element.querySelectorAll("div"))
+      .map((node) => node.textContent?.trim() ?? "")
+      .filter(Boolean);
+    const startY = 60 + args.metaLines.filter(Boolean).length * 14 + 20;
+    lines.forEach((line, index) => {
+      doc.text(line, 40, startY + index * 16);
+    });
+  }
+
+  const filename = `${normalizeFilenamePart(args.filenameBase || args.title)}_${timestampForFilename()}.pdf`;
+  doc.save(filename);
+}
+
 function venueColumnKey(r: { zone_name: string; mohallah_name: string; venue_name: string }) {
   return `${r.zone_name}||${r.mohallah_name}||${r.venue_name}`;
 }
@@ -410,12 +442,11 @@ function ReportCard(props: {
             onClick={() => {
               try {
                 const el = getContentEl();
-                openPrintWindow({
+                downloadPdfFromElement({
                   title: props.title,
                   metaLines: props.metaLines,
-                  bodyHtml: el.innerHTML,
-                  hintLine: "Tip: choose “Save as PDF” in the print dialog.",
-                  autoPrint: true
+                  filenameBase: props.filenameBase,
+                  element: el
                 });
               } catch (e: any) {
                 window.alert(String(e?.message ?? e));
@@ -1161,34 +1192,6 @@ export function ReportsPage() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <ReportCard
-          title="Status Summary"
-          filenameBase="status_summary"
-          metaLines={exportMetaLines}
-          disabled={statusQuery.isLoading || statusQuery.isError}
-        >
-          {statusQuery.isLoading ? (
-            <div className="text-sm text-textMuted">Loading...</div>
-          ) : statusQuery.isError ? (
-            <div className="text-sm text-danger">Failed to load status summary</div>
-          ) : (
-            <div className="space-y-2 text-sm">
-              <div>
-                <div className="text-textMuted">Parties</div>
-                <div className="font-semibold">
-                  Active: {statusQuery.data?.parties.active ?? 0} | Inactive: {statusQuery.data?.parties.inactive ?? 0}
-                </div>
-              </div>
-              <div>
-                <div className="text-textMuted">Venues</div>
-                <div className="font-semibold">
-                  Active: {statusQuery.data?.venues.active ?? 0} | Inactive: {statusQuery.data?.venues.inactive ?? 0}
-                </div>
-              </div>
-            </div>
-          )}
-        </ReportCard>
-
-        <ReportCard
           title="Miqaat Schedule"
           filenameBase="miqaat_schedule"
           metaLines={exportMetaLines}
@@ -1352,6 +1355,34 @@ export function ReportsPage() {
           )}
         </ReportCard>
       </div>
+
+      <ReportCard
+        title="Status Summary"
+        filenameBase="status_summary"
+        metaLines={exportMetaLines}
+        disabled={statusQuery.isLoading || statusQuery.isError}
+      >
+        {statusQuery.isLoading ? (
+          <div className="text-sm text-textMuted">Loading...</div>
+        ) : statusQuery.isError ? (
+          <div className="text-sm text-danger">Failed to load status summary</div>
+        ) : (
+          <div className="space-y-2 text-sm">
+            <div>
+              <div className="text-textMuted">Parties</div>
+              <div className="font-semibold">
+                Active: {statusQuery.data?.parties.active ?? 0} | Inactive: {statusQuery.data?.parties.inactive ?? 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-textMuted">Venues</div>
+              <div className="font-semibold">
+                Active: {statusQuery.data?.venues.active ?? 0} | Inactive: {statusQuery.data?.venues.inactive ?? 0}
+              </div>
+            </div>
+          </div>
+        )}
+      </ReportCard>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <ReportCard
