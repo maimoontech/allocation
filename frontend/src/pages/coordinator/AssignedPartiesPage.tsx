@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Link } from "react-router-dom";
 import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
@@ -42,6 +44,49 @@ export function AssignedPartiesPage() {
       .sort((a, b) => b.englishDate.localeCompare(a.englishDate));
   }, [schedulesQuery.data]);
 
+  function downloadPdf() {
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const selectedMiqaatLabel = miqaatOptions.find((option) => option.value === miqaatId)?.label ?? "All miqaats";
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("Anjuman-e-Zakereen Hussain AS. Karachi.", pageWidth / 2, 34, { align: "center" });
+    doc.setFontSize(16);
+    doc.text("Venue Assigned Parties", 40, 58);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Filter: ${selectedMiqaatLabel}`, 40, 76);
+
+    autoTable(doc, {
+      startY: 92,
+      head: [["Miqaat Name", "English Date", "Venue", "Party"]],
+      body: cards.flatMap((card) =>
+        card.assignments
+          .slice()
+          .sort((a, b) => a.venue_name.localeCompare(b.venue_name))
+          .map((assignment) => [
+            card.miqaatName,
+            formatDateDdMmmYy(card.englishDate),
+            assignment.venue_name,
+            `${assignment.party_name} (${assignment.category})`
+          ])
+      ),
+      styles: { fontSize: 9, cellPadding: 6, valign: "middle" },
+      headStyles: { fillColor: [31, 64, 104] },
+      columnStyles: {
+        0: { cellWidth: 220 },
+        1: { cellWidth: 90 },
+        2: { cellWidth: 170 },
+        3: { cellWidth: 240 }
+      },
+      margin: { left: 40, right: 40, bottom: 40 }
+    });
+
+    const suffix = miqaatId === "all" ? "all" : miqaatId;
+    doc.save(`assigned_parties_${suffix}.pdf`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">Venue Assigned Parties</div>
@@ -55,6 +100,9 @@ export function AssignedPartiesPage() {
             options={miqaatOptions}
           />
           <div className="flex items-end gap-2">
+            <Button variant="ghost" onClick={downloadPdf} disabled={cards.length === 0 || schedulesQuery.isLoading}>
+              Download PDF
+            </Button>
             <Button variant="ghost" onClick={() => schedulesQuery.refetch()}>
               Refresh
             </Button>
@@ -94,8 +142,6 @@ export function AssignedPartiesPage() {
                     <tr className="border-b border-border">
                       <th className="py-2 pr-3">Venue</th>
                       <th className="py-2 pr-3">Party</th>
-                      <th className="py-2 pr-3">Zone</th>
-                      <th className="py-2 pr-3">Manual</th>
                       <th className="py-2 pr-3">Action</th>
                     </tr>
                   </thead>
@@ -109,8 +155,6 @@ export function AssignedPartiesPage() {
                           <td className="py-2 pr-3">
                             {a.party_name} <span className="text-textMuted">({a.category})</span>
                           </td>
-                          <td className="py-2 pr-3">{a.zone_name}</td>
-                          <td className="py-2 pr-3">{a.is_manual ? "Yes" : "No"}</td>
                           <td className="py-2 pr-3">
                             <Link
                               className="text-secondary underline"
