@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
@@ -46,6 +48,49 @@ export function MySchedulePage() {
     return "—";
   }
 
+  function downloadPdf() {
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const title = "My Schedule";
+    const selectedMiqaatLabel = miqaatOptions.find((option) => option.value === miqaatId)?.label ?? "All miqaats";
+
+    doc.setFontSize(16);
+    doc.text(title, 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Party: ${user?.displayName ?? "—"}`, 40, 58);
+    doc.text(`Filter: ${selectedMiqaatLabel}`, 40, 72);
+
+    autoTable(doc, {
+      startY: 88,
+      head: [[
+        "Miqaat Name",
+        "English Date",
+        "Hijri Date",
+        "Venue Name",
+        "Venue Coordinator Name & Contact Number"
+      ]],
+      body: rows.map((row) => [
+        row.miqaat_name,
+        formatDateDdMmmYy(row.english_date),
+        row.hijri_date || "—",
+        row.venue_name,
+        formatCoordinatorLine(row.venue_coordinator_name, row.venue_contact_number)
+      ]),
+      styles: { fontSize: 9, cellPadding: 6, valign: "middle" },
+      headStyles: { fillColor: [31, 64, 104] },
+      columnStyles: {
+        0: { cellWidth: 170 },
+        1: { cellWidth: 80 },
+        2: { cellWidth: 80 },
+        3: { cellWidth: 130 },
+        4: { cellWidth: 220 }
+      },
+      margin: { left: 40, right: 40, bottom: 40 }
+    });
+
+    const suffix = miqaatId === "all" ? "all" : miqaatId;
+    doc.save(`my_schedule_${suffix}.pdf`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="text-2xl font-bold">My Schedule</div>
@@ -54,6 +99,9 @@ export function MySchedulePage() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Select label="Filter by Miqaat" value={miqaatId} onChange={(e) => setMiqaatId(e.target.value)} options={miqaatOptions} />
           <div className="flex items-end gap-2">
+            <Button variant="ghost" onClick={downloadPdf} disabled={rows.length === 0 || schedulesQuery.isLoading}>
+              Download PDF
+            </Button>
             <Button variant="ghost" onClick={() => schedulesQuery.refetch()}>
               Refresh
             </Button>
