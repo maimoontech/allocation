@@ -23,23 +23,24 @@ export function MySchedulePage() {
     return [{ value: "all", label: "All miqaats" }, ...opts];
   }, [miqaatsQuery.data]);
 
-  const cards = useMemo(() => {
-    const rows = schedulesQuery.data ?? [];
-    const byMiqaat = new Map<number, typeof rows>();
-    for (const r of rows) {
-      const list = byMiqaat.get(r.miqaat_id) ?? [];
-      list.push(r);
-      byMiqaat.set(r.miqaat_id, list);
-    }
-    return Array.from(byMiqaat.entries())
-      .map(([id, list]) => ({
-        miqaatId: id,
-        miqaatName: list[0]?.miqaat_name ?? "",
-        englishDate: list[0]?.english_date ?? "",
-        assignments: list
-      }))
-      .sort((a, b) => b.englishDate.localeCompare(a.englishDate));
-  }, [schedulesQuery.data]);
+  const rows = useMemo(
+    () =>
+      [...(schedulesQuery.data ?? [])].sort((a, b) => {
+        const byDate = b.english_date.localeCompare(a.english_date);
+        if (byDate !== 0) return byDate;
+        return a.venue_name.localeCompare(b.venue_name);
+      }),
+    [schedulesQuery.data]
+  );
+
+  function formatCoordinatorLine(name?: string | null, contact?: string | null) {
+    const safeName = name?.trim();
+    const safeContact = contact?.trim();
+    if (safeName && safeContact) return `${safeName} - ${safeContact}`;
+    if (safeName) return safeName;
+    if (safeContact) return safeContact;
+    return "—";
+  }
 
   return (
     <div className="space-y-4">
@@ -64,7 +65,7 @@ export function MySchedulePage() {
         <Card>
           <div className="text-sm text-danger">Failed to load schedule</div>
         </Card>
-      ) : cards.length === 0 ? (
+      ) : rows.length === 0 ? (
         <Card>
           <div className="text-sm text-textMuted">
             No schedule assigned yet. Ask Zonal Head/Admin to generate schedule for the selected Miqaat.
@@ -72,37 +73,33 @@ export function MySchedulePage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {cards.map((c) => (
-            <Card key={c.miqaatId}>
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          {rows.map((row) => (
+            <Card key={row.id}>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <div className="text-lg font-bold">{c.miqaatName}</div>
-                  <div className="text-sm text-textMuted">{formatDateDdMmmYy(c.englishDate)}</div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">Miqaat Name</div>
+                  <div className="mt-1 font-semibold">{row.miqaat_name}</div>
                 </div>
-                <div className="text-sm text-textMuted">{c.assignments.length} assignment(s)</div>
-              </div>
-
-              <div className="mt-3 overflow-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="py-2 pr-3">Zone</th>
-                      <th className="py-2 pr-3">Mohallah</th>
-                      <th className="py-2 pr-3">Venue</th>
-                      <th className="py-2 pr-3">Manual</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {c.assignments.map((a) => (
-                      <tr key={a.id} className="border-b border-border last:border-0">
-                        <td className="py-2 pr-3">{a.zone_name}</td>
-                        <td className="py-2 pr-3">{a.mohallah_name}</td>
-                        <td className="py-2 pr-3 font-semibold">{a.venue_name}</td>
-                        <td className="py-2 pr-3">{a.is_manual ? "Yes" : "No"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">English Date</div>
+                  <div className="mt-1">{formatDateDdMmmYy(row.english_date)}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">Hijri Date</div>
+                  <div className="mt-1">{row.hijri_date || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">Venue Name</div>
+                  <div className="mt-1">{row.venue_name}</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">
+                    Venue Coordinator Name & Contact Number
+                  </div>
+                  <div className="mt-1">
+                    {formatCoordinatorLine(row.venue_coordinator_name, row.venue_contact_number)}
+                  </div>
+                </div>
               </div>
             </Card>
           ))}

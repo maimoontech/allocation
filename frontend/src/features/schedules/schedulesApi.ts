@@ -7,8 +7,11 @@ export type ScheduleRow = {
   miqaat_id: number;
   miqaat_name: string;
   english_date: string;
+  hijri_date?: string | null;
   venue_id: number;
   venue_name: string;
+  venue_coordinator_name?: string | null;
+  venue_contact_number?: string | null;
   mohallah_id: number;
   mohallah_name: string;
   zone_id: number;

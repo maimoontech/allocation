@@ -47,7 +47,8 @@ exports.schedulesRoutes.get("/", async (req, res) => {
         params.zone_id = zoneId;
     }
     const whereSql = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const [rows] = await pool_1.pool.query(`SELECT s.id, s.miqaat_id, q.miqaat_name, q.english_date, s.venue_id, v.venue_name, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
+    const [rows] = await pool_1.pool.query(`SELECT s.id, s.miqaat_id, q.miqaat_name, q.english_date, q.hijri_date, s.venue_id, v.venue_name, v.coordinator_name AS venue_coordinator_name,
+            v.contact_number AS venue_contact_number, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
             s.party_id, p.party_name, p.category, s.is_manual, s.created_at,
             COALESCE(completed_pairs.all_assigned_venues_completed, 0) AS all_assigned_venues_completed,
             CASE WHEN pr.id IS NULL THEN 0 ELSE 1 END AS performance_submitted,
