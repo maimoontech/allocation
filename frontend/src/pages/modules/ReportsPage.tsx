@@ -529,6 +529,11 @@ export function ReportsPage() {
     return [{ value: "", label: "Select party" }, ...opts];
   }, [partiesQuery.data, effectiveZoneId]);
 
+  const selectedMiqaat = useMemo(
+    () => (miqaatsQuery.data ?? []).find((item) => String(item.id) === miqaatId),
+    [miqaatId, miqaatsQuery.data]
+  );
+
   const exportMetaLines = useMemo(() => {
     const zoneLabel =
       role === "admin"
@@ -977,6 +982,57 @@ export function ReportsPage() {
                       <td className="py-2 pr-3">{r.is_manual ? "Yes" : "No"}</td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ReportCard>
+
+        <ReportCard
+          title="Venue Assigned Parties"
+          filenameBase="venue_assigned_parties"
+          metaLines={exportMetaLines}
+          disabled={!miqaatId || miqaatScheduleQuery.isLoading || miqaatScheduleQuery.isError}
+        >
+          {!miqaatId ? (
+            <div className="text-sm text-textMuted">Select a Miqaat to view venue assigned parties.</div>
+          ) : miqaatScheduleQuery.isLoading ? (
+            <div className="text-sm text-textMuted">Loading...</div>
+          ) : miqaatScheduleQuery.isError ? (
+            <div className="text-sm text-danger">Failed to load venue assigned parties</div>
+          ) : (
+            <div className="overflow-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="py-2 pr-3">Miqaat Name</th>
+                    <th className="py-2 pr-3">English Date</th>
+                    <th className="py-2 pr-3">Hijri Date</th>
+                    <th className="py-2 pr-3">Venue</th>
+                    <th className="py-2 pr-3">Party</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(miqaatScheduleQuery.data ?? [])
+                    .slice()
+                    .sort((a, b) => {
+                      const byVenue = a.venue_name.localeCompare(b.venue_name);
+                      if (byVenue !== 0) return byVenue;
+                      return a.party_name.localeCompare(b.party_name);
+                    })
+                    .map((r) => (
+                      <tr key={r.id} className="border-b border-border last:border-0">
+                        <td className="py-2 pr-3">{selectedMiqaat?.miqaat_name ?? "—"}</td>
+                        <td className="py-2 pr-3">{selectedMiqaat ? formatDateDdMmmYy(selectedMiqaat.english_date) : "—"}</td>
+                        <td className="py-2 pr-3">{selectedMiqaat?.hijri_date || "—"}</td>
+                        <td className="py-2 pr-3 font-semibold">
+                          {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
+                        </td>
+                        <td className="py-2 pr-3">
+                          {r.party_name} <span className="text-textMuted">({r.category})</span>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
