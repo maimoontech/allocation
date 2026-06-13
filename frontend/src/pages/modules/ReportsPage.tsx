@@ -145,18 +145,35 @@ function downloadExcelFromElement(args: { title: string; metaLines: string[]; fi
 
 function downloadPdfFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-  doc.setFontSize(16);
-  doc.text(args.title, 40, 40);
-  doc.setFontSize(10);
-  args.metaLines.filter(Boolean).forEach((line, index) => {
-    doc.text(line, 40, 60 + index * 14);
-  });
+  const isVenueAssignedParties = args.filenameBase === "venue_assigned_parties";
+  let startY = 74;
+
+  if (isVenueAssignedParties) {
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const venueLine = args.metaLines.find((line) => line.startsWith("Venue: "));
+    const venueName = venueLine ? venueLine.replace(/^Venue:\s*/, "") : "All venues";
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("Anjuman-e-Zakereen Hussain AS. Karachi", pageWidth / 2, 34, { align: "center" });
+    doc.setFontSize(16);
+    doc.text(venueName, 40, 58);
+    startY = 76;
+  } else {
+    doc.setFontSize(16);
+    doc.text(args.title, 40, 40);
+    doc.setFontSize(10);
+    args.metaLines.filter(Boolean).forEach((line, index) => {
+      doc.text(line, 40, 60 + index * 14);
+    });
+    startY = 60 + args.metaLines.filter(Boolean).length * 14 + 14;
+  }
 
   const table = args.element.querySelector("table");
   if (table) {
     autoTable(doc, {
       html: table as HTMLTableElement,
-      startY: 60 + args.metaLines.filter(Boolean).length * 14 + 14,
+      startY,
       styles: { fontSize: 8, cellPadding: 4, valign: "top" },
       headStyles: { fillColor: [243, 243, 243], textColor: [17, 17, 17] },
       margin: { left: 40, right: 40, bottom: 40 }
@@ -165,9 +182,9 @@ function downloadPdfFromElement(args: { title: string; metaLines: string[]; file
     const lines = Array.from(args.element.querySelectorAll("div"))
       .map((node) => node.textContent?.trim() ?? "")
       .filter(Boolean);
-    const startY = 60 + args.metaLines.filter(Boolean).length * 14 + 20;
+    const textStartY = startY + 6;
     lines.forEach((line, index) => {
-      doc.text(line, 40, startY + index * 16);
+      doc.text(line, 40, textStartY + index * 16);
     });
   }
 
