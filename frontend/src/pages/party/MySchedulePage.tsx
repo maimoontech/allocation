@@ -2,11 +2,13 @@ import { useMemo, useState } from "react";
 import { Card } from "../../components/ui/Card";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
+import { useAppSelector } from "../../hooks/storeHooks";
 import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetSchedulesQuery } from "../../features/schedules/schedulesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
 
 export function MySchedulePage() {
+  const user = useAppSelector((state) => state.auth.user);
   const miqaatsQuery = useGetMiqaatsQuery();
   const [miqaatId, setMiqaatId] = useState<string>("all");
 
@@ -25,12 +27,14 @@ export function MySchedulePage() {
 
   const rows = useMemo(
     () =>
-      [...(schedulesQuery.data ?? [])].sort((a, b) => {
+      [...(schedulesQuery.data ?? [])]
+        .filter((row) => !user?.partyId || row.party_id === user.partyId)
+        .sort((a, b) => {
         const byDate = b.english_date.localeCompare(a.english_date);
         if (byDate !== 0) return byDate;
         return a.venue_name.localeCompare(b.venue_name);
-      }),
-    [schedulesQuery.data]
+        }),
+    [schedulesQuery.data, user?.partyId]
   );
 
   function formatCoordinatorLine(name?: string | null, contact?: string | null) {
