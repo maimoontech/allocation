@@ -46,21 +46,18 @@ export function AssignedPartiesPage() {
 
   function downloadPdf() {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    const selectedMiqaatLabel = miqaatOptions.find((option) => option.value === miqaatId)?.label ?? "All miqaats";
     const pageWidth = doc.internal.pageSize.getWidth();
+    const venueName =
+      cards.flatMap((card) => card.assignments).find((assignment) => assignment.venue_name)?.venue_name ?? "Venue";
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(18);
     doc.text("Anjuman-e-Zakereen Hussain AS. Karachi.", pageWidth / 2, 34, { align: "center" });
-    doc.setFontSize(16);
-    doc.text("Venue Assigned Parties", 40, 58);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(`Filter: ${selectedMiqaatLabel}`, 40, 76);
+    doc.text(venueName, 40, 58);
 
     autoTable(doc, {
-      startY: 92,
-      head: [["Miqaat Name", "English Date", "Venue", "Party"]],
+      startY: 74,
+      head: [["Miqaat Name", "English Date", "Hijri Date", "Party"]],
       body: cards.flatMap((card) =>
         card.assignments
           .slice()
@@ -68,17 +65,17 @@ export function AssignedPartiesPage() {
           .map((assignment) => [
             card.miqaatName,
             formatDateDdMmmYy(card.englishDate),
-            assignment.venue_name,
+            assignment.hijri_date || "—",
             `${assignment.party_name} (${assignment.category})`
           ])
       ),
       styles: { fontSize: 9, cellPadding: 6, valign: "middle" },
       headStyles: { fillColor: [31, 64, 104] },
       columnStyles: {
-        0: { cellWidth: 220 },
+        0: { cellWidth: 240 },
         1: { cellWidth: 90 },
-        2: { cellWidth: 170 },
-        3: { cellWidth: 240 }
+        2: { cellWidth: 90 },
+        3: { cellWidth: 300 }
       },
       margin: { left: 40, right: 40, bottom: 40 }
     });
