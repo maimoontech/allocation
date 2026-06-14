@@ -140,8 +140,8 @@ export function LoginPage() {
         {/* <div className="mt-3 text-center text-xs text-textMuted">
           Frontend v{__APP_VERSION__} | build {__APP_BUILD__}
         </div> */}
-        {/* <div className="mt-1 text-center text-xs text-textMuted">{backendInfo}</div>
-        <div className="mt-1 text-center text-[11px] text-textMuted">API: {apiBaseUrl}</div> */}
+        {/* <div className="mt-1 text-center text-xs text-textMuted">{backendInfo}</div> */}
+       {/* <div className="mt-1 text-center text-[11px] text-textMuted">API: {apiBaseUrl}</div> */}
       </div>
     </div>
   );
