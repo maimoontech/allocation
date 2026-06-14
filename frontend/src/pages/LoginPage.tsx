@@ -77,8 +77,8 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md">
         <div className="mb-4 text-center">
-          <div className="text-2xl font-bold text-primary">ZSMS</div>
-          <div className="text-sm text-textMuted">Zakereen Scheduling Management System</div>
+          <div className="text-2xl font-bold text-primary">Anjuman-e-Zakereen Hussain A.S Karachi</div>
+          <div className="text-sm text-textMuted">Zakereen Scheduling System</div>
         </div>
         <Card>
           <form
