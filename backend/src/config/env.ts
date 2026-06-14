@@ -12,7 +12,7 @@ export const env = {
   port: Number(process.env.PORT ?? "4000"),
   cors: {
     allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ??
-      "https://allocation-iota.vercel.app,http://localhost:5173").split(",").map((origin) => origin.trim()).filter(Boolean)
+      "https://allocation-iota.vercel.app,https://www.karachizakereen.org,http://localhost:5173").split(",").map((origin) => origin.trim()).filter(Boolean)
   },
   db: {
     host: requireEnv("DB_HOST", "64.20.33.10"),
