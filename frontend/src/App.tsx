@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AppRoutes } from "./router/AppRoutes";
 
 const LAUNCH_AT_UTC_MS = Date.UTC(2026, 5, 14, 17, 30, 0);
+const PREVIEW_QUERY_KEY = "preview";
+const PREVIEW_QUERY_VALUE = "admin";
+const PREVIEW_STORAGE_KEY = "zsms_launch_preview_access";
 
 function formatCountdownParts(msRemaining: number) {
   const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
@@ -12,8 +15,18 @@ function formatCountdownParts(msRemaining: number) {
   return { days, hours, minutes, seconds };
 }
 
+function hasPreviewBypass() {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return (
+    window.sessionStorage.getItem(PREVIEW_STORAGE_KEY) === "1" ||
+    params.get(PREVIEW_QUERY_KEY) === PREVIEW_QUERY_VALUE
+  );
+}
+
 export default function App() {
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [previewAccess, setPreviewAccess] = useState(() => hasPreviewBypass());
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -22,7 +35,20 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const isLive = nowMs >= LAUNCH_AT_UTC_MS;
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(PREVIEW_QUERY_KEY) !== PREVIEW_QUERY_VALUE) return;
+
+    window.sessionStorage.setItem(PREVIEW_STORAGE_KEY, "1");
+    setPreviewAccess(true);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete(PREVIEW_QUERY_KEY);
+    const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
+
+  const isLive = nowMs >= LAUNCH_AT_UTC_MS || previewAccess;
   const countdown = useMemo(() => formatCountdownParts(LAUNCH_AT_UTC_MS - nowMs), [nowMs]);
 
   if (!isLive) {
