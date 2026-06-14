@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
@@ -6,7 +6,6 @@ import { Select } from "../components/ui/Select";
 import { Button } from "../components/ui/Button";
 import type { Role } from "../types";
 import { useLoginMutation } from "../features/auth/authApi";
-import { apiBaseUrl, resolveBackendUrl } from "../features/api/api";
 import { useAppDispatch } from "../hooks/storeHooks";
 import { setAuth } from "../features/auth/authSlice";
 
@@ -27,7 +26,6 @@ export function LoginPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [login, loginState] = useLoginMutation();
-  const [backendInfo, setBackendInfo] = useState<string>("Loading backend info...");
 
   const [role, setRole] = useState<Role>("admin");
   const [identifier, setIdentifier] = useState("");
@@ -42,36 +40,6 @@ export function LoginPage() {
     if (role === "party") return "Use your ITS No as User ID";
     return "Use your Venue name or Venue ID";
   }, [role]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadBackendInfo() {
-      try {
-        const res = await fetch(resolveBackendUrl("/health"));
-        const text = await res.text();
-        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
-        const data = JSON.parse(text) as {
-          version?: string;
-          build?: string;
-          db_host?: string;
-          db_name?: string;
-        };
-        if (cancelled) return;
-        setBackendInfo(
-          `Backend v${data.version ?? "unknown"} | build ${data.build ?? "unknown"} | DB ${data.db_host ?? "?"}/${data.db_name ?? "?"}`
-        );
-      } catch {
-        if (cancelled) return;
-        setBackendInfo("Backend info unavailable");
-      }
-    }
-
-    void loadBackendInfo();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface p-4">

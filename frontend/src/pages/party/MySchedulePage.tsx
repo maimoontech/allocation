@@ -50,17 +50,18 @@ export function MySchedulePage() {
 
   function downloadPdf() {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    const title = "My Schedule";
-    const selectedMiqaatLabel = miqaatOptions.find((option) => option.value === miqaatId)?.label ?? "All miqaats";
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const partyName = user?.displayName ?? "—";
 
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.text("Anjuman-e-Zakereen Hussain AS. Karachi", pageWidth / 2, 34, { align: "center" });
     doc.setFontSize(16);
-    doc.text(title, 40, 40);
-    doc.setFontSize(10);
-    doc.text(`Party: ${user?.displayName ?? "—"}`, 40, 58);
-    doc.text(`Filter: ${selectedMiqaatLabel}`, 40, 72);
+    doc.text(partyName, 40, 58);
+    doc.setFont("helvetica", "normal");
 
     autoTable(doc, {
-      startY: 88,
+      startY: 76,
       head: [[
         "Miqaat Name",
         "English Date",
