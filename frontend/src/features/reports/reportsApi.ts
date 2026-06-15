@@ -14,6 +14,8 @@ export type MiqaatScheduleRow = {
   venue_name: string;
   party_name: string;
   category: "A" | "B" | "C" | "H";
+  its_no?: string | null;
+  leader_name?: string | null;
   is_manual: 0 | 1;
 };
 

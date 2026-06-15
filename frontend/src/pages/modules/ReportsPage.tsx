@@ -132,6 +132,25 @@ function openPrintWindow(args: {
 
 type ApiEnvelope<T> = { success: boolean; data: T; message?: string };
 
+function renderPartyWithContact(args: {
+  partyName: string;
+  category: string;
+  leaderName?: string | null;
+  itsNo?: string | null;
+}) {
+  const details = [];
+  if (args.leaderName) details.push(`Leader: ${args.leaderName}`);
+  if (args.itsNo) details.push(`ITS: ${args.itsNo}`);
+  return (
+    <>
+      <div>
+        {args.partyName} <span className="text-textMuted">({args.category})</span>
+      </div>
+      {details.length ? <div className="text-xs text-textMuted">{details.join(" | ")}</div> : null}
+    </>
+  );
+}
+
 function downloadExcelFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
   const html = buildExportHtmlDocument({
     title: args.title,
@@ -1328,7 +1347,12 @@ export function ReportsPage() {
                           {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
                         </td>
                         <td className="py-2 pr-3">
-                          {r.party_name} <span className="text-textMuted">({r.category})</span>
+                          {renderPartyWithContact({
+                            partyName: r.party_name,
+                            category: r.category,
+                            leaderName: r.leader_name,
+                            itsNo: r.its_no
+                          })}
                         </td>
                       </tr>
                     ))}
@@ -1362,7 +1386,12 @@ export function ReportsPage() {
                           {r.venue_name} <span className="text-textMuted">({r.mohallah_name})</span>
                         </td>
                         <td className="py-2 pr-3">
-                          {r.party_name} <span className="text-textMuted">({r.category})</span>
+                          {renderPartyWithContact({
+                            partyName: r.party_name,
+                            category: r.category,
+                            leaderName: r.leader_name,
+                            itsNo: r.its_no
+                          })}
                         </td>
                       </tr>
                     ))}

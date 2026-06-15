@@ -102,7 +102,7 @@ exports.reportsRoutes.get("/miqaat-schedule", async (req, res) => {
         zoneSql = " AND m.zone_id = :zone_id";
         params.zone_id = zoneId;
     }
-    const [rows] = await pool_1.pool.query(`SELECT s.id, z.zone_name, m.mohallah_name, v.venue_name, p.party_name, p.category, s.is_manual
+    const [rows] = await pool_1.pool.query(`SELECT s.id, z.zone_name, m.mohallah_name, v.venue_name, p.party_name, p.category, p.its_no, p.leader_name, s.is_manual
      FROM schedules s
      JOIN venues v ON v.id = s.venue_id
      JOIN mohallahs m ON m.id = v.mohallah_id
