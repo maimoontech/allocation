@@ -22,7 +22,7 @@ export function MySchedulePage() {
     const items = miqaatsQuery.data ?? [];
     const opts = items
       .slice()
-      .sort((a, b) => b.english_date.localeCompare(a.english_date))
+      .sort((a, b) => a.english_date.localeCompare(b.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
     return [{ value: "all", label: "All miqaats" }, ...opts];
   }, [miqaatsQuery.data]);
@@ -32,9 +32,9 @@ export function MySchedulePage() {
       [...(schedulesQuery.data ?? [])]
         .filter((row) => !user?.partyId || row.party_id === user.partyId)
         .sort((a, b) => {
-        const byDate = b.english_date.localeCompare(a.english_date);
-        if (byDate !== 0) return byDate;
-        return a.venue_name.localeCompare(b.venue_name);
+          const byDate = a.english_date.localeCompare(b.english_date);
+          if (byDate !== 0) return byDate;
+          return a.venue_name.localeCompare(b.venue_name);
         }),
     [schedulesQuery.data, user?.partyId]
   );
