@@ -6,6 +6,8 @@ export type Party = {
   id: number;
   its_no: string;
   leader_name: string;
+  contact_number?: string | null;
+  whatsapp_number?: string | null;
   party_name: string;
   zone_id: number;
   zone_name: string;
@@ -19,6 +21,8 @@ export type CreatePartyRequest = {
   zone_id?: number;
   its_no: string;
   leader_name: string;
+  contact_number?: string | null;
+  whatsapp_number?: string | null;
   party_name: string;
   category: Party["category"];
   is_active?: 0 | 1;
@@ -30,6 +34,8 @@ export type UpdatePartyRequest = {
   zone_id?: number;
   its_no: string;
   leader_name: string;
+  contact_number?: string | null;
+  whatsapp_number?: string | null;
   party_name: string;
   category: Party["category"];
   is_active?: 0 | 1;

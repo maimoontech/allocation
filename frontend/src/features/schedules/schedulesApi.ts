@@ -21,6 +21,8 @@ export type ScheduleRow = {
   category: "A" | "B" | "C" | "H";
   party_its_no?: string | null;
   party_leader_name?: string | null;
+  party_contact_number?: string | null;
+  party_whatsapp_number?: string | null;
   is_manual: 0 | 1;
   all_assigned_venues_completed?: 0 | 1;
   created_at: string;

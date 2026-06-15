@@ -137,10 +137,14 @@ function renderPartyWithContact(args: {
   category: string;
   leaderName?: string | null;
   itsNo?: string | null;
+  contactNumber?: string | null;
+  whatsappNumber?: string | null;
 }) {
   const details = [];
   if (args.leaderName) details.push(`Leader: ${args.leaderName}`);
   if (args.itsNo) details.push(`ITS: ${args.itsNo}`);
+  if (args.contactNumber) details.push(`Contact: ${args.contactNumber}`);
+  if (args.whatsappNumber) details.push(`WhatsApp: ${args.whatsappNumber}`);
   return (
     <>
       <div>
@@ -1351,7 +1355,9 @@ export function ReportsPage() {
                             partyName: r.party_name,
                             category: r.category,
                             leaderName: r.leader_name,
-                            itsNo: r.its_no
+                            itsNo: r.its_no,
+                            contactNumber: r.contact_number,
+                            whatsappNumber: r.whatsapp_number
                           })}
                         </td>
                       </tr>
@@ -1390,7 +1396,9 @@ export function ReportsPage() {
                             partyName: r.party_name,
                             category: r.category,
                             leaderName: r.leader_name,
-                            itsNo: r.its_no
+                            itsNo: r.its_no,
+                            contactNumber: r.contact_number,
+                            whatsappNumber: r.whatsapp_number
                           })}
                         </td>
                       </tr>

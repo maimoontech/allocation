@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS parties (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   its_no VARCHAR(20) NOT NULL,
   leader_name VARCHAR(150) NOT NULL,
+  contact_number VARCHAR(20) NULL,
+  whatsapp_number VARCHAR(20) NULL,
   party_name VARCHAR(150) NOT NULL,
   zone_id INT UNSIGNED NOT NULL,
   category ENUM('A','B','C','H') NOT NULL,

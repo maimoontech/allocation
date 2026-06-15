@@ -129,7 +129,8 @@ reportsRoutes.get("/miqaat-schedule", async (req, res) => {
   }
 
   const [rows] = await pool.query<any[]>(
-    `SELECT s.id, z.zone_name, m.mohallah_name, v.venue_name, p.party_name, p.category, p.its_no, p.leader_name, s.is_manual
+    `SELECT s.id, z.zone_name, m.mohallah_name, v.venue_name, p.party_name, p.category, p.its_no, p.leader_name,
+            p.contact_number, p.whatsapp_number, s.is_manual
      FROM schedules s
      JOIN venues v ON v.id = s.venue_id
      JOIN mohallahs m ON m.id = v.mohallah_id
