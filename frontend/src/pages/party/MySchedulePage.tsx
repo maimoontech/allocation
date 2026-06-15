@@ -57,7 +57,7 @@ export function MySchedulePage() {
     doc.setFontSize(18);
     doc.text("Anjuman-e-Zakereen Hussain AS. Karachi", pageWidth / 2, 34, { align: "center" });
     doc.setFontSize(16);
-    doc.text(partyName, 40, 58);
+    doc.text(partyName, pageWidth / 2, 58, { align: "center" });
     doc.setFont("helvetica", "normal");
 
     autoTable(doc, {
