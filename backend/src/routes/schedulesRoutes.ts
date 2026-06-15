@@ -73,7 +73,7 @@ schedulesRoutes.get("/", async (req, res) => {
      ${completedPartyMiqaatJoin("s")}
      LEFT JOIN performance_ratings pr ON pr.schedule_id = s.id AND pr.coordinator_id = :coordinator_id
      ${whereSql}
-     ORDER BY q.english_date DESC, z.zone_name, m.mohallah_name, v.venue_name, p.party_name`,
+     ORDER BY q.english_date ASC, z.zone_name, m.mohallah_name, v.venue_name, p.party_name`,
     params
   );
 
