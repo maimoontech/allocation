@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Card } from "../../components/ui/Card";
@@ -232,14 +232,17 @@ export function SchedulesPage() {
     return [{ value: "", label: "Select zone" }, ...opts];
   }, [zonesQuery.data]);
 
+  const activeMiqaats = useMemo(() => {
+    return (miqaatsQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [miqaatsQuery.data]);
+
   const miqaatOptions = useMemo(() => {
-    const items = miqaatsQuery.data ?? [];
-    const opts = items
+    const opts = activeMiqaats
       .slice()
       .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
     return [{ value: "", label: "Select miqaat" }, ...opts];
-  }, [miqaatsQuery.data]);
+  }, [activeMiqaats]);
 
   const partyOptions = useMemo(() => {
     const items = partiesQuery.data ?? [];
@@ -261,7 +264,8 @@ export function SchedulesPage() {
 
   const rows = useMemo(() => {
     const items = schedulesQuery.data ?? [];
-    return [...items].sort((a, b) => {
+    const activeMiqaatIds = new Set(activeMiqaats.map((item) => item.id));
+    return items.filter((item) => activeMiqaatIds.has(item.miqaat_id)).sort((a, b) => {
       const d = b.english_date.localeCompare(a.english_date);
       if (d !== 0) return d;
       const z = a.zone_name.localeCompare(b.zone_name);
@@ -272,7 +276,17 @@ export function SchedulesPage() {
       if (v !== 0) return v;
       return a.party_name.localeCompare(b.party_name);
     });
-  }, [schedulesQuery.data]);
+  }, [activeMiqaats, schedulesQuery.data]);
+
+  useEffect(() => {
+    if (!miqaatId) return;
+    const selectedId = Number(miqaatId);
+    if (!selectedId) return;
+    if (!activeMiqaats.some((item) => item.id === selectedId)) {
+      setMiqaatId("");
+      setPage(1);
+    }
+  }, [activeMiqaats, miqaatId]);
 
   const [sortKey, setSortKey] = useState<"miqaat" | "zone" | "mohallah" | "venue" | "party" | "manual">("miqaat");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -306,9 +320,9 @@ export function SchedulesPage() {
   const endIndex = Math.min(startIndex + pageSizeNumber, total);
   const pageRows = useMemo(() => sortedRows.slice(startIndex, endIndex), [endIndex, sortedRows, startIndex]);
   const selectedMiqaatLabel = useMemo(() => {
-    const match = (miqaatsQuery.data ?? []).find((item) => item.id === effectiveMiqaatId);
+    const match = activeMiqaats.find((item) => item.id === effectiveMiqaatId);
     return match ? `${formatDateDdMmmYy(match.english_date)} - ${match.miqaat_name}` : "All miqaats";
-  }, [effectiveMiqaatId, miqaatsQuery.data]);
+  }, [activeMiqaats, effectiveMiqaatId]);
   const selectedZoneLabel = useMemo(() => {
     if (!effectiveZoneId) return "All zones";
     const match = (zonesQuery.data ?? []).find((item) => item.id === effectiveZoneId);
