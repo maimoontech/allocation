@@ -233,31 +233,27 @@ export function MiqaatsPage() {
             />
             <div>
               <div className="mb-2 text-sm font-medium text-text">Show Inactive Miqaat</div>
-              <div className="flex min-h-10 items-center gap-4 rounded-xl border border-border px-3 py-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="showInactiveMiqaat"
-                    checked={!showInactive}
-                    onChange={() => {
-                      setShowInactive(false);
-                      setPage(1);
-                    }}
+              <div className="flex min-h-10 items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
+                <span className="text-sm text-textMuted">{showInactive ? "Yes" : "No"}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showInactive}
+                  aria-label="Show inactive miqaat"
+                  onClick={() => {
+                    setShowInactive((value) => !value);
+                    setPage(1);
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    showInactive ? "bg-primary" : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+                      showInactive ? "translate-x-5" : "translate-x-1"
+                    }`}
                   />
-                  No
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="radio"
-                    name="showInactiveMiqaat"
-                    checked={showInactive}
-                    onChange={() => {
-                      setShowInactive(true);
-                      setPage(1);
-                    }}
-                  />
-                  Yes
-                </label>
+                </button>
               </div>
             </div>
           </div>
