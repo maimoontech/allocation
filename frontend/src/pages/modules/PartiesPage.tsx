@@ -117,8 +117,6 @@ export function PartiesPage() {
   const [zoneId, setZoneId] = useState<string>("");
   const [itsNo, setItsNo] = useState("");
   const [leaderName, setLeaderName] = useState("");
-  const [contactNumber, setContactNumber] = useState("");
-  const [whatsappNumber, setWhatsappNumber] = useState("");
   const [partyName, setPartyName] = useState("");
   const [category, setCategory] = useState<Party["category"]>("A");
   const [isActive, setIsActive] = useState<string>("1");
@@ -198,8 +196,6 @@ export function PartiesPage() {
     setZoneId("");
     setItsNo("");
     setLeaderName("");
-    setContactNumber("");
-    setWhatsappNumber("");
     setPartyName("");
     setCategory("A");
     setIsActive("1");
@@ -249,8 +245,6 @@ export function PartiesPage() {
     const base = {
       its_no: itsNo.trim(),
       leader_name: leaderName.trim(),
-      contact_number: contactNumber.trim() || null,
-      whatsapp_number: whatsappNumber.trim() || null,
       party_name: partyName.trim(),
       category,
       is_active: isActive === "1" ? (1 as const) : (0 as const)
@@ -328,22 +322,6 @@ export function PartiesPage() {
               setFormError(null);
             }}
             error={submitAttempted && !leaderName.trim() ? "Required" : undefined}
-          />
-          <Input
-            label="Contact No."
-            value={contactNumber}
-            onChange={(e) => {
-              setContactNumber(e.target.value);
-              setFormError(null);
-            }}
-          />
-          <Input
-            label="Whatsapp No."
-            value={whatsappNumber}
-            onChange={(e) => {
-              setWhatsappNumber(e.target.value);
-              setFormError(null);
-            }}
           />
           <Input
             label="Party Name"
@@ -507,8 +485,6 @@ export function PartiesPage() {
                   <th className="py-2 pr-3">Zone</th>
                   <th className="py-2 pr-3">ITS No</th>
                   <th className="py-2 pr-3">Leader</th>
-                  <th className="py-2 pr-3">Contact No.</th>
-                  <th className="py-2 pr-3">Whatsapp No.</th>
                   <th className="py-2 pr-3">Party</th>
                   <th className="py-2 pr-3">Category</th>
                   <th className="py-2 pr-3">Status</th>
@@ -521,8 +497,6 @@ export function PartiesPage() {
                     <td className="py-2 pr-3">{p.zone_name}</td>
                     <td className="py-2 pr-3">{p.its_no}</td>
                     <td className="py-2 pr-3">{p.leader_name}</td>
-                    <td className="py-2 pr-3">{p.contact_number || "-"}</td>
-                    <td className="py-2 pr-3">{p.whatsapp_number || "-"}</td>
                     <td className="py-2 pr-3 font-semibold">{p.party_name}</td>
                     <td className="py-2 pr-3">{p.category}</td>
                     <td className="py-2 pr-3">{p.is_active ? "Active" : "Inactive"}</td>
@@ -536,8 +510,6 @@ export function PartiesPage() {
                             setZoneId(String(p.zone_id));
                             setItsNo(p.its_no);
                             setLeaderName(p.leader_name);
-                            setContactNumber(p.contact_number || "");
-                            setWhatsappNumber(p.whatsapp_number || "");
                             setPartyName(p.party_name);
                             setCategory(p.category);
                             setIsActive(p.is_active ? "1" : "0");

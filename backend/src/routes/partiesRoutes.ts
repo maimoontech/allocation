@@ -26,7 +26,7 @@ partiesRoutes.get("/", async (req, res) => {
   const params = Number.isFinite(zoneId) ? { zone_id: zoneId } : {};
 
   const [rows] = await pool.query<any[]>(
-    `SELECT p.id, p.its_no, p.leader_name, p.contact_number, p.whatsapp_number, p.party_name, p.zone_id, z.zone_name, p.category, p.is_active, p.last_login_at, p.created_at
+    `SELECT p.id, p.its_no, p.leader_name, p.party_name, p.zone_id, z.zone_name, p.category, p.is_active, p.last_login_at, p.created_at
      FROM parties p
      JOIN zones z ON z.id = p.zone_id
      ${where}
@@ -38,19 +38,17 @@ partiesRoutes.get("/", async (req, res) => {
 
 partiesRoutes.post("/", async (req, res) => {
   const user = req.user!;
-  const { zone_id, its_no, leader_name, contact_number, whatsapp_number, party_name, category, is_active, password } = req.body ?? {};
+  const { zone_id, its_no, leader_name, party_name, category, is_active, password } = req.body ?? {};
   const finalZoneId = user.role === "zonal_head" ? user.zoneId : zone_id;
   if (!finalZoneId || !its_no || !leader_name || !party_name || !category || !password) return fail(res, "Invalid request", 400);
 
   try {
     const password_hash = await bcrypt.hash(String(password), 10);
     await pool.query(
-      "INSERT INTO parties (its_no, leader_name, contact_number, whatsapp_number, party_name, zone_id, category, is_active, password_hash, created_at) VALUES (:its_no, :leader_name, :contact_number, :whatsapp_number, :party_name, :zone_id, :category, :is_active, :password_hash, NOW())",
+      "INSERT INTO parties (its_no, leader_name, party_name, zone_id, category, is_active, password_hash, created_at) VALUES (:its_no, :leader_name, :party_name, :zone_id, :category, :is_active, :password_hash, NOW())",
       {
         its_no,
         leader_name,
-        contact_number: String(contact_number ?? "").trim() || null,
-        whatsapp_number: String(whatsapp_number ?? "").trim() || null,
         party_name,
         zone_id: finalZoneId,
         category,
@@ -69,21 +67,11 @@ partiesRoutes.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return fail(res, "Invalid ID", 400);
 
-  const { zone_id, its_no, leader_name, contact_number, whatsapp_number, party_name, category, is_active, password } = req.body ?? {};
+  const { zone_id, its_no, leader_name, party_name, category, is_active, password } = req.body ?? {};
   const finalZoneId = user.role === "zonal_head" ? user.zoneId : zone_id;
   if (!finalZoneId || !its_no || !leader_name || !party_name || !category) return fail(res, "Invalid request", 400);
 
-  const params: any = {
-    id,
-    its_no,
-    leader_name,
-    contact_number: String(contact_number ?? "").trim() || null,
-    whatsapp_number: String(whatsapp_number ?? "").trim() || null,
-    zone_id: finalZoneId,
-    party_name,
-    category,
-    is_active: is_active ?? 1
-  };
+  const params: any = { id, its_no, leader_name, zone_id: finalZoneId, party_name, category, is_active: is_active ?? 1 };
   let setPasswordSql = "";
   if (password) {
     params.password_hash = await bcrypt.hash(String(password), 10);
@@ -94,7 +82,7 @@ partiesRoutes.put("/:id", async (req, res) => {
 
   try {
     await pool.query(
-      `UPDATE parties SET its_no = :its_no, leader_name = :leader_name, contact_number = :contact_number, whatsapp_number = :whatsapp_number, party_name = :party_name, zone_id = :zone_id, category = :category, is_active = :is_active${setPasswordSql} WHERE id = :id${scopeSql}`,
+      `UPDATE parties SET its_no = :its_no, leader_name = :leader_name, party_name = :party_name, zone_id = :zone_id, category = :category, is_active = :is_active${setPasswordSql} WHERE id = :id${scopeSql}`,
       params
     );
     return ok(res, { success: true }, "Updated");

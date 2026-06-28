@@ -55,8 +55,7 @@ schedulesRoutes.get("/", async (req, res) => {
   const [rows] = await pool.query<any[]>(
     `SELECT s.id, s.miqaat_id, q.miqaat_name, q.english_date, q.hijri_date, s.venue_id, v.venue_name, v.coordinator_name AS venue_coordinator_name,
             v.contact_number AS venue_contact_number, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
-            s.party_id, p.party_name, p.category, p.its_no AS party_its_no, p.leader_name AS party_leader_name,
-            p.contact_number AS party_contact_number, p.whatsapp_number AS party_whatsapp_number, s.is_manual, s.created_at,
+            s.party_id, p.party_name, p.category, s.is_manual, s.created_at,
             COALESCE(completed_pairs.all_assigned_venues_completed, 0) AS all_assigned_venues_completed,
             CASE WHEN pr.id IS NULL THEN 0 ELSE 1 END AS performance_submitted,
             pr.attended_properly,
@@ -74,7 +73,7 @@ schedulesRoutes.get("/", async (req, res) => {
      ${completedPartyMiqaatJoin("s")}
      LEFT JOIN performance_ratings pr ON pr.schedule_id = s.id AND pr.coordinator_id = :coordinator_id
      ${whereSql}
-     ORDER BY q.english_date ASC, z.zone_name, m.mohallah_name, v.venue_name, p.party_name`,
+     ORDER BY q.english_date DESC, z.zone_name, m.mohallah_name, v.venue_name, p.party_name`,
     params
   );
 

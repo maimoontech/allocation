@@ -236,7 +236,7 @@ export function SchedulesPage() {
     const items = miqaatsQuery.data ?? [];
     const opts = items
       .slice()
-      .sort((a, b) => a.english_date.localeCompare(b.english_date))
+      .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
     return [{ value: "", label: "Select miqaat" }, ...opts];
   }, [miqaatsQuery.data]);
@@ -262,7 +262,7 @@ export function SchedulesPage() {
   const rows = useMemo(() => {
     const items = schedulesQuery.data ?? [];
     return [...items].sort((a, b) => {
-      const d = a.english_date.localeCompare(b.english_date);
+      const d = b.english_date.localeCompare(a.english_date);
       if (d !== 0) return d;
       const z = a.zone_name.localeCompare(b.zone_name);
       if (z !== 0) return z;
@@ -275,7 +275,7 @@ export function SchedulesPage() {
   }, [schedulesQuery.data]);
 
   const [sortKey, setSortKey] = useState<"miqaat" | "zone" | "mohallah" | "venue" | "party" | "manual">("miqaat");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [pageSize, setPageSize] = useState<string>("25");
   const [page, setPage] = useState<number>(1);
   const listRef = useRef<HTMLDivElement>(null);

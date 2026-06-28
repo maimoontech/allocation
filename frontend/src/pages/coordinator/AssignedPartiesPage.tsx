@@ -9,21 +9,6 @@ import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetSchedulesQuery } from "../../features/schedules/schedulesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
 
-function formatPartyContactLine(args: {
-  partyName: string;
-  category: string;
-  leaderName?: string | null;
-  contactNumber?: string | null;
-  whatsappNumber?: string | null;
-}) {
-  const details = [];
-  if (args.leaderName) details.push(`Leader: ${args.leaderName}`);
-  if (args.contactNumber) details.push(`Contact: ${args.contactNumber}`);
-  if (args.whatsappNumber) details.push(`WhatsApp: ${args.whatsappNumber}`);
-  const suffix = details.length ? `\n${details.join(" | ")}` : "";
-  return `${args.partyName} (${args.category})${suffix}`;
-}
-
 export function AssignedPartiesPage() {
   const miqaatsQuery = useGetMiqaatsQuery();
   const [miqaatId, setMiqaatId] = useState<string>("all");
@@ -81,13 +66,7 @@ export function AssignedPartiesPage() {
             card.miqaatName,
             formatDateDdMmmYy(card.englishDate),
             assignment.hijri_date || "—",
-            formatPartyContactLine({
-              partyName: assignment.party_name,
-              category: assignment.category,
-              leaderName: assignment.party_leader_name,
-              contactNumber: assignment.party_contact_number,
-              whatsappNumber: assignment.party_whatsapp_number
-            })
+            `${assignment.party_name} (${assignment.category})`
           ])
       ),
       styles: { fontSize: 9, cellPadding: 6, valign: "middle" },
@@ -171,18 +150,7 @@ export function AssignedPartiesPage() {
                         <tr key={a.id} className="border-b border-border last:border-0">
                           <td className="py-2 pr-3 font-semibold">{a.venue_name}</td>
                           <td className="py-2 pr-3">
-                            <div>{a.party_name} <span className="text-textMuted">({a.category})</span></div>
-                            {a.party_leader_name || a.party_contact_number || a.party_whatsapp_number ? (
-                              <div className="text-xs text-textMuted">
-                                {[
-                                  a.party_leader_name ? `Leader: ${a.party_leader_name}` : "",
-                                  a.party_contact_number ? `Contact: ${a.party_contact_number}` : "",
-                                  a.party_whatsapp_number ? `WhatsApp: ${a.party_whatsapp_number}` : ""
-                                ]
-                                  .filter(Boolean)
-                                  .join(" | ")}
-                              </div>
-                            ) : null}
+                            {a.party_name} <span className="text-textMuted">({a.category})</span>
                           </td>
                           <td className="py-2 pr-3">
                             <Link
