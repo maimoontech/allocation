@@ -244,14 +244,17 @@ export function SchedulesPage() {
     return [{ value: "", label: "Select miqaat" }, ...opts];
   }, [activeMiqaats]);
 
+  const activeParties = useMemo(() => {
+    return (partiesQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [partiesQuery.data]);
+
   const partyOptions = useMemo(() => {
-    const items = partiesQuery.data ?? [];
-    const opts = items
+    const opts = activeParties
       .slice()
       .sort((a, b) => a.party_name.localeCompare(b.party_name))
       .map((p) => ({ value: String(p.id), label: `${p.party_name} (${p.category})` }));
     return [{ value: "", label: "Select party" }, ...opts];
-  }, [partiesQuery.data]);
+  }, [activeParties]);
 
   const venueOptions = useMemo(() => {
     const items = venuesQuery.data ?? [];
@@ -287,6 +290,12 @@ export function SchedulesPage() {
       setPage(1);
     }
   }, [activeMiqaats, miqaatId]);
+
+  useEffect(() => {
+    if (!editPartyId) return;
+    if (partyOptions.some((option) => option.value === editPartyId)) return;
+    setEditPartyId("");
+  }, [editPartyId, partyOptions]);
 
   const [sortKey, setSortKey] = useState<"miqaat" | "zone" | "mohallah" | "venue" | "party" | "manual">("miqaat");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");

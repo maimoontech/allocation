@@ -602,15 +602,24 @@ export function ReportsPage() {
     ];
   }, [miqaatsQuery.data]);
 
+  const activeParties = useMemo(() => {
+    return (partiesQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [partiesQuery.data]);
+
   const partyOptions = useMemo(() => {
-    const items = partiesQuery.data ?? [];
-    const filtered = effectiveZoneId ? items.filter((p) => p.zone_id === effectiveZoneId) : items;
+    const filtered = effectiveZoneId ? activeParties.filter((p) => p.zone_id === effectiveZoneId) : activeParties;
     const opts = filtered
       .slice()
       .sort((a, b) => a.party_name.localeCompare(b.party_name))
       .map((p) => ({ value: String(p.id), label: `${p.party_name} (${p.zone_name})` }));
     return [{ value: "", label: "Select party" }, ...opts];
-  }, [partiesQuery.data, effectiveZoneId]);
+  }, [activeParties, effectiveZoneId]);
+
+  useEffect(() => {
+    if (!partyId) return;
+    if (partyOptions.some((option) => option.value === partyId)) return;
+    setPartyId("");
+  }, [partyId, partyOptions]);
 
   const venueOptions = useMemo(() => {
     const items = venuesQuery.data ?? [];

@@ -159,11 +159,12 @@ export function PartiesPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [pageSize, setPageSize] = useState<string>("25");
   const [page, setPage] = useState<number>(1);
+  const [showInactive, setShowInactive] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   const sortedRows = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
-    const copy = [...sorted];
+    const copy = sorted.filter((party) => showInactive || Boolean(party.is_active));
     copy.sort((a, b) => {
       const byString = (av: string | null | undefined, bv: string | null | undefined) =>
         String(av ?? "").localeCompare(String(bv ?? "")) * dir;
@@ -181,7 +182,7 @@ export function PartiesPage() {
       return byNumber(a.is_active ? 1 : 0, b.is_active ? 1 : 0);
     });
     return copy;
-  }, [sorted, sortDir, sortKey]);
+  }, [showInactive, sorted, sortDir, sortKey]);
 
   const pageSizeNumber = Math.max(1, Number(pageSize) || 25);
   const total = sortedRows.length;
@@ -394,7 +395,7 @@ export function PartiesPage() {
                 />
               </div>
             ) : null}
-            <div className="text-sm text-textMuted">{sorted.length} total</div>
+            <div className="text-sm text-textMuted">{total} total</div>
             <Button
               variant="ghost"
               onClick={() => {
@@ -409,7 +410,7 @@ export function PartiesPage() {
         </div>
 
         <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
             <Select
               label="Sort By"
               value={sortKey}
@@ -452,6 +453,31 @@ export function PartiesPage() {
                 { value: "100", label: "100" }
               ]}
             />
+            <div>
+              <div className="mb-2 text-sm font-medium text-text">Show Inactive Parties</div>
+              <div className="flex min-h-10 items-center justify-between gap-3 rounded-xl border border-border px-3 py-2">
+                <span className="text-sm text-textMuted">{showInactive ? "Yes" : "No"}</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showInactive}
+                  aria-label="Show inactive parties"
+                  onClick={() => {
+                    setShowInactive((value) => !value);
+                    setPage(1);
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    showInactive ? "bg-primary" : "bg-slate-300"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+                      showInactive ? "translate-x-5" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-sm text-textMuted">
