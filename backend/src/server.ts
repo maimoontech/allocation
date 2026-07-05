@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { env } from "./config/env";
+import { ensureSchema } from "./db/ensureSchema";
 import { fail } from "./utils/response";
 import { authRoutes } from "./routes/authRoutes";
 import { zonesRoutes } from "./routes/zonesRoutes";
@@ -61,6 +62,15 @@ app.use((err: any, _req: any, res: any, _next: any) => {
   return fail(res, "Internal server error", 500);
 });
 
-app.listen(env.port, () => {
-  process.stdout.write(`API listening on http://localhost:${env.port}\\n`);
+async function startServer() {
+  await ensureSchema();
+
+  app.listen(env.port, () => {
+    process.stdout.write(`API listening on http://localhost:${env.port}\\n`);
+  });
+}
+
+startServer().catch((error) => {
+  process.stderr.write(`Failed to start server: ${String(error)}\\n`);
+  process.exit(1);
 });

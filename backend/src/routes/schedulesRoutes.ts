@@ -41,6 +41,7 @@ schedulesRoutes.get("/", async (req, res) => {
 
   if (user.role === "party") {
     conditions.push("s.party_id = :party_id");
+    conditions.push("s.is_published = 1");
     params.party_id = user.partyId;
   } else if (user.role === "coordinator") {
     conditions.push("v.id = :venue_id");
@@ -55,7 +56,7 @@ schedulesRoutes.get("/", async (req, res) => {
   const [rows] = await pool.query<any[]>(
     `SELECT s.id, s.miqaat_id, q.miqaat_name, q.english_date, q.hijri_date, s.venue_id, v.venue_name, v.coordinator_name AS venue_coordinator_name,
             v.contact_number AS venue_contact_number, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
-            s.party_id, p.party_name, p.category, s.is_manual, s.created_at,
+            s.party_id, p.party_name, p.category, s.is_manual, s.is_published, s.created_at,
             COALESCE(completed_pairs.all_assigned_venues_completed, 0) AS all_assigned_venues_completed,
             CASE WHEN pr.id IS NULL THEN 0 ELSE 1 END AS performance_submitted,
             pr.attended_properly,
@@ -105,6 +106,48 @@ schedulesRoutes.post("/generate", requireRole(["admin", "zonal_head"]), async (r
     if (err?.message === "NO_PARTIES") return fail(res, "No active parties found for zone", 400);
     return fail(res, "Failed to generate schedule", 500);
   }
+});
+
+schedulesRoutes.post("/publish", requireRole(["admin"]), async (req, res) => {
+  const miqaatId = Number(req.body?.miqaat_id);
+  const zoneId = Number(req.body?.zone_id);
+
+  if (!Number.isFinite(miqaatId) || !Number.isFinite(zoneId)) return fail(res, "Invalid request", 400);
+
+  const [scopeRows] = await pool.query<any[]>(
+    `SELECT COUNT(*) AS total_rows,
+            SUM(CASE WHEN s.is_published = 1 THEN 1 ELSE 0 END) AS published_rows
+     FROM schedules s
+     JOIN venues v ON v.id = s.venue_id
+     JOIN mohallahs m ON m.id = v.mohallah_id
+     WHERE s.miqaat_id = :miqaat_id AND m.zone_id = :zone_id`,
+    { miqaat_id: miqaatId, zone_id: zoneId }
+  );
+
+  const totalRows = Number(scopeRows[0]?.total_rows ?? 0);
+  const publishedRows = Number(scopeRows[0]?.published_rows ?? 0);
+
+  if (totalRows === 0) return fail(res, "No schedule rows found for the selected Miqaat and Zone.", 404);
+
+  await pool.query(
+    `UPDATE schedules s
+     JOIN venues v ON v.id = s.venue_id
+     JOIN mohallahs m ON m.id = v.mohallah_id
+     SET s.is_published = 1
+     WHERE s.miqaat_id = :miqaat_id AND m.zone_id = :zone_id`,
+    { miqaat_id: miqaatId, zone_id: zoneId }
+  );
+
+  return ok(
+    res,
+    {
+      success: true,
+      total: totalRows,
+      newly_published: Math.max(totalRows - publishedRows, 0),
+      already_published: publishedRows
+    },
+    publishedRows === totalRows ? "Already published" : "Published"
+  );
 });
 
 schedulesRoutes.delete("/", requireRole(["admin", "zonal_head"]), async (req, res) => {
@@ -197,6 +240,23 @@ schedulesRoutes.get("/history", async (req, res) => {
 
   if (user.role === "party" && partyId !== user.partyId) return fail(res, "Forbidden", 403);
   if (user.role === "coordinator") return fail(res, "Forbidden", 403);
+
+  if (user.role === "party") {
+    const [publishedHistoryRows] = await pool.query<any[]>(
+      `SELECT s.venue_id,
+              v.venue_name,
+              COUNT(*) AS visit_count,
+              MIN(s.created_at) AS first_visited_at,
+              MAX(s.created_at) AS last_visited_at
+       FROM schedules s
+       JOIN venues v ON v.id = s.venue_id
+       WHERE s.party_id = :party_id AND s.is_published = 1
+       GROUP BY s.venue_id, v.venue_name
+       ORDER BY last_visited_at DESC`,
+      { party_id: partyId }
+    );
+    return ok(res, publishedHistoryRows, "OK");
+  }
 
   const [rows] = await pool.query<any[]>(
     `SELECT h.venue_id, v.venue_name, h.visit_count, h.first_visited_at, h.last_visited_at

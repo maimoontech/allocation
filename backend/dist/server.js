@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const env_1 = require("./config/env");
+const ensureSchema_1 = require("./db/ensureSchema");
 const response_1 = require("./utils/response");
 const authRoutes_1 = require("./routes/authRoutes");
 const zonesRoutes_1 = require("./routes/zonesRoutes");
@@ -58,6 +59,13 @@ app.use((err, _req, res, _next) => {
         return (0, response_1.fail)(res, "Duplicate entry", 409);
     return (0, response_1.fail)(res, "Internal server error", 500);
 });
-app.listen(env_1.env.port, () => {
-    process.stdout.write(`API listening on http://localhost:${env_1.env.port}\\n`);
+async function startServer() {
+    await (0, ensureSchema_1.ensureSchema)();
+    app.listen(env_1.env.port, () => {
+        process.stdout.write(`API listening on http://localhost:${env_1.env.port}\\n`);
+    });
+}
+startServer().catch((error) => {
+    process.stderr.write(`Failed to start server: ${String(error)}\\n`);
+    process.exit(1);
 });

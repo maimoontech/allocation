@@ -15,6 +15,7 @@ import {
   useDeleteSchedulesByScopeMutation,
   useGenerateScheduleMutation,
   useGetSchedulesQuery,
+  usePublishSchedulesByScopeMutation,
   useUpdateScheduleMutation,
   type ScheduleRow
 } from "../../features/schedules/schedulesApi";
@@ -213,6 +214,7 @@ export function SchedulesPage() {
   const [updateSchedule, updateState] = useUpdateScheduleMutation();
   const [deleteSchedule, deleteState] = useDeleteScheduleMutation();
   const [deleteSchedulesByScope, deleteScopeState] = useDeleteSchedulesByScopeMutation();
+  const [publishSchedulesByScope, publishState] = usePublishSchedulesByScopeMutation();
 
   const [overwrite, setOverwrite] = useState<string>("0");
   const [editing, setEditing] = useState<ScheduleRow | null>(null);
@@ -221,7 +223,12 @@ export function SchedulesPage() {
   const [actionMessage, setActionMessage] = useState<string>("");
   const [actionError, setActionError] = useState<string>("");
 
-  const isBusy = generateState.isLoading || updateState.isLoading || deleteState.isLoading || deleteScopeState.isLoading;
+  const isBusy =
+    generateState.isLoading ||
+    updateState.isLoading ||
+    deleteState.isLoading ||
+    deleteScopeState.isLoading ||
+    publishState.isLoading;
 
   const zoneOptions = useMemo(() => {
     const zones = zonesQuery.data ?? [];
@@ -351,6 +358,18 @@ export function SchedulesPage() {
     [selectedMiqaatLabel, selectedZoneLabel, sortedRows.length]
   );
   const exportBodyHtml = useMemo(() => buildScheduleTableHtml(sortedRows), [sortedRows]);
+  const selectedScopeRows = useMemo(() => {
+    if (!effectiveMiqaatId || !effectiveZoneId) return [] as ScheduleRow[];
+    return rows.filter((row) => row.miqaat_id === effectiveMiqaatId && row.zone_id === effectiveZoneId);
+  }, [effectiveMiqaatId, effectiveZoneId, rows]);
+  const selectedScopePublished = selectedScopeRows.length > 0 && selectedScopeRows.every((row) => Boolean(row.is_published));
+  const publishStatusText = !effectiveMiqaatId || !effectiveZoneId
+    ? "Select Miqaat and Zone to check publish status."
+    : selectedScopeRows.length === 0
+      ? "No generated schedule found for the selected Miqaat and Zone."
+      : selectedScopePublished
+        ? "Published. Party users can now view this schedule."
+        : "Draft. Party users cannot view this schedule until admin publishes it.";
 
   async function onGenerate() {
     const mId = Number(miqaatId);
@@ -358,13 +377,17 @@ export function SchedulesPage() {
     if (!Number.isFinite(mId) || mId <= 0) return;
     if (!Number.isFinite(zId) || !zId) return;
 
+    setActionMessage("");
+    setActionError("");
+
     await generateSchedule({
       miqaat_id: mId,
       zone_id: role === "admin" ? zId : undefined,
       overwrite: overwrite === "1"
     }).unwrap();
 
-    schedulesQuery.refetch();
+    await schedulesQuery.refetch();
+    setActionMessage("Schedule generated in draft mode. Publish it to make it visible to party users.");
   }
 
   async function onSaveEdit() {
@@ -416,6 +439,32 @@ export function SchedulesPage() {
       } catch (rowDeleteError) {
         setActionError(getErrorMessage(rowDeleteError || bulkError));
       }
+    }
+  }
+
+  async function onPublishSelectedSchedule() {
+    const mId = Number(miqaatId);
+    const zId = Number(zoneId);
+    if (role !== "admin") return;
+    if (!Number.isFinite(mId) || mId <= 0) return;
+    if (!Number.isFinite(zId) || zId <= 0) return;
+
+    setActionMessage("");
+    setActionError("");
+
+    try {
+      const result = await publishSchedulesByScope({
+        miqaat_id: mId,
+        zone_id: zId
+      }).unwrap();
+      await schedulesQuery.refetch();
+      if (result.newly_published > 0) {
+        setActionMessage(`${result.newly_published} schedule row(s) published for party users.`);
+        return;
+      }
+      setActionMessage("Selected schedule is already published.");
+    } catch (error) {
+      setActionError(getErrorMessage(error));
     }
   }
 
@@ -516,6 +565,15 @@ export function SchedulesPage() {
           <Button onClick={onGenerate} disabled={isBusy}>
             {generateState.isLoading ? "Generating..." : "Generate"}
           </Button>
+          {role === "admin" ? (
+            <Button
+              variant="secondary"
+              onClick={onPublishSelectedSchedule}
+              disabled={isBusy || !effectiveMiqaatId || !effectiveZoneId || selectedScopeRows.length === 0 || selectedScopePublished}
+            >
+              {publishState.isLoading ? "Publishing..." : "Publish"}
+            </Button>
+          ) : null}
           <Button
             variant="danger"
             onClick={onDeleteSelectedSchedule}
@@ -527,9 +585,11 @@ export function SchedulesPage() {
             Refresh
           </Button>
         </div>
+        <div className="mt-2 text-sm text-textMuted">{publishStatusText}</div>
         {actionMessage ? <div className="mt-2 text-sm text-secondary">{actionMessage}</div> : null}
         {actionError ? <div className="mt-2 text-sm text-danger">{actionError}</div> : null}
         {generateState.isError ? <div className="mt-2 text-sm text-danger">Failed to generate schedule</div> : null}
+        {publishState.isError ? <div className="mt-2 text-sm text-danger">Failed to publish schedule</div> : null}
       </Card>
 
       {editing ? (

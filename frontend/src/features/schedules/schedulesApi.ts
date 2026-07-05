@@ -20,6 +20,7 @@ export type ScheduleRow = {
   party_name: string;
   category: "A" | "B" | "C" | "H";
   is_manual: 0 | 1;
+  is_published: 0 | 1;
   all_assigned_venues_completed?: 0 | 1;
   created_at: string;
   performance_submitted?: 0 | 1;
@@ -40,6 +41,11 @@ export type GenerateScheduleRequest = {
 export type DeleteSchedulesByScopeRequest = {
   miqaat_id: number;
   zone_id?: number;
+};
+
+export type PublishSchedulesByScopeRequest = {
+  miqaat_id: number;
+  zone_id: number;
 };
 
 export const schedulesApi = api.injectEndpoints({
@@ -85,6 +91,16 @@ export const schedulesApi = api.injectEndpoints({
       },
       transformResponse: (res: ApiEnvelope<{ success: true; deleted: number }>) => res.data,
       invalidatesTags: [{ type: "Schedules", id: "LIST" }]
+    }),
+    publishSchedulesByScope: builder.mutation<
+      { success: true; total: number; newly_published: number; already_published: number },
+      PublishSchedulesByScopeRequest
+    >({
+      query: (body) => ({ url: "/schedules/publish", method: "POST", body }),
+      transformResponse: (
+        res: ApiEnvelope<{ success: true; total: number; newly_published: number; already_published: number }>
+      ) => res.data,
+      invalidatesTags: [{ type: "Schedules", id: "LIST" }]
     })
   })
 });
@@ -94,5 +110,6 @@ export const {
   useGenerateScheduleMutation,
   useUpdateScheduleMutation,
   useDeleteScheduleMutation,
-  useDeleteSchedulesByScopeMutation
+  useDeleteSchedulesByScopeMutation,
+  usePublishSchedulesByScopeMutation
 } = schedulesApi;

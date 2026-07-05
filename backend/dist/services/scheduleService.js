@@ -246,8 +246,8 @@ async function generateSchedule(params) {
         void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "C", location: "scheduleService.ts:157", msg: "[DEBUG] generated assignments before insert", data: { miqaatId, zoneId, assignmentCount: assignments.length, assignments: assignments.map((a) => ({ venueId: a.venueId, partyId: a.partyId, pairVisitCount: visitCount(a.partyId, a.venueId) })) }, ts: Date.now() }) }).catch(() => { });
         // #endregion
         for (const a of assignments) {
-            await connection.query(`INSERT INTO schedules (miqaat_id, venue_id, party_id, is_manual, created_by_role, created_by_id, created_at)
-         VALUES (:miqaat_id, :venue_id, :party_id, :is_manual, :created_by_role, :created_by_id, NOW())`, {
+            await connection.query(`INSERT INTO schedules (miqaat_id, venue_id, party_id, is_manual, is_published, created_by_role, created_by_id, created_at)
+         VALUES (:miqaat_id, :venue_id, :party_id, :is_manual, 0, :created_by_role, :created_by_id, NOW())`, {
                 miqaat_id: miqaatId,
                 venue_id: a.venueId,
                 party_id: a.partyId,

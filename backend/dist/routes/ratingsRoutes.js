@@ -15,7 +15,7 @@ exports.ratingsRoutes.post("/", auth_1.requireAuth, (0, auth_1.requireRole)(["pa
         return (0, response_1.fail)(res, "Invalid request", 400);
     if (ratingScore < 1 || ratingScore > 10)
         return (0, response_1.fail)(res, "Score must be 1-10", 400);
-    const [rows] = await pool_1.pool.query("SELECT id FROM schedules WHERE id = :id AND party_id = :party_id LIMIT 1", { id: scheduleId, party_id: user.partyId });
+    const [rows] = await pool_1.pool.query("SELECT id FROM schedules WHERE id = :id AND party_id = :party_id AND is_published = 1 LIMIT 1", { id: scheduleId, party_id: user.partyId });
     if (!rows[0])
         return (0, response_1.fail)(res, "Forbidden", 403);
     await pool_1.pool.query(`INSERT INTO ratings (schedule_id, rater_role, rater_id, rating_score, comments, created_at)

@@ -14,7 +14,7 @@ ratingsRoutes.post("/", requireAuth, requireRole(["party"]), async (req, res) =>
   if (ratingScore < 1 || ratingScore > 10) return fail(res, "Score must be 1-10", 400);
 
   const [rows] = await pool.query<any[]>(
-    "SELECT id FROM schedules WHERE id = :id AND party_id = :party_id LIMIT 1",
+    "SELECT id FROM schedules WHERE id = :id AND party_id = :party_id AND is_published = 1 LIMIT 1",
     { id: scheduleId, party_id: user.partyId }
   );
   if (!rows[0]) return fail(res, "Forbidden", 403);
