@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetSchedulesQuery } from "../../features/schedules/schedulesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
+import { addPdfBrandHeader } from "../../utils/pdfBranding";
 
 export function AssignedPartiesPage() {
   const miqaatsQuery = useGetMiqaatsQuery();
@@ -54,19 +55,14 @@ export function AssignedPartiesPage() {
       .sort((a, b) => b.englishDate.localeCompare(a.englishDate));
   }, [activeMiqaats, schedulesQuery.data]);
 
-  function downloadPdf() {
+  async function downloadPdf() {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
     const venueName =
       cards.flatMap((card) => card.assignments).find((assignment) => assignment.venue_name)?.venue_name ?? "Venue";
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("Anjuman-e-Zakereen Hussain AS. Karachi.", pageWidth / 2, 34, { align: "center" });
-    doc.text(venueName, 40, 58);
+    const startY = await addPdfBrandHeader(doc, { subtitle: venueName, subtitleAlign: "left" });
 
     autoTable(doc, {
-      startY: 74,
+      startY,
       head: [["Miqaat Name", "English Date", "Hijri Date", "Party"]],
       body: cards.flatMap((card) =>
         card.assignments

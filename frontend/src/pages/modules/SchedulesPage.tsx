@@ -10,6 +10,7 @@ import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetPartiesQuery } from "../../features/parties/partiesApi";
 import { useGetVenuesQuery } from "../../features/venues/venuesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
+import { addPdfBrandHeader } from "../../utils/pdfBranding";
 import {
   useDeleteScheduleMutation,
   useDeleteSchedulesByScopeMutation,
@@ -478,17 +479,16 @@ export function SchedulesPage() {
     });
   }
 
-  function onDownloadPdf() {
+  async function onDownloadPdf() {
     if (sortedRows.length === 0) return;
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    doc.setFontSize(16);
-    doc.text("Schedule List", 40, 40);
-    doc.setFontSize(10);
-    exportMetaLines.forEach((line, index) => {
-      doc.text(line, 40, 60 + index * 14);
+    const startY = await addPdfBrandHeader(doc, {
+      reportTitle: "Schedule List",
+      reportTitleAlign: "left",
+      metaLines: exportMetaLines
     });
     autoTable(doc, {
-      startY: 110,
+      startY,
       head: [["Miqaat", "Zone", "Mohallah", "Venue", "Party", "Manual"]],
       body: sortedRows.map((row) => [
         `${formatDateDdMmmYy(row.english_date)} - ${row.miqaat_name}`,

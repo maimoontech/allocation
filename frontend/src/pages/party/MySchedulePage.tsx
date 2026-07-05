@@ -8,6 +8,7 @@ import { useAppSelector } from "../../hooks/storeHooks";
 import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetSchedulesQuery } from "../../features/schedules/schedulesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
+import { addPdfBrandHeader } from "../../utils/pdfBranding";
 
 export function MySchedulePage() {
   const user = useAppSelector((state) => state.auth.user);
@@ -58,20 +59,13 @@ export function MySchedulePage() {
     return "—";
   }
 
-  function downloadPdf() {
+  async function downloadPdf() {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
     const partyName = user?.displayName ?? "—";
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("Anjuman-e-Zakereen Hussain AS. Karachi", pageWidth / 2, 34, { align: "center" });
-    doc.setFontSize(16);
-    doc.text(partyName, pageWidth / 2, 58, { align: "center" });
-    doc.setFont("helvetica", "normal");
+    const startY = await addPdfBrandHeader(doc, { subtitle: partyName, subtitleAlign: "center" });
 
     autoTable(doc, {
-      startY: 76,
+      startY,
       head: [[
         "Miqaat Name",
         "English Date",

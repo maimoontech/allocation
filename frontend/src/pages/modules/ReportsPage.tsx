@@ -11,6 +11,7 @@ import { useGetMiqaatsQuery } from "../../features/miqaats/miqaatsApi";
 import { useGetPartiesQuery } from "../../features/parties/partiesApi";
 import { useGetVenuesQuery } from "../../features/venues/venuesApi";
 import { formatDateDdMmmYy } from "../../utils/formatDate";
+import { addPdfBrandHeader } from "../../utils/pdfBranding";
 import {
   type AttendanceRow,
   type MiqaatScheduleRow,
@@ -164,30 +165,21 @@ function downloadExcelFromElement(args: { title: string; metaLines: string[]; fi
   downloadBlobFile(filename, blob);
 }
 
-function downloadPdfFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
+async function downloadPdfFromElement(args: { title: string; metaLines: string[]; filenameBase: string; element: HTMLElement }) {
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const isVenueAssignedParties = args.filenameBase === "venue_assigned_parties";
   let startY = 74;
 
   if (isVenueAssignedParties) {
-    const pageWidth = doc.internal.pageSize.getWidth();
     const venueLine = args.metaLines.find((line) => line.startsWith("Venue: "));
     const venueName = venueLine ? venueLine.replace(/^Venue:\s*/, "") : "All venues";
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("Anjuman-e-Zakereen Hussain AS. Karachi", pageWidth / 2, 34, { align: "center" });
-    doc.setFontSize(16);
-    doc.text(venueName, 40, 58);
-    startY = 76;
+    startY = await addPdfBrandHeader(doc, { subtitle: venueName, subtitleAlign: "left" });
   } else {
-    doc.setFontSize(16);
-    doc.text(args.title, 40, 40);
-    doc.setFontSize(10);
-    args.metaLines.filter(Boolean).forEach((line, index) => {
-      doc.text(line, 40, 60 + index * 14);
+    startY = await addPdfBrandHeader(doc, {
+      reportTitle: args.title,
+      reportTitleAlign: "left",
+      metaLines: args.metaLines
     });
-    startY = 60 + args.metaLines.filter(Boolean).length * 14 + 14;
   }
 
   const table = args.element.querySelector("table");
@@ -480,7 +472,7 @@ function ReportCard(props: {
             onClick={() => {
               try {
                 const el = getContentEl();
-                downloadPdfFromElement({
+                void downloadPdfFromElement({
                   title: props.title,
                   metaLines: props.metaLines,
                   filenameBase: props.filenameBase,
@@ -1049,12 +1041,11 @@ export function ReportsPage() {
 
       const matrix = buildBulkMiqaatVenuePartyGridModel({ miqaatTitles, rowsByMiqaatId });
       const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-      doc.setFontSize(16);
-      doc.text("Miqaat Schedules", 40, 40);
-      doc.setFontSize(10);
       const metaLines = [`Zone: ${zoneLabel}`, `Count: ${ids.length}`];
-      metaLines.forEach((line, index) => {
-        doc.text(line, 40, 60 + index * 14);
+      const startY = await addPdfBrandHeader(doc, {
+        reportTitle: "Miqaat Schedules",
+        reportTitleAlign: "left",
+        metaLines
       });
 
       const head = [
@@ -1075,7 +1066,7 @@ export function ReportsPage() {
       }
 
       autoTable(doc, {
-        startY: 115,
+        startY,
         head,
         body,
         styles: { fontSize: 7, cellPadding: 2, valign: "top", overflow: "linebreak" as any },
