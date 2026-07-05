@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Card } from "../../components/ui/Card";
@@ -18,25 +18,35 @@ export function MySchedulePage() {
     miqaatId === "all" ? undefined : { miqaat_id: Number(miqaatId) }
   );
 
+  const activeMiqaats = useMemo(() => {
+    return (miqaatsQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [miqaatsQuery.data]);
+
   const miqaatOptions = useMemo(() => {
-    const items = miqaatsQuery.data ?? [];
-    const opts = items
+    const opts = activeMiqaats
       .slice()
       .sort((a, b) => a.english_date.localeCompare(b.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
     return [{ value: "all", label: "All miqaats" }, ...opts];
-  }, [miqaatsQuery.data]);
+  }, [activeMiqaats]);
+
+  useEffect(() => {
+    if (miqaatId === "all") return;
+    if (miqaatOptions.some((option) => option.value === miqaatId)) return;
+    setMiqaatId("all");
+  }, [miqaatId, miqaatOptions]);
 
   const rows = useMemo(
     () =>
       [...(schedulesQuery.data ?? [])]
+        .filter((row) => activeMiqaats.some((item) => item.id === row.miqaat_id))
         .filter((row) => !user?.partyId || row.party_id === user.partyId)
         .sort((a, b) => {
           const byDate = a.english_date.localeCompare(b.english_date);
           if (byDate !== 0) return byDate;
           return a.venue_name.localeCompare(b.venue_name);
         }),
-    [schedulesQuery.data, user?.partyId]
+    [activeMiqaats, schedulesQuery.data, user?.partyId]
   );
 
   function formatCoordinatorLine(name?: string | null, contact?: string | null) {

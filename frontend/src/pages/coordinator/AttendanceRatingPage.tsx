@@ -68,17 +68,27 @@ export function AttendanceRatingPage() {
     miqaatId === "all" ? undefined : { miqaat_id: Number(miqaatId) }
   );
 
+  const activeMiqaats = useMemo(() => {
+    return (miqaatsQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [miqaatsQuery.data]);
+
   const miqaatOptions = useMemo(() => {
-    const items = miqaatsQuery.data ?? [];
-    const opts = items
+    const opts = activeMiqaats
       .slice()
       .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
     return [{ value: "all", label: "All miqaats" }, ...opts];
-  }, [miqaatsQuery.data]);
+  }, [activeMiqaats]);
+
+  useEffect(() => {
+    if (miqaatId === "all") return;
+    if (miqaatOptions.some((option) => option.value === miqaatId)) return;
+    setMiqaatId("all");
+  }, [miqaatId, miqaatOptions]);
 
   const rows = useMemo(() => {
-    const list = schedulesQuery.data ?? [];
+    const activeMiqaatIds = new Set(activeMiqaats.map((item) => item.id));
+    const list = (schedulesQuery.data ?? []).filter((row) => activeMiqaatIds.has(row.miqaat_id));
     return [...list].sort((a, b) => {
       const d = b.english_date.localeCompare(a.english_date);
       if (d !== 0) return d;
@@ -86,7 +96,7 @@ export function AttendanceRatingPage() {
       if (v !== 0) return v;
       return a.party_name.localeCompare(b.party_name);
     });
-  }, [schedulesQuery.data]);
+  }, [activeMiqaats, schedulesQuery.data]);
 
   const [forms, setForms] = useState<Record<number, FormState>>({});
   const [locked, setLocked] = useState<Record<number, boolean>>({});

@@ -589,9 +589,12 @@ export function ReportsPage() {
     return [{ value: "all", label: "All zones" }, ...opts];
   }, [zonesQuery.data]);
 
+  const activeMiqaats = useMemo(() => {
+    return (miqaatsQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [miqaatsQuery.data]);
+
   const miqaatOptions = useMemo(() => {
-    const items = miqaatsQuery.data ?? [];
-    const opts = items
+    const opts = activeMiqaats
       .slice()
       .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
@@ -600,7 +603,7 @@ export function ReportsPage() {
       { value: "all", label: "All miqaats" },
       ...opts
     ];
-  }, [miqaatsQuery.data]);
+  }, [activeMiqaats]);
 
   const activeParties = useMemo(() => {
     return (partiesQuery.data ?? []).filter((item) => Boolean(item.is_active));
@@ -615,6 +618,10 @@ export function ReportsPage() {
     return [{ value: "", label: "Select party" }, ...opts];
   }, [activeParties, effectiveZoneId]);
 
+  const activeVenues = useMemo(() => {
+    return (venuesQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [venuesQuery.data]);
+
   useEffect(() => {
     if (!partyId) return;
     if (partyOptions.some((option) => option.value === partyId)) return;
@@ -622,8 +629,7 @@ export function ReportsPage() {
   }, [partyId, partyOptions]);
 
   const venueOptions = useMemo(() => {
-    const items = venuesQuery.data ?? [];
-    const opts = items
+    const opts = activeVenues
       .slice()
       .sort((a, b) => {
         const byVenue = a.venue_name.localeCompare(b.venue_name);
@@ -632,7 +638,20 @@ export function ReportsPage() {
       })
       .map((v) => ({ value: String(v.id), label: `${v.venue_name} (${v.mohallah_name})` }));
     return [{ value: "", label: "All venues" }, ...opts];
-  }, [venuesQuery.data]);
+  }, [activeVenues]);
+
+  useEffect(() => {
+    if (!miqaatId) return;
+    if (miqaatId === "all") return;
+    if (miqaatOptions.some((option) => option.value === miqaatId)) return;
+    setMiqaatId("");
+  }, [miqaatId, miqaatOptions]);
+
+  useEffect(() => {
+    if (!venueId) return;
+    if (venueOptions.some((option) => option.value === venueId)) return;
+    setVenueId("");
+  }, [venueId, venueOptions]);
 
   const selectedMiqaat = useMemo(
     () => (miqaatsQuery.data ?? []).find((item) => String(item.id) === miqaatId),
@@ -749,12 +768,19 @@ export function ReportsPage() {
   const [bulkError, setBulkError] = useState<string | null>(null);
 
   const bulkMiqaatOptions = useMemo(() => {
-    const items = miqaatsQuery.data ?? [];
-    return items
+    return activeMiqaats
       .slice()
       .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ id: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
-  }, [miqaatsQuery.data]);
+  }, [activeMiqaats]);
+
+  useEffect(() => {
+    if (!bulkMiqaatIds.length) return;
+    const validIds = new Set(bulkMiqaatOptions.map((item) => item.id));
+    const nextIds = bulkMiqaatIds.filter((id) => validIds.has(id));
+    if (nextIds.length === bulkMiqaatIds.length) return;
+    setBulkMiqaatIds(nextIds);
+  }, [bulkMiqaatIds, bulkMiqaatOptions]);
 
   async function fetchEnvelope<T>(path: string): Promise<ApiEnvelope<T>> {
     const res = await fetch(resolveApiUrl(path), {

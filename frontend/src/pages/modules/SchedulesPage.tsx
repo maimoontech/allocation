@@ -256,14 +256,17 @@ export function SchedulesPage() {
     return [{ value: "", label: "Select party" }, ...opts];
   }, [activeParties]);
 
+  const activeVenues = useMemo(() => {
+    return (venuesQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [venuesQuery.data]);
+
   const venueOptions = useMemo(() => {
-    const items = venuesQuery.data ?? [];
-    const opts = items
+    const opts = activeVenues
       .slice()
       .sort((a, b) => a.venue_name.localeCompare(b.venue_name))
       .map((v) => ({ value: String(v.id), label: `${v.venue_name} (${v.mohallah_name})` }));
     return [{ value: "", label: "Select venue" }, ...opts];
-  }, [venuesQuery.data]);
+  }, [activeVenues]);
 
   const rows = useMemo(() => {
     const items = schedulesQuery.data ?? [];
@@ -296,6 +299,12 @@ export function SchedulesPage() {
     if (partyOptions.some((option) => option.value === editPartyId)) return;
     setEditPartyId("");
   }, [editPartyId, partyOptions]);
+
+  useEffect(() => {
+    if (!editVenueId) return;
+    if (venueOptions.some((option) => option.value === editVenueId)) return;
+    setEditVenueId("");
+  }, [editVenueId, venueOptions]);
 
   const [sortKey, setSortKey] = useState<"miqaat" | "zone" | "mohallah" | "venue" | "party" | "manual">("miqaat");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");

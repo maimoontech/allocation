@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { Link } from "react-router-dom";
@@ -17,17 +17,27 @@ export function AssignedPartiesPage() {
     miqaatId === "all" ? undefined : { miqaat_id: Number(miqaatId) }
   );
 
+  const activeMiqaats = useMemo(() => {
+    return (miqaatsQuery.data ?? []).filter((item) => Boolean(item.is_active));
+  }, [miqaatsQuery.data]);
+
   const miqaatOptions = useMemo(() => {
-    const items = miqaatsQuery.data ?? [];
-    const opts = items
+    const opts = activeMiqaats
       .slice()
       .sort((a, b) => b.english_date.localeCompare(a.english_date))
       .map((m) => ({ value: String(m.id), label: `${formatDateDdMmmYy(m.english_date)} - ${m.miqaat_name}` }));
     return [{ value: "all", label: "All miqaats" }, ...opts];
-  }, [miqaatsQuery.data]);
+  }, [activeMiqaats]);
+
+  useEffect(() => {
+    if (miqaatId === "all") return;
+    if (miqaatOptions.some((option) => option.value === miqaatId)) return;
+    setMiqaatId("all");
+  }, [miqaatId, miqaatOptions]);
 
   const cards = useMemo(() => {
-    const rows = schedulesQuery.data ?? [];
+    const activeMiqaatIds = new Set(activeMiqaats.map((item) => item.id));
+    const rows = (schedulesQuery.data ?? []).filter((row) => activeMiqaatIds.has(row.miqaat_id));
     const byMiqaat = new Map<number, typeof rows>();
     for (const r of rows) {
       const list = byMiqaat.get(r.miqaat_id) ?? [];
@@ -42,7 +52,7 @@ export function AssignedPartiesPage() {
         assignments: list
       }))
       .sort((a, b) => b.englishDate.localeCompare(a.englishDate));
-  }, [schedulesQuery.data]);
+  }, [activeMiqaats, schedulesQuery.data]);
 
   function downloadPdf() {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
