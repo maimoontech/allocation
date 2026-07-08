@@ -92,14 +92,15 @@ export function AppShell() {
         </div>
 
         <nav className="fixed bottom-0 left-0 right-0 border-t border-border bg-white px-2 py-2 md:hidden">
-          <div className="mx-auto flex max-w-xl items-center justify-around gap-2">
+          <div className="mx-auto max-w-xl overflow-x-auto">
+            <div className="flex min-w-max items-center gap-2">
             {nav.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   [
-                    "flex-1 rounded-button px-3 py-2 text-center text-xs font-semibold",
+                    "flex-shrink-0 whitespace-nowrap rounded-button px-3 py-2 text-center text-xs font-semibold",
                     isActive ? "bg-primary text-white" : "text-textPrimary hover:bg-black/5"
                   ].join(" ")
                 }
@@ -107,6 +108,7 @@ export function AppShell() {
                 {item.label}
               </NavLink>
             ))}
+            </div>
           </div>
         </nav>
       </main>
