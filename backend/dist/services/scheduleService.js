@@ -15,7 +15,7 @@ function activeCategoryOrder() {
     return ["A", "B", "C"];
 }
 async function generateSchedule(params) {
-    const { miqaatId, zoneId, overwrite, createdBy } = params;
+    const { miqaatId, zoneId, overwrite, createdBy, dryRun = false } = params;
     const connection = await pool_1.pool.getConnection();
     try {
         await connection.beginTransaction();
@@ -56,10 +56,12 @@ async function generateSchedule(params) {
             throw err;
         }
         if (existingCount > 0 && overwrite) {
-            await connection.query(`DELETE s FROM schedules s
-         JOIN venues v ON v.id = s.venue_id
-         JOIN mohallahs m ON m.id = v.mohallah_id
-         WHERE s.miqaat_id = :miqaat_id AND m.zone_id = :zone_id`, { miqaat_id: miqaatId, zone_id: zoneId });
+            if (!dryRun) {
+                await connection.query(`DELETE s FROM schedules s
+           JOIN venues v ON v.id = s.venue_id
+           JOIN mohallahs m ON m.id = v.mohallah_id
+           WHERE s.miqaat_id = :miqaat_id AND m.zone_id = :zone_id`, { miqaat_id: miqaatId, zone_id: zoneId });
+            }
         }
         const venueIds = venues.map((v) => v.id);
         const partyIds = parties.map((p) => p.id);
@@ -67,14 +69,18 @@ async function generateSchedule(params) {
         const currentCycleCoveredByParty = new Map();
         const lastVenueByParty = new Map();
         if (venueIds.length > 0 && partyIds.length > 0) {
+            const overwriteHistorySql = existingCount > 0 && overwrite && dryRun ? " AND s.miqaat_id <> ?" : "";
             const [pairCountRows] = await connection.query(`SELECT s.party_id, s.venue_id, COUNT(*) AS visit_count
          FROM schedules s
          JOIN venues v ON v.id = s.venue_id
          JOIN mohallahs m ON m.id = v.mohallah_id
          WHERE m.zone_id = ?
+           ${overwriteHistorySql}
            AND s.party_id IN (${partyIds.map(() => "?").join(",")})
            AND s.venue_id IN (${venueIds.map(() => "?").join(",")})
-         GROUP BY s.party_id, s.venue_id`, [zoneId, ...partyIds, ...venueIds]);
+         GROUP BY s.party_id, s.venue_id`, overwriteHistorySql
+                ? [zoneId, miqaatId, ...partyIds, ...venueIds]
+                : [zoneId, ...partyIds, ...venueIds]);
             for (const r of pairCountRows) {
                 pairVisitCounts.set(`${Number(r.party_id)}:${Number(r.venue_id)}`, Number(r.visit_count ?? 0));
             }
@@ -212,39 +218,65 @@ async function generateSchedule(params) {
             }
             return seatToPartyIndex;
         }
+        const fillSeats = (candidateParties, allowedSeatIndexes, canUseSeat, preferUnvisited) => {
+            if (candidateParties.length === 0 || allowedSeatIndexes.size === 0)
+                return;
+            const matchableParties = buildMatchableParties(candidateParties, canUseSeat, preferUnvisited);
+            if (matchableParties.length === 0)
+                return;
+            const seatToPartyIndex = maximizeAssignments(matchableParties, allowedSeatIndexes);
+            seatToPartyIndex.forEach((partyIndex, seatIndex) => {
+                if (partyIndex < 0)
+                    return;
+                if (!allowedSeatIndexes.has(seatIndex))
+                    return;
+                const partyId = matchableParties[partyIndex].id;
+                if (assignedParty.has(partyId))
+                    return;
+                place(seatList[seatIndex].venueId, partyId);
+                allowedSeatIndexes.delete(seatIndex);
+            });
+        };
         const allSeatIndexes = new Set(seatList.map((_seat, index) => index));
-        const strictMatchableParties = buildMatchableParties(parties, canAssignPartyToVenue, false);
-        // #region debug-point A:candidate-ranking
-        void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "post-fix", hypothesisId: "A", location: "scheduleService.ts:118", msg: "[DEBUG] built global party-seat graph", data: { miqaatId, zoneId, partyCount: strictMatchableParties.length, seatCount: seatList.length, sample: strictMatchableParties.slice(0, 8).map((party) => ({ partyId: party.id, category: party.category, options: party.seatIndexes.length })) }, ts: Date.now() }) }).catch(() => { });
-        // #endregion
-        const strictSeatToPartyIndex = maximizeAssignments(strictMatchableParties, allSeatIndexes);
-        const strictlyAssignedPartyIds = new Set();
-        strictSeatToPartyIndex.forEach((partyIndex) => {
-            if (partyIndex < 0)
-                return;
-            strictlyAssignedPartyIds.add(strictMatchableParties[partyIndex].id);
-        });
-        const relaxedCandidateParties = parties.filter((party) => !strictlyAssignedPartyIds.has(party.id));
-        const remainingSeatIndexes = new Set(strictSeatToPartyIndex.map((partyIndex, index) => (partyIndex < 0 ? index : -1)).filter((index) => index >= 0));
-        const relaxedMatchableParties = buildMatchableParties(relaxedCandidateParties, () => true, true);
-        const relaxedSeatToPartyIndex = relaxedMatchableParties.length > 0 && remainingSeatIndexes.size > 0
-            ? maximizeAssignments(relaxedMatchableParties, remainingSeatIndexes)
-            : Array(seatList.length).fill(-1);
-        strictSeatToPartyIndex.forEach((partyIndex, seatIndex) => {
-            if (partyIndex < 0)
-                return;
-            place(seatList[seatIndex].venueId, strictMatchableParties[partyIndex].id);
-        });
-        relaxedSeatToPartyIndex.forEach((partyIndex, seatIndex) => {
-            if (partyIndex < 0)
-                return;
-            place(seatList[seatIndex].venueId, relaxedMatchableParties[partyIndex].id);
-        });
+        const availableSeatIndexes = new Set(allSeatIndexes);
+        for (let round = 1; round <= maxRounds; round += 1) {
+            const roundSeatIndexes = new Set();
+            seatList.forEach((seat, index) => {
+                if (seat.round !== round)
+                    return;
+                if (!availableSeatIndexes.has(index))
+                    return;
+                roundSeatIndexes.add(index);
+            });
+            if (roundSeatIndexes.size === 0)
+                continue;
+            for (const category of activeCategoryOrder()) {
+                if (roundSeatIndexes.size === 0)
+                    break;
+                const candidates = partiesByCategory[category].filter((p) => !assignedParty.has(p.id));
+                fillSeats(candidates, roundSeatIndexes, canAssignPartyToVenue, false);
+            }
+            if (roundSeatIndexes.size > 0) {
+                const candidates = parties.filter((p) => !assignedParty.has(p.id));
+                fillSeats(candidates, roundSeatIndexes, canAssignPartyToVenue, false);
+            }
+            if (roundSeatIndexes.size > 0) {
+                const candidates = parties.filter((p) => !assignedParty.has(p.id));
+                fillSeats(candidates, roundSeatIndexes, () => true, true);
+            }
+            roundSeatIndexes.forEach((seatIndex) => {
+                availableSeatIndexes.delete(seatIndex);
+            });
+        }
         if (assignments.length === 0)
             throw new Error("NO_ASSIGNMENTS");
         // #region debug-point C:assignment-result
         void fetch("http://127.0.0.1:7777/event", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: "duplicate-assignment", runId: "pre-fix", hypothesisId: "C", location: "scheduleService.ts:157", msg: "[DEBUG] generated assignments before insert", data: { miqaatId, zoneId, assignmentCount: assignments.length, assignments: assignments.map((a) => ({ venueId: a.venueId, partyId: a.partyId, pairVisitCount: visitCount(a.partyId, a.venueId) })) }, ts: Date.now() }) }).catch(() => { });
         // #endregion
+        if (dryRun) {
+            await connection.rollback();
+            return { assignments };
+        }
         for (const a of assignments) {
             await connection.query(`INSERT INTO schedules (miqaat_id, venue_id, party_id, is_manual, is_published, created_by_role, created_by_id, created_at)
          VALUES (:miqaat_id, :venue_id, :party_id, :is_manual, 0, :created_by_role, :created_by_id, NOW())`, {
