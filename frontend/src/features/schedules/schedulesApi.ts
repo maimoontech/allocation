@@ -12,6 +12,8 @@ export type ScheduleRow = {
   venue_name: string;
   venue_coordinator_name?: string | null;
   venue_contact_number?: string | null;
+  venue_address?: string | null;
+  venue_google_map_link?: string | null;
   mohallah_id: number;
   mohallah_name: string;
   zone_id: number;

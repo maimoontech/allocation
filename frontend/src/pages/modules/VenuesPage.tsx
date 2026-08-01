@@ -114,6 +114,8 @@ export function VenuesPage() {
   const [coordinatorName, setCoordinatorName] = useState("");
   const [contactNumber, setContactNumber] = useState("");
   const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [address, setAddress] = useState("");
+  const [googleMapLink, setGoogleMapLink] = useState("");
   const [password, setPassword] = useState("");
   const [minParties, setMinParties] = useState<string>("1");
   const [maxParties, setMaxParties] = useState<string>("5");
@@ -199,6 +201,8 @@ export function VenuesPage() {
     setCoordinatorName("");
     setContactNumber("");
     setWhatsappNumber("");
+    setAddress("");
+    setGoogleMapLink("");
     setPassword("");
     setMinParties("1");
     setMaxParties("5");
@@ -235,6 +239,8 @@ export function VenuesPage() {
           coordinator_name: coordinatorName.trim() || null,
           contact_number: contactNumber.trim() || null,
           whatsapp_number: whatsappNumber.trim() || null,
+          address: address.trim() || null,
+          google_map_link: googleMapLink.trim() || null,
           password,
           min_parties: min,
           max_parties: max,
@@ -253,6 +259,8 @@ export function VenuesPage() {
         coordinator_name: coordinatorName.trim() || null,
         contact_number: contactNumber.trim() || null,
         whatsapp_number: whatsappNumber.trim() || null,
+        address: address.trim() || null,
+        google_map_link: googleMapLink.trim() || null,
         password: password.trim() || undefined,
         min_parties: min,
         max_parties: max,
@@ -290,6 +298,8 @@ export function VenuesPage() {
           <Input label="Coordinator Name" value={coordinatorName} onChange={(e) => setCoordinatorName(e.target.value)} />
           <Input label="Mobile No." value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} />
           <Input label="WhatsApp No." value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value)} />
+          <Input label="Address" value={address} onChange={(e) => setAddress(e.target.value)} />
+          <Input label="Google Map Link" value={googleMapLink} onChange={(e) => setGoogleMapLink(e.target.value)} />
           <label className="block text-left">
             <div className="mb-1 text-sm font-semibold">{editing ? "New Password (optional)" : "Password"}</div>
             <div className="relative">
@@ -467,6 +477,8 @@ export function VenuesPage() {
                   <th className="py-2 pr-3">Coordinator</th>
                   <th className="py-2 pr-3">Mobile</th>
                   <th className="py-2 pr-3">WhatsApp</th>
+                  <th className="py-2 pr-3">Address</th>
+                  <th className="py-2 pr-3">Map</th>
                   <th className="py-2 pr-3">Capacity</th>
                   <th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Actions</th>
@@ -481,6 +493,21 @@ export function VenuesPage() {
                     <td className="py-2 pr-3">{v.coordinator_name ?? "—"}</td>
                     <td className="py-2 pr-3">{v.contact_number ?? "—"}</td>
                     <td className="py-2 pr-3">{v.whatsapp_number ?? "—"}</td>
+                    <td className="py-2 pr-3">{(v.address ?? "").trim() || "—"}</td>
+                    <td className="py-2 pr-3">
+                      {(v.google_map_link ?? "").trim() ? (
+                        <a
+                          href={v.google_map_link as string}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline"
+                        >
+                          Open
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="py-2 pr-3">
                       {v.min_parties}/{v.max_parties}
                     </td>
@@ -497,6 +524,8 @@ export function VenuesPage() {
                             setCoordinatorName(v.coordinator_name ?? "");
                             setContactNumber(v.contact_number ?? "");
                             setWhatsappNumber(v.whatsapp_number ?? "");
+                            setAddress(v.address ?? "");
+                            setGoogleMapLink(v.google_map_link ?? "");
                             setPassword("");
                             setMinParties(String(v.min_parties));
                             setMaxParties(String(v.max_parties));

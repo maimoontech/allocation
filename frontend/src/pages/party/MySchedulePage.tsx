@@ -59,6 +59,40 @@ export function MySchedulePage() {
     return "—";
   }
 
+  function getDirectionsUrl(rawValue?: string | null) {
+    const raw = rawValue?.trim();
+    if (!raw) return null;
+    if (!/^https?:\/\//i.test(raw)) {
+      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(raw)}`;
+    }
+
+    try {
+      const url = new URL(raw);
+      if (url.searchParams.get("destination")) return raw;
+      if (url.pathname.includes("/maps/dir/")) return raw;
+
+      const q = url.searchParams.get("q") || url.searchParams.get("query");
+      if (q) {
+        return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(q)}`;
+      }
+
+      const placePrefix = "/maps/place/";
+      if (url.pathname.startsWith(placePrefix)) {
+        const rest = url.pathname.slice(placePrefix.length);
+        const place = rest.split("/")[0];
+        if (place) {
+          return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+            decodeURIComponent(place.replaceAll("+", " "))
+          )}`;
+        }
+      }
+
+      return raw;
+    } catch {
+      return raw;
+    }
+  }
+
   async function downloadPdf() {
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
     const partyName = user?.displayName ?? "—";
@@ -71,23 +105,29 @@ export function MySchedulePage() {
         "English Date",
         "Hijri Date",
         "Venue Name",
-        "Venue Coordinator Name & Contact Number"
+        "Venue Coordinator Name & Contact Number",
+        "Address",
+        "Google Map"
       ]],
       body: rows.map((row) => [
         row.miqaat_name,
         formatDateDdMmmYy(row.english_date),
         row.hijri_date || "—",
         row.venue_name,
-        formatCoordinatorLine(row.venue_coordinator_name, row.venue_contact_number)
+        formatCoordinatorLine(row.venue_coordinator_name, row.venue_contact_number),
+        row.venue_address || "—",
+        row.venue_google_map_link || "—"
       ]),
       styles: { fontSize: 9, cellPadding: 6, valign: "middle" },
       headStyles: { fillColor: [31, 64, 104] },
       columnStyles: {
-        0: { cellWidth: 170 },
+        0: { cellWidth: 160 },
         1: { cellWidth: 80 },
         2: { cellWidth: 80 },
-        3: { cellWidth: 130 },
-        4: { cellWidth: 220 }
+        3: { cellWidth: 120 },
+        4: { cellWidth: 200 },
+        5: { cellWidth: 180 },
+        6: { cellWidth: 200 }
       },
       margin: { left: 40, right: 40, bottom: 40 }
     });
@@ -155,6 +195,27 @@ export function MySchedulePage() {
                   </div>
                   <div className="mt-1">
                     {formatCoordinatorLine(row.venue_coordinator_name, row.venue_contact_number)}
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">Address</div>
+                  <div className="mt-1">{row.venue_address || "—"}</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-textMuted">Google Map</div>
+                  <div className="mt-1">
+                    {getDirectionsUrl(row.venue_google_map_link) ? (
+                      <a
+                        href={getDirectionsUrl(row.venue_google_map_link) as string}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline"
+                      >
+                        Open in Google Maps
+                      </a>
+                    ) : (
+                      "—"
+                    )}
                   </div>
                 </div>
               </div>

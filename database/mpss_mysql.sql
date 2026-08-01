@@ -87,6 +87,8 @@ CREATE TABLE IF NOT EXISTS venues (
   coordinator_name VARCHAR(150) NULL,
   contact_number VARCHAR(20) NULL,
   whatsapp_number VARCHAR(20) NULL,
+  address VARCHAR(255) NULL,
+  google_map_link VARCHAR(500) NULL,
   password_hash VARCHAR(255) NOT NULL,
   last_login_at DATETIME NULL,
   min_parties TINYINT UNSIGNED NOT NULL DEFAULT 1,

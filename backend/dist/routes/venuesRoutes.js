@@ -18,6 +18,7 @@ exports.venuesRoutes.get("/", async (req, res) => {
     const params = Number.isFinite(zoneId) ? { zone_id: zoneId } : {};
     const [rows] = await pool_1.pool.query(`SELECT v.id, v.venue_name, v.mohallah_id, m.mohallah_name, m.zone_id, z.zone_name,
             v.coordinator_name, v.contact_number, v.whatsapp_number,
+            v.address, v.google_map_link,
             v.min_parties, v.max_parties, v.is_active, v.created_at
      FROM venues v
      JOIN mohallahs m ON m.id = v.mohallah_id
@@ -28,7 +29,7 @@ exports.venuesRoutes.get("/", async (req, res) => {
 });
 exports.venuesRoutes.post("/", async (req, res) => {
     const user = req.user;
-    const { venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password, min_parties, max_parties, is_active } = req.body ?? {};
+    const { venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, address, google_map_link, password, min_parties, max_parties, is_active } = req.body ?? {};
     if (!venue_name || !mohallah_id || !password)
         return (0, response_1.fail)(res, "Invalid request", 400);
     if (user.role === "zonal_head") {
@@ -38,14 +39,16 @@ exports.venuesRoutes.post("/", async (req, res) => {
     }
     const password_hash = await bcryptjs_1.default.hash(String(password), 10);
     await pool_1.pool.query(`INSERT INTO venues
-      (venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password_hash, min_parties, max_parties, is_active, created_at)
+      (venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, address, google_map_link, password_hash, min_parties, max_parties, is_active, created_at)
      VALUES
-      (:venue_name, :mohallah_id, :coordinator_name, :contact_number, :whatsapp_number, :password_hash, :min_parties, :max_parties, :is_active, NOW())`, {
+      (:venue_name, :mohallah_id, :coordinator_name, :contact_number, :whatsapp_number, :address, :google_map_link, :password_hash, :min_parties, :max_parties, :is_active, NOW())`, {
         venue_name,
         mohallah_id,
         coordinator_name: coordinator_name || null,
         contact_number: contact_number || null,
         whatsapp_number: whatsapp_number || null,
+        address: address || null,
+        google_map_link: google_map_link || null,
         password_hash,
         min_parties: min_parties ?? 1,
         max_parties: max_parties ?? 5,
@@ -58,7 +61,7 @@ exports.venuesRoutes.put("/:id", async (req, res) => {
     const id = Number(req.params.id);
     if (!Number.isFinite(id))
         return (0, response_1.fail)(res, "Invalid ID", 400);
-    const { venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, password, min_parties, max_parties, is_active } = req.body ?? {};
+    const { venue_name, mohallah_id, coordinator_name, contact_number, whatsapp_number, address, google_map_link, password, min_parties, max_parties, is_active } = req.body ?? {};
     if (!venue_name || !mohallah_id)
         return (0, response_1.fail)(res, "Invalid request", 400);
     if (user.role === "zonal_head") {
@@ -73,6 +76,8 @@ exports.venuesRoutes.put("/:id", async (req, res) => {
         coordinator_name: coordinator_name || null,
         contact_number: contact_number || null,
         whatsapp_number: whatsapp_number || null,
+        address: address || null,
+        google_map_link: google_map_link || null,
         min_parties: min_parties ?? 1,
         max_parties: max_parties ?? 5,
         is_active: is_active ?? 1
@@ -87,7 +92,9 @@ exports.venuesRoutes.put("/:id", async (req, res) => {
          mohallah_id = :mohallah_id,
          coordinator_name = :coordinator_name,
          contact_number = :contact_number,
-         whatsapp_number = :whatsapp_number${passwordSql},
+         whatsapp_number = :whatsapp_number,
+         address = :address,
+         google_map_link = :google_map_link${passwordSql},
          min_parties = :min_parties,
          max_parties = :max_parties,
          is_active = :is_active

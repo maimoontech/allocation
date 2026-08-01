@@ -12,6 +12,8 @@ export type Venue = {
   coordinator_name: string | null;
   contact_number: string | null;
   whatsapp_number: string | null;
+  address?: string | null;
+  google_map_link?: string | null;
   min_parties: number;
   max_parties: number;
   is_active: 0 | 1;
@@ -25,6 +27,8 @@ export type CreateVenueRequest = {
   coordinator_name?: string | null;
   contact_number?: string | null;
   whatsapp_number?: string | null;
+  address?: string | null;
+  google_map_link?: string | null;
   password: string;
   min_parties?: number;
   max_parties?: number;
@@ -38,6 +42,8 @@ export type UpdateVenueRequest = {
   coordinator_name?: string | null;
   contact_number?: string | null;
   whatsapp_number?: string | null;
+  address?: string | null;
+  google_map_link?: string | null;
   password?: string;
   min_parties?: number;
   max_parties?: number;
