@@ -6,28 +6,56 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.env = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
-function requireEnv(name, fallback) {
-    const value = process.env[name] ?? fallback;
-    if (!value)
-        throw new Error(`Missing environment variable: ${name}`);
+const missing = [];
+/**
+ * Reads a required variable. Deliberately has no fallback parameter: a default
+ * for a credential means the credential lives in source control.
+ */
+function requireEnv(name) {
+    const value = process.env[name]?.trim();
+    if (!value) {
+        missing.push(name);
+        return "";
+    }
     return value;
 }
-exports.env = {
-    port: Number(process.env.PORT ?? "4000"),
+/** Reads a non-secret variable that has a safe default. */
+function optionalEnv(name, fallback) {
+    const value = process.env[name]?.trim();
+    return value ? value : fallback;
+}
+const PLACEHOLDER_SECRETS = new Set(["change_me", "changeme", "change-me", "secret", "changeit", "test"]);
+const config = {
+    port: Number(optionalEnv("PORT", "4000")),
     cors: {
-        allowedOrigins: (process.env.CORS_ALLOWED_ORIGINS ??
-            "https://allocation-iota.vercel.app,https://www.karachizakereen.org,http://localhost:5173").split(",").map((origin) => origin.trim()).filter(Boolean)
+        allowedOrigins: optionalEnv("CORS_ALLOWED_ORIGINS", "https://allocation-iota.vercel.app,https://www.karachizakereen.org,http://localhost:5173")
+            .split(",")
+            .map((origin) => origin.trim())
+            .filter(Boolean)
     },
     db: {
-        host: requireEnv("DB_HOST", "64.20.33.10"),
-        port: Number(process.env.DB_PORT ?? "3306"),
-        name: requireEnv("DB_NAME", "masjid_scheduling"),
-        user: requireEnv("DB_USER", "karachizakereen"),
-        pass: process.env.DB_PASS ?? "Kz@5253"
+        host: requireEnv("DB_HOST"),
+        port: Number(optionalEnv("DB_PORT", "3306")),
+        name: requireEnv("DB_NAME"),
+        user: requireEnv("DB_USER"),
+        pass: requireEnv("DB_PASS")
     },
     jwt: {
-        secret: requireEnv("JWT_SECRET", "change_me"),
-        expiresIn: requireEnv("JWT_EXPIRES_IN", "1d"),
-        refreshExpiresInDays: Number(process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS ?? "7")
+        secret: requireEnv("JWT_SECRET"),
+        expiresIn: optionalEnv("JWT_EXPIRES_IN", "1d"),
+        refreshExpiresInDays: Number(optionalEnv("REFRESH_TOKEN_EXPIRES_IN_DAYS", "7"))
     }
 };
+if (missing.length > 0) {
+    throw new Error(`Missing required environment variable(s): ${missing.join(", ")}. ` +
+        `Set them in backend/.env for local development, or in the hosting provider's ` +
+        `environment configuration for a deployed environment. See backend/.env.example.`);
+}
+if (PLACEHOLDER_SECRETS.has(config.jwt.secret.toLowerCase())) {
+    throw new Error("JWT_SECRET is set to a placeholder value. Generate a strong secret with: " +
+        "node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"");
+}
+if (config.jwt.secret.length < 32) {
+    process.stderr.write("WARNING: JWT_SECRET is shorter than 32 characters. Use a longer random secret in production.\n");
+}
+exports.env = config;

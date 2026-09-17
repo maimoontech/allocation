@@ -238,7 +238,7 @@ Then report:
 - There are generated `frontend/dist` and `backend/dist` directories; prefer editing `src` and regenerate builds rather than editing `dist` directly.
 - The repository contains temporary scheduling/debug scripts. Do not delete or execute them blindly; inspect purpose first.
 - Existing documentation describes Prisma in some places, but the current backend source uses `mysql2` directly. The current source code is authoritative.
-- Environment configuration contains fallback database/secret values in source. Treat this as a security finding and do not reproduce those values; future work should move production credentials fully to environment configuration.
+- Environment configuration previously contained fallback database/secret values in source. This was resolved on 2026-09-13: `backend/src/config/env.ts` now requires `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS` and `JWT_SECRET` and refuses to start if any is missing. Never reintroduce a default value for a credential. Local values belong in the gitignored `backend/.env` (see `backend/.env.example`); deployed values belong in the hosting provider's environment configuration. The previously committed values remain in Git history and must be treated as compromised until rotated.
 
 ## Safe Mode for Ambiguous Requests
 

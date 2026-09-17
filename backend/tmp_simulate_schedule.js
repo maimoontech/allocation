@@ -1,4 +1,5 @@
 const mysql = require("mysql2/promise");
+const { env } = require("./dist/config/env");
 
 function activeCategoryOrder() {
   return ["A", "B", "C"];
@@ -64,11 +65,11 @@ class MaxFlow {
 (async () => {
   const zoneId = 2;
   const conn = await mysql.createConnection({
-    host: "64.20.33.10",
-    port: 3306,
-    user: "karachizakereen",
-    password: "Kz@5253",
-    database: "masjid_scheduling"
+    host: env.db.host,
+    port: env.db.port,
+    user: env.db.user,
+    password: env.db.pass,
+    database: env.db.name
   });
 
   const [venueRows] = await conn.query(

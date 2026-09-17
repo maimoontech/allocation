@@ -1,4 +1,5 @@
 const mysql = require("mysql2/promise");
+const { env } = require("./dist/config/env");
 function categoryRank(category) {
   if (category === "A") return 0;
   if (category === "B") return 1;
@@ -8,7 +9,7 @@ function categoryRank(category) {
 (async()=>{
   const zoneId = 2;
   const miqaatId = 9;
-  const conn = await mysql.createConnection({host:"64.20.33.10",port:3306,user:"karachizakereen",password:"Kz@5253",database:"masjid_scheduling"});
+  const conn = await mysql.createConnection({host:env.db.host,port:env.db.port,user:env.db.user,password:env.db.pass,database:env.db.name});
   const [[miqaatRow]] = await conn.query(`SELECT DATE_FORMAT(english_date, '%Y-%m-%d') AS english_date FROM miqaats WHERE id = ? LIMIT 1`, [miqaatId]);
   const currentMiqaatDate = miqaatRow.english_date;
   const [venueRows] = await conn.query(`SELECT v.id, v.venue_name, v.min_parties, v.max_parties FROM venues v JOIN mohallahs m ON m.id=v.mohallah_id WHERE m.zone_id=? AND v.is_active=1 ORDER BY v.id`, [zoneId]);

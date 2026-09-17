@@ -8,7 +8,7 @@
 - Render `/health` reports:
   - `version=1.0.0`
   - `build=cd975229dc81485a3824e0efd934c42a3b31dda2`
-  - `db_host=64.20.33.10`
+  - `db_host=<redacted>`
   - `db_name=masjid_scheduling`
 - Local `git rev-parse HEAD` matches the same commit hash.
 - Current saved data still shows `13` duplicate-rule violations.

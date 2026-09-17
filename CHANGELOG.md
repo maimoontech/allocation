@@ -1,5 +1,36 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-09-13 — Removed hardcoded credentials from source
+
+### Security
+Resolved the finding recorded as item 3 in the 2026-09-12 baseline below.
+
+`backend/src/config/env.ts` previously supplied the live database host, name, user and
+password, plus a `change_me` JWT secret, as fallback defaults. Any checkout of the
+repository exposed working production credentials, and an unset `JWT_SECRET` in a
+deployed environment would have signed tokens with a publicly known value.
+
+Changes:
+- `requireEnv` no longer accepts a fallback. `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`
+  and `JWT_SECRET` are mandatory; startup aborts listing every missing variable at once.
+- Non-secret settings (`PORT`, `DB_PORT`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN_DAYS`,
+  `CORS_ALLOWED_ORIGINS`) keep their previous defaults via a separate `optionalEnv` helper,
+  so effective behaviour is unchanged when the variables are set.
+- Startup rejects known placeholder JWT secrets and warns when the secret is under 32 characters.
+- Added `backend/.env.example` documenting every variable. `backend/.env` stays gitignored.
+- 14 `tmp_*.js` debug scripts embedded their own copies of the credentials; they now read
+  `env.db.*` from `./dist/config/env`, matching the scripts that already did so.
+- Rebuilt `backend/dist` so the committed build no longer carries the values.
+- Redacted the database host from `debug-schedule-duplicates.md`.
+
+### Required follow-up (not performed here)
+1. **Rotate the database password and the admin account password.** The old values remain
+   in Git history and must be assumed compromised.
+2. **Set the five required variables in the backend hosting environment before the next
+   deploy.** The service will not start without them.
+3. Setting a new `JWT_SECRET` invalidates all issued access tokens; every user must log in
+   again. The frontend does not refresh tokens automatically, so this surfaces as a forced logout.
+
 ## 2026-09-12 — Claude Code Context Baseline
 
 Created a Claude-oriented project context based on the supplied Trae AI project.

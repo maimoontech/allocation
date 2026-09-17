@@ -123,7 +123,7 @@ Some older documentation refers to Prisma. The current backend source uses `mysq
 
 ## Important Existing Risks
 
-- Environment configuration includes fallback credentials/secrets in source code.
+- Environment configuration included fallback credentials/secrets in source code. Resolved 2026-09-13; required variables are now validated at startup and the process exits if any is missing. The old values persist in Git history and require rotation.
 - Startup schema mutation is implemented in `ensureSchema.ts`.
 - Scheduling logic is complex and business-critical.
 - Debug/temporary scripts are present and require careful handling.
