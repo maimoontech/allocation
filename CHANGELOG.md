@@ -1,5 +1,26 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-09-17 — Fixed `.env` lookup depending on the working directory
+
+Follow-up to the 2026-09-13 credential change.
+
+`dotenv.config()` resolves `.env` against `process.cwd()`, so starting the backend from
+the repository root (rather than from `backend/`) found no file and aborted with
+`Missing required environment variable(s): ...` even though `backend/.env` was present
+and complete. The old hardcoded fallbacks had masked this; removing them exposed it.
+
+- `backend/src/config/env.ts` now resolves `backend/.env` from the module's own location
+  (`__dirname/../..`, which is the backend package root for both `src/` under tsx and the
+  compiled `dist/`), so the load no longer depends on where the process was started.
+- Real environment variables still take precedence — dotenv does not overwrite values
+  already present in `process.env`, so deployed configuration is unaffected.
+- The startup error now names the exact path that was checked and whether a file was found.
+
+Verified loading from the repository root, `backend/`, an unrelated directory and a
+different drive root; and verified that a genuinely missing `.env` still aborts startup.
+`npm run dev:backend` was already unaffected, as `npm run --prefix backend` changes the
+working directory.
+
 ## 2026-09-13 — Removed hardcoded credentials from source
 
 ### Security

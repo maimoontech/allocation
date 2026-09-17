@@ -1,6 +1,21 @@
 import dotenv from "dotenv";
+import fs from "node:fs";
+import path from "node:path";
 
-dotenv.config();
+// Resolve the backend package root from this module rather than from the current
+// working directory, so `.env` is found no matter where the process was started:
+// src/config -> backend (tsx), dist/config -> backend (compiled).
+const backendRoot = path.resolve(__dirname, "..", "..");
+const envPath = path.join(backendRoot, ".env");
+const envFileFound = fs.existsSync(envPath);
+
+// Real environment variables always take precedence: dotenv never overwrites a
+// value already present in process.env, so deployed configuration still wins.
+if (envFileFound) {
+  dotenv.config({ path: envPath });
+} else {
+  dotenv.config();
+}
 
 const missing: string[] = [];
 
@@ -53,8 +68,10 @@ const config = {
 if (missing.length > 0) {
   throw new Error(
     `Missing required environment variable(s): ${missing.join(", ")}. ` +
-      `Set them in backend/.env for local development, or in the hosting provider's ` +
-      `environment configuration for a deployed environment. See backend/.env.example.`
+      (envFileFound
+        ? `Loaded ${envPath}, but it does not define them. Add them there, or set them in the environment.`
+        : `No .env file was found at ${envPath}. Copy backend/.env.example to backend/.env and fill it in ` +
+          `for local development, or set these variables in the hosting provider's environment configuration.`)
   );
 }
 
