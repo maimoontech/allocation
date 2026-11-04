@@ -340,6 +340,16 @@ export function MembersPage() {
             The member&apos;s health and other profile answers stay private to them.
           </div>
 
+          {/* Asked twice why these columns were blank. They are blank because the member has
+              not filled them: nothing on this page can set them, so saying where they come
+              from is more use than another dash. */}
+          <div className="rounded-input border border-border bg-surface p-2 text-xs text-textMuted">
+            Zone, Party, WhatsApp and Mobile numbers are entered by the member in their own
+            profile — contact numbers on <strong>Tab 1 Personal</strong>, Zone and Party on{" "}
+            <strong>Tab 3 Hizb</strong>. Each shows a dash until the member saves it, and it
+            cannot be filled in from here.
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
               label="Search"
