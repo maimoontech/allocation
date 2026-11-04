@@ -43,16 +43,17 @@ export function AppRoutes() {
 
         <Route element={<ProtectedRoute roles={["admin"]} />}>
           <Route path="/import-export" element={<ImportExportPage />} />
-          {/* Account status only. Accounts are created from a roster under Import/Export. */}
-          <Route path="/members" element={<MembersPage />} />
           {/* The dropdown options members choose from. Five of the ten lists ship empty, so
               this is how they get their authoritative values. */}
           <Route path="/member-lookups" element={<MemberLookupsPage />} />
           <Route path="/member-lookups/:entity" element={<MemberLookupEditPage />} />
         </Route>
 
-        <Route element={<ProtectedRoute roles={["admin", "zonal_head"]} />}> 
-          <Route path="/member-photo-approvals" element={<MemberPhotoApprovalPage />} /> 
+        <Route element={<ProtectedRoute roles={["admin", "zonal_head"]} />}>
+          <Route path="/member-photo-approvals" element={<MemberPhotoApprovalPage />} />
+          {/* Both roles create accounts and set account status here. A Zonal Head sees only
+              their own zone, which the server enforces — this guard just opens the door. */}
+          <Route path="/members" element={<MembersPage />} />
         </Route>
 
         <Route element={<ProtectedRoute roles={["party"]} />}>

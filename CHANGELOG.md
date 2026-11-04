@@ -1,5 +1,51 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-04 — Added: Admin and Zonal Head can create a member account
+
+Both roles can now add a member from three fields — ITS No, Full Name, Password — instead of
+only through a roster CSV under Import/Export.
+
+- `POST /api/v1/members` creates one account. ITS number must be 6–20 digits (the same rule
+  the import route applies), the name is stored on `member_accounts.member_name`, and the
+  password goes through `validateMemberPassword` — the member policy (FR-020, FR-021) — then
+  bcrypt at cost 10. `must_change_password = 1` and `password_changed_at = NULL`, so a
+  provisioned password is a one-time credential however it was issued (FR-004, FR-005). A
+  duplicate ITS number is a 409 naming the number, not a silent update.
+- `/api/v1/members` is no longer admin-only. It now accepts `admin` and `zonal_head`, and a
+  Zonal Head is **scoped to their own zone** on the list, the photo endpoint and the
+  activate/deactivate toggle. The toggle reads the member's zone *before* writing, so a
+  refusal cannot be preceded by an update. A `zonal_head` token carrying no usable `zoneId` is
+  refused rather than falling through to an unscoped query.
+- The Members page is shared by both roles, with the `Add member` form collapsed by default.
+  The password can be revealed, because a typo there cannot be corrected from this page — the
+  member simply cannot sign in. A confirm field would only prove the same typo twice.
+
+**A Zonal Head cannot see the account they just created.** Zone lives on `member_profiles`,
+which does not exist until the member fills Tab 2, so a new account is in no zone. The chosen
+design records no zone at creation, which leaves this gap; the alternative — showing every
+zone-less account to every Zonal Head — would leak one zone's new members into another's list.
+The form and the empty state both say so plainly rather than leaving it to be discovered, and
+a test pins it so that making creation set a zone has to be a deliberate rewrite. Recording a
+provisioning zone on `member_accounts` would close it with one nullable column.
+
+## 2026-11-04 — Fixed: the test suite can no longer run against a live database
+
+`npm test` in `backend/` writes. `ensureFixtures` inserts into `admins`, `zones`, `mohallahs`,
+`venues`, `parties`, `miqaats`, `schedules` and `member_accounts`; teardown then deletes by
+marker, and `clearMemberLoginAttempts` deletes every row whose ITS number starts with `999`.
+Nothing distinguished a local database from production: both come from `DB_HOST` in the same
+`.env` the application uses, so pointing the app at live pointed the tests there too.
+
+This was not hypothetical — it happened while applying the membership module. The suite was
+run with `.env` holding live credentials and created fixture rows in seven production tables.
+Teardown removed them and the 13 pre-existing tables returned to their exact baseline counts,
+so nothing persisted; but survival depended on teardown completing, which is luck, not a
+safeguard.
+
+`src/__tests__/globalSetup.ts` now refuses to run unless `DB_HOST` is local, printing which
+host and database it declined and why. The check runs before any statement is sent. Override
+with `MPSS_ALLOW_REMOTE_TEST_DB=1` for a genuinely disposable remote database.
+
 ## 2026-11-04 — Changed: `database/` reorganised so one file is obviously the one to run
 
 Asked which script to run against live, because the folder held several. It held eleven files,

@@ -1,16 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { MembersPage } from "./MembersPage";
-import { renderWithProviders } from "../../test-utils";
+import { setAuth } from "../../features/auth/authSlice";
+import { makeTestStore, renderWithProviders } from "../../test-utils";
+import type { Role } from "../../types";
 
 /**
- * The administrator's member list.
+ * The member list, shared by the administrator and the Zonal Head.
  *
  * It must show the identifying details the office works from — photograph, name parts, zone
  * and party posting, and both contact numbers — while health and other profile answers stay
  * off the screen. A missing photograph degrades to initials rather than a broken image, and
  * an unposted member shows a dash rather than an empty cell.
+ *
+ * It must also create an account from three fields, and — for a Zonal Head — say plainly
+ * that the account it just created is not in their zone-scoped list yet.
  */
+
+/** A store already signed in as `role`, since the page's wording depends on it. */
+function storeAs(role: Role, zoneId?: number) {
+  const store = makeTestStore();
+  store.dispatch(
+    setAuth({
+      token: "test-token",
+      refreshToken: "test-refresh",
+      user: { role, id: 1, displayName: "__TEST__", zoneId }
+    })
+  );
+  return store;
+}
 
 const ITEMS = [
   {
@@ -60,9 +78,15 @@ const ITEMS = [
 ];
 
 let requested: string[] = [];
+/** Bodies of every POST /members, so a test can assert what was actually sent. */
+let posted: any[] = [];
+/** Set by a test to make the next create fail with this status and message. */
+let createFailure: { status: number; message: string } | null = null;
 
 beforeEach(() => {
   requested = [];
+  posted = [];
+  createFailure = null;
 
   Object.assign(URL, {
     createObjectURL: vi.fn(() => "blob:member-photo"),
@@ -71,8 +95,9 @@ beforeEach(() => {
 
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : String(input);
+      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
       requested.push(url);
 
       if (url.includes("/members/11/photo")) {
@@ -80,6 +105,34 @@ beforeEach(() => {
           status: 200,
           headers: { "Content-Type": "image/png" }
         });
+      }
+
+      if (method === "POST" && url.includes("/members")) {
+        const raw = input instanceof Request ? await input.clone().text() : String(init?.body ?? "{}");
+        const body = JSON.parse(raw || "{}");
+        posted.push(body);
+
+        if (createFailure) {
+          return new Response(
+            JSON.stringify({ success: false, data: null, message: createFailure.message }),
+            { status: createFailure.status, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              id: 99,
+              its_no: body.its_no,
+              member_name: body.member_name,
+              is_active: true,
+              must_change_password: true
+            },
+            message: "created"
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
       }
 
       if (url.includes("/members")) {
@@ -133,5 +186,104 @@ describe("MembersPage", () => {
     expect(screen.getByText("F")).toBeInTheDocument();
     expect(requested.some((url) => url.includes("/members/11/photo"))).toBe(true);
     expect(requested.some((url) => url.includes("/members/12/photo"))).toBe(false);
+  });
+});
+
+describe("MembersPage — adding a member", () => {
+  async function openForm(role: Role) {
+    renderWithProviders(<MembersPage />, { store: storeAs(role, 7) });
+    fireEvent.click(await screen.findByRole("button", { name: "Add member" }));
+  }
+
+  function fillForm(values: { its_no: string; member_name: string; password: string }) {
+    fireEvent.change(screen.getByLabelText(/^ITS No/), { target: { value: values.its_no } });
+    fireEvent.change(screen.getByLabelText(/^Full Name/), {
+      target: { value: values.member_name }
+    });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: values.password } });
+  }
+
+  const VALID = {
+    its_no: "40480999",
+    member_name: "Mulla Taha Ali Rangwala",
+    password: "Tanzeem#2026"
+  };
+
+  it("sends only the ITS number, full name and password", async () => {
+    await openForm("admin");
+    fillForm(VALID);
+    fireEvent.click(screen.getByRole("button", { name: "Create member" }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    // Exactly three fields. Zone, party and profile answers are the member's own to fill,
+    // so the form must not smuggle any of them in.
+    expect(posted[0]).toEqual(VALID);
+  });
+
+  it("trims what was typed, so a stray space cannot become part of the ITS number", async () => {
+    await openForm("admin");
+    fillForm({ ...VALID, its_no: "  40480999  ", member_name: "  Taha  " });
+    fireEvent.click(screen.getByRole("button", { name: "Create member" }));
+
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0].its_no).toBe("40480999");
+    expect(posted[0].member_name).toBe("Taha");
+    // The password is NOT trimmed: trimming would accept one the member could never retype.
+    expect(posted[0].password).toBe("Tanzeem#2026");
+  });
+
+  it("confirms the account afterwards, naming the forced password change", async () => {
+    await openForm("admin");
+    fillForm(VALID);
+    fireEvent.click(screen.getByRole("button", { name: "Create member" }));
+
+    expect(await screen.findByText(/Created 1 member just now/)).toBeInTheDocument();
+    expect(screen.getByText(/must change password at first sign-in/)).toBeInTheDocument();
+  });
+
+  it("rejects a malformed ITS number without calling the server", async () => {
+    await openForm("admin");
+    fillForm({ ...VALID, its_no: "12ab" });
+    fireEvent.click(screen.getByRole("button", { name: "Create member" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("ITS No must be 6 to 20 digits.");
+    expect(posted).toHaveLength(0);
+  });
+
+  it("shows the server's own message when it refuses, rather than a generic failure", async () => {
+    await openForm("admin");
+    createFailure = { status: 409, message: "ITS No 40480999 already has a member account." };
+
+    fillForm(VALID);
+    fireEvent.click(screen.getByRole("button", { name: "Create member" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "ITS No 40480999 already has a member account."
+    );
+  });
+
+  it("lets the operator read the password back, since a typo cannot be reset here", async () => {
+    await openForm("admin");
+
+    expect(screen.getByLabelText(/^Password/)).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(screen.getByLabelText(/^Password/)).toHaveAttribute("type", "text");
+  });
+
+  it("warns a Zonal Head that the new member is not in their list yet", async () => {
+    await openForm("zonal_head");
+
+    expect(
+      screen.getByText(/A new account has no zone until the member chooses one/i)
+    ).toBeInTheDocument();
+  });
+
+  it("does not show that warning to an administrator, who sees every account", async () => {
+    await openForm("admin");
+
+    expect(
+      screen.queryByText(/A new account has no zone until the member chooses one/i)
+    ).not.toBeInTheDocument();
   });
 });
