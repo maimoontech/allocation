@@ -46,19 +46,19 @@ export function BmiMeter({ bmi }: { bmi: number | null }) {
   const needleAngle = angleFor(bmi ?? BMI_SCALE_MIN);
 
   return (
-    <figure className="mx-auto w-full max-w-[300px]">
+    <figure className="mx-auto w-[150px]">
       {/* Readout window: empty until there is a value to show. */}
-      <div className="mx-auto mb-[-14px] w-40 rounded-t-lg border border-b-0 border-[#3a3a3a] bg-[#2a2a2a] px-2 pt-2">
+      <div className="mx-auto mb-[-7px] w-20 rounded-t-md border border-b-0 border-[#3a3a3a] bg-[#2a2a2a] px-1 pt-1">
         <div
           aria-hidden="true"
-          className="flex h-12 flex-col items-center justify-center rounded border border-[#111] bg-[#f4f6f0] shadow-[inset_0_2px_4px_rgba(0,0,0,0.35)]"
+          className="flex h-7 flex-col items-center justify-center rounded-sm border border-[#111] bg-[#f4f6f0] shadow-[inset_0_1px_2px_rgba(0,0,0,0.35)]"
         >
           {bmi != null ? (
             <>
-              <span className="text-xl font-semibold leading-none tabular-nums text-[#1b1b1b]">
+              <span className="text-sm font-semibold leading-none tabular-nums text-[#1b1b1b]">
                 {bmi.toFixed(1)}
               </span>
-              <span className="mt-0.5 text-[11px] font-semibold" style={{ color: band?.colour }}>
+              <span className="text-[9px] font-semibold leading-tight" style={{ color: band?.colour }}>
                 {band?.label}
               </span>
             </>
@@ -176,21 +176,21 @@ export function BmiMeter({ bmi }: { bmi: number | null }) {
       </svg>
 
       <figcaption>
-        <ul className="mt-1 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
+        <ul className="mt-1 flex flex-col items-center gap-0.5 text-[10px] leading-tight">
           {BMI_BANDS.map((b) => (
             <li
               key={b.id}
-              className={`flex items-center gap-1.5 ${
+              className={`flex items-center gap-1 ${
                 category === b.id ? "font-semibold text-textPrimary" : "text-textMuted"
               }`}
             >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: b.colour }} />
+              <span className="h-2 w-2 rounded-full" style={{ background: b.colour }} />
               {b.label} <span className="font-normal text-textMuted">{b.range}</span>
             </li>
           ))}
         </ul>
         {bmi == null ? (
-          <p className="mt-2 text-center text-xs text-textMuted">
+          <p className="mt-1 text-center text-[10px] leading-tight text-textMuted">
             Enter your height and weight to see your BMI.
           </p>
         ) : null}

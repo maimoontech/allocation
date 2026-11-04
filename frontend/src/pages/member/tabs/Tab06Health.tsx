@@ -44,34 +44,47 @@ export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
         included in reports or exports.
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Select
-          label="Blood Group"
-          value={value.blood_group ?? ""}
-          onChange={(e) => onChange("blood_group", e.target.value === "" ? null : e.target.value)}
-          options={enumOptions(BLOOD_GROUPS)}
-          error={errorFor("blood_group")}
-          disabled={disabled}
-        />
-
-        <YesNoField
-          label="Regular Donor"
-          name="is_regular_donor"
-          value={value.is_regular_donor}
-          onChange={onDonorChange}
-          error={errorFor("is_regular_donor")}
-          disabled={disabled}
-        />
-
-        {isDonor ? (
-          <DatePicker
-            label="Last Donation Date"
-            value={value.last_donation_date}
-            onChange={(next) => onChange("last_donation_date", next)}
-            error={errorFor("last_donation_date")}
-            max={todayIso()}
+      {/* The meter sits beside the Regular Donor question, top-aligned with it. That cell
+          spans the left column's rows, and the last row is the flexible one, so the meter's
+          height lands there rather than opening a gap between Blood Group and Last
+          Donation Date. */}
+      <div className="grid gap-3 sm:grid-cols-2 sm:grid-rows-[auto_auto_1fr]">
+        <div className="sm:col-start-1 sm:row-start-1">
+          <Select
+            label="Blood Group"
+            value={value.blood_group ?? ""}
+            onChange={(e) => onChange("blood_group", e.target.value === "" ? null : e.target.value)}
+            options={enumOptions(BLOOD_GROUPS)}
+            error={errorFor("blood_group")}
             disabled={disabled}
           />
+        </div>
+
+        <div className="flex items-start gap-6 sm:col-start-2 sm:row-span-3 sm:row-start-1">
+          <YesNoField
+            label="Regular Donor"
+            name="is_regular_donor"
+            value={value.is_regular_donor}
+            onChange={onDonorChange}
+            error={errorFor("is_regular_donor")}
+            disabled={disabled}
+          />
+          <div className="shrink-0">
+            <BmiMeter bmi={liveBmi} />
+          </div>
+        </div>
+
+        {isDonor ? (
+          <div className="sm:col-start-1 sm:row-start-2">
+            <DatePicker
+              label="Last Donation Date"
+              value={value.last_donation_date}
+              onChange={(next) => onChange("last_donation_date", next)}
+              error={errorFor("last_donation_date")}
+              max={todayIso()}
+              disabled={disabled}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -111,8 +124,6 @@ export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
           helperText="Calculated automatically."
         />
       </div>
-
-      <BmiMeter bmi={liveBmi} />
     </div>
   );
 }
