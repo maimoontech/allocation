@@ -37,6 +37,22 @@ export type MemberAccountPage = {
   page_size: number;
 };
 
+/** The three fields an Admin or Zonal Head supplies to create an account. */
+export type CreateMemberRequest = {
+  its_no: string;
+  member_name: string;
+  password: string;
+};
+
+/** What comes back after a create. No password material, by design (FR-015). */
+export type CreatedMemberAccount = {
+  id: number;
+  its_no: string;
+  member_name: string;
+  is_active: boolean;
+  must_change_password: boolean;
+};
+
 export type ListMembersRequest = {
   q?: string;
   is_active?: boolean;
@@ -64,6 +80,23 @@ export const memberAdminApi = api.injectEndpoints({
               ...result.items.map((m) => ({ type: "Members" as const, id: m.id }))
             ]
           : [{ type: "Members" as const, id: "LIST" }]
+    }),
+
+    /**
+     * Creates one member account. Admin and Zonal Head both reach this.
+     *
+     * Only the three basic fields; zone, party and the rest of the profile are the member's
+     * own to fill. The server forces a password change at first sign-in, and no password
+     * material comes back in the response.
+     *
+     * The server's `message` is surfaced verbatim on failure: it names the rule that was
+     * broken (the ITS format, the password policy, or an ITS number already taken), which a
+     * generic "could not create" would throw away.
+     */
+    createMemberAccount: builder.mutation<CreatedMemberAccount, CreateMemberRequest>({
+      query: (body) => ({ url: "/members", method: "POST", body }),
+      transformResponse: (res: ApiEnvelope<CreatedMemberAccount>) => res.data,
+      invalidatesTags: [{ type: "Members", id: "LIST" }]
     }),
 
     /** `is_active` is the only field the server accepts here. */    setMemberActive: builder.mutation<
@@ -95,6 +128,7 @@ export const memberAdminApi = api.injectEndpoints({
 
 export const {
   useGetMemberAccountsQuery,
+  useCreateMemberAccountMutation,
   useSetMemberActiveMutation,
   useGetMemberPhotoQuery
 } = memberAdminApi;

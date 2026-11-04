@@ -29,6 +29,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/venues", label: "Venues" },
     { to: "/schedules", label: "Schedules" },
     { to: "/reports", label: "Reports" },
+    { to: "/members", label: "Members" },
     { to: "/member-photo-approvals", label: "Photo Approvals" },
     { to: "/change-password", label: "Change Password" }
   ],

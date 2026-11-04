@@ -192,11 +192,13 @@ expected values.
 #### Member account provisioning
 
 - **FR-001**: An administrator MUST be able to create member accounts in bulk from a supplied roster identifying each member by ITS Number.
+- **FR-001a** *(authorised 2026-11-04)*: An administrator or a Zonal Head MUST also be able to create ONE member account directly, supplying only the ITS Number, the member's full name and an initial password. Zone, party and every profile answer remain the member's own to enter (FR-047, FR-048), so single creation MUST NOT set them. All of FR-002 through FR-005 apply unchanged: the ITS Number stays unique, and the account is created requiring a password change.
 - **FR-002**: The system MUST treat the ITS Number as the unique identifier of a member account; two member accounts MUST NOT share an ITS Number.
 - **FR-003**: Provisioning the same ITS Number again MUST update the existing account rather than create a second one.
 - **FR-004**: Each newly provisioned account MUST be recorded as requiring a password change before first use.
 - **FR-005**: Re-provisioning an account whose member has already set their own password MUST NOT overwrite that password nor re-impose the password change requirement.
-- **FR-006**: Only administrators MUST be able to provision, deactivate or reactivate member accounts.
+- **FR-006** *(amended 2026-11-04; previously "Only administrators")*: Only administrators and Zonal Heads MUST be able to provision, deactivate or reactivate member accounts. A Zonal Head MUST be confined to members posted to their own zone for every such action, and for viewing the account list and member photographs. Bulk roster provisioning (FR-001) remains administrator-only.
+- **FR-006a** *(authorised 2026-11-04)*: A Zonal Head's confinement MUST be derived from the member's profile zone (`member_profiles.zone_id`), the same source photo approval already uses. An account with no profile is therefore in no zone and MUST NOT be visible to any Zonal Head — including the one who just created it. The interface MUST state this where an account is created, rather than leaving it to be discovered. Treating zone-less accounts as belonging to whoever created them is explicitly NOT permitted without a column recording that fact, because showing them to every Zonal Head would disclose one zone's members to another.
 - **FR-007**: A deactivated member account MUST be refused at sign-in while its profile data is retained.
 - **FR-008**: Roster rows that cannot be processed MUST be reported individually with a reason, without preventing the valid rows from being processed.
 
