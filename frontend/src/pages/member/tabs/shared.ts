@@ -94,6 +94,32 @@ export function computeBmi(heightCm: number | null, weightKg: number | null): nu
   return Math.round((weightKg / (metres * metres)) * 100) / 100;
 }
 
+export type BmiCategory = "underweight" | "normal" | "overweight";
+
+/** The printed scale of the BMI meter on Tab 6; values outside it pin the needle. */
+export const BMI_SCALE_MIN = 10;
+export const BMI_SCALE_MAX = 40;
+
+/** WHO adult cut-offs: under 18.5, 18.5 up to 25, and 25 and above. */
+export const BMI_BANDS: Array<{
+  id: BmiCategory;
+  label: string;
+  range: string;
+  from: number;
+  to: number;
+  colour: string;
+}> = [
+  { id: "underweight", label: "Underweight", range: "below 18.5", from: BMI_SCALE_MIN, to: 18.5, colour: "#3a96dd" },
+  { id: "normal", label: "Normal", range: "18.5 to 24.9", from: 18.5, to: 25, colour: "#13a10e" },
+  { id: "overweight", label: "Overweight", range: "25 and above", from: 25, to: BMI_SCALE_MAX, colour: "#e8590c" }
+];
+
+export function bmiCategory(bmi: number): BmiCategory {
+  if (bmi < 18.5) return "underweight";
+  if (bmi < 25) return "normal";
+  return "overweight";
+}
+
 /** A banner for a lookup the organisation has not filled in yet (FR-095). */
 export const EMPTY_LOOKUP_NOTE =
   "These options have not been set up yet. You can still complete and save the rest of your profile.";

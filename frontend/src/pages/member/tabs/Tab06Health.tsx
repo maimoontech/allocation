@@ -3,6 +3,7 @@ import { Select } from "../../../components/ui/Select";
 import { DatePicker } from "../../../components/ui/DatePicker";
 import { YesNoField } from "../../../components/ui/YesNoField";
 import { todayIso } from "../../../utils/dates";
+import { BmiMeter } from "./BmiMeter";
 import { computeBmi, enumOptions, toNullableNumber } from "./shared";
 import type { TabProps } from "./shared";
 
@@ -110,6 +111,8 @@ export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
           helperText="Calculated automatically."
         />
       </div>
+
+      <BmiMeter bmi={liveBmi} />
     </div>
   );
 }
