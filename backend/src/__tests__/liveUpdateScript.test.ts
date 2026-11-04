@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * `database/membership_live_update.sql` must stay in step with its two sources.
+ * `database/MEMBERSHIP_LIVE_INSTALL.sql` must stay in step with its two sources.
  *
  * The combined script exists because a live migration is best handed over as one
  * self-contained file — runnable from any directory, pasteable into any client, with no chance
@@ -21,8 +21,23 @@ import { join } from "node:path";
 
 const DB_DIR = join(__dirname, "..", "..", "..", "database");
 
+/** The one file that is run against a live database. */
+const GENERATED = "MEMBERSHIP_LIVE_INSTALL.sql";
+
 function read(name: string) {
   return readFileSync(join(DB_DIR, name), "utf8");
+}
+
+/**
+ * The two maintained sources live in `database/sources/`, away from the generated script.
+ *
+ * They used to sit beside it, so `database/` held membership_live_update.sql,
+ * membership_schema.sql, membership_seed.sql and membership_rollback.sql — four names differing
+ * by one word, exactly one of which should ever be run against production. A reader could not
+ * tell which, and asked.
+ */
+function readSource(name: string) {
+  return read(join("sources", name));
 }
 
 /** Must match the generator's hash: sha256, first 16 hex characters. */
@@ -47,20 +62,20 @@ function statementsOnly(sql: string) {
 
 describe("the live update script", () => {
   it("records the current hash of each source it was built from", () => {
-    const generated = read("membership_live_update.sql");
+    const generated = read(GENERATED);
 
     for (const source of ["membership_schema.sql", "membership_seed.sql"]) {
-      const expected = shortSha(read(source));
+      const expected = shortSha(readSource(source));
       expect(
         generated.includes(`${source} (sha256 ${expected})`),
-        `${source} has changed since membership_live_update.sql was generated. ` +
+        `${source} has changed since ${GENERATED} was generated. ` +
           `Run: node database/build_live_update.mjs`
       ).toBe(true);
     }
   });
 
   it("contains both sources in full, schema before seed", () => {
-    const generated = read("membership_live_update.sql");
+    const generated = read(GENERATED);
 
     // A marker from each source rather than a line count: the point is that the content is
     // present and in the right order, since the seed's foreign keys need the tables first.
@@ -73,7 +88,7 @@ describe("the live update script", () => {
   });
 
   it("refuses to run against the wrong database", () => {
-    const generated = read("membership_live_update.sql");
+    const generated = read(GENERATED);
 
     // The guard that matters most: pointing a migration at the wrong schema is the mistake
     // with the worst consequences and the one nobody expects to make.
@@ -87,7 +102,7 @@ describe("the live update script", () => {
   });
 
   it("prints the existing row counts both before and after", () => {
-    const generated = read("membership_live_update.sql");
+    const generated = read(GENERATED);
 
     // The operator's proof that nothing existing changed. Both blocks must cover the same
     // tables, or comparing them proves nothing.
@@ -129,7 +144,7 @@ describe("the live update script", () => {
     const targets: string[] = [];
 
     for (const source of sources) {
-      const statements = statementsOnly(read(source));
+      const statements = statementsOnly(readSource(source));
       for (const pattern of [
         /\bALTER\s+TABLE\s+([a-z_]+)/gi,
         /\bDROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([a-z_]+)/gi,
@@ -159,7 +174,7 @@ describe("the live update script", () => {
   });
 
   it("creates every table with the explicit collation", () => {
-    const statements = statementsOnly(read("membership_schema.sql"));
+    const statements = statementsOnly(readSource("membership_schema.sql"));
 
     // The bug this prevents: the database default is utf8mb4_0900_ai_ci while every existing
     // table is utf8mb4_general_ci, so a table inheriting the default throws error 1267 the
@@ -173,7 +188,7 @@ describe("the live update script", () => {
   });
 
   it("seeds all ten lookup lists, every value already reviewed", () => {
-    const seed = statementsOnly(read("membership_seed.sql"));
+    const seed = statementsOnly(readSource("membership_seed.sql"));
 
     // This replaces an assertion that titles, sharafs, halqas, mozes and places ship EMPTY.
     // That was correct while nobody had supplied those values and inventing Dawoodi Bohra
@@ -201,7 +216,7 @@ describe("the live update script", () => {
   });
 
   it("seeds the four adopted tamreen_methods, not the seven that were proposed", () => {
-    const seed = statementsOnly(read("membership_seed.sql"));
+    const seed = statementsOnly(readSource("membership_seed.sql"));
 
     const insert = seed.slice(seed.search(/INSERT INTO tamreen_methods\b/i));
     const values = insert.slice(0, insert.indexOf(";"));
@@ -234,7 +249,7 @@ describe("the live update script", () => {
     // script was never updated. It kept passing every test here — none of them knew the
     // columns existed — and would have created a member_photos without them on production,
     // where every photo approval query then fails with error 1054, unknown column.
-    const schema = statementsOnly(read("membership_schema.sql"));
+    const schema = statementsOnly(readSource("membership_schema.sql"));
 
     const createAt = schema.search(/CREATE TABLE IF NOT EXISTS member_photos\b/);
     expect(createAt).toBeGreaterThan(-1);

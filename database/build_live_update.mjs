@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Builds database/membership_live_update.sql from the two approved source scripts.
+ * Builds database/MEMBERSHIP_LIVE_INSTALL.sql from the two approved source scripts.
  *
  * WHY GENERATE IT RATHER THAN HAND-WRITE IT.
  *
@@ -26,7 +26,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const OUTPUT = join(here, "membership_live_update.sql");
+
+// The output sits at the top of database/ under a deliberately shouty name, and the sources it
+// is built from sit in database/sources/. The folder previously held membership_live_update.sql
+// next to membership_schema.sql, membership_seed.sql and membership_rollback.sql — four files
+// whose names differ by one word, only one of which should ever be run against production. That
+// is a mistake waiting to happen, and it very nearly was one.
+const OUTPUT = join(here, "MEMBERSHIP_LIVE_INSTALL.sql");
+const SOURCE_DIR = join(here, "sources");
 
 const SOURCES = [
   { name: "membership_schema.sql", title: "PART 1 OF 2 — SCHEMA (20 new tables)" },
@@ -215,7 +222,7 @@ SELECT 'Membership module applied.' AS result, NOW() AS finished_at;
 function build() {
   const parts = SOURCES.map((s) => ({
     ...s,
-    text: readFileSync(join(here, s.name), "utf8")
+    text: readFileSync(join(SOURCE_DIR, s.name), "utf8")
   }));
 
   const header = [
@@ -250,11 +257,19 @@ function build() {
     "-- IT REFUSES TO RUN AGAINST THE WRONG DATABASE",
     "--   The pre-flight aborts with SQLSTATE 45000 unless `parties` and `zones` exist.",
     "--",
+    "-- THIS IS THE ONLY FILE YOU RUN AGAINST THE LIVE DATABASE",
+    "--   It is self-contained: the schema and the seed are both inside it, in the right",
+    "--   order, with the verification built in. Nothing else in database/ needs running.",
+    "--   The other files are its two sources (database/sources/), changes already applied",
+    "--   to live long ago (database/already-applied/), the original schema baseline",
+    "--   (mpss_mysql.sql — never run that against live, it resets the admin password), and",
+    "--   the rollback. See database/README.md.",
+    "--",
     "-- HOW TO RUN IT",
     "--   Through the mysql CLI, NOT a driver: this file contains DELIMITER, which is a",
     "--   client command that drivers do not parse.",
     "--",
-    "--     mysql -h <host> -u <user> -p <database> < membership_live_update.sql > run.log 2>&1",
+    "--     mysql -h <host> -u <user> -p <database> < MEMBERSHIP_LIVE_INSTALL.sql > run.log 2>&1",
     "--",
     "--   Keep run.log. It contains the BEFORE and AFTER tables you need to compare.",
     "--",
@@ -288,21 +303,21 @@ if (process.argv.includes("--check")) {
   try {
     current = readFileSync(OUTPUT, "utf8");
   } catch {
-    console.error("membership_live_update.sql is missing. Run: node database/build_live_update.mjs");
+    console.error("MEMBERSHIP_LIVE_INSTALL.sql is missing. Run: node database/build_live_update.mjs");
     process.exit(1);
   }
   if (current !== generated) {
     console.error(
-      "membership_live_update.sql is out of date with its sources.\n" +
+      "MEMBERSHIP_LIVE_INSTALL.sql is out of date with its sources.\n" +
         "Run: node database/build_live_update.mjs"
     );
     process.exit(1);
   }
-  console.log("membership_live_update.sql is current.");
+  console.log("MEMBERSHIP_LIVE_INSTALL.sql is current.");
   process.exit(0);
 }
 
 writeFileSync(OUTPUT, generated, "utf8");
 console.log(
-  `Wrote membership_live_update.sql (${generated.split("\n").length} lines) from ${SOURCES.length} sources.`
+  `Wrote MEMBERSHIP_LIVE_INSTALL.sql (${generated.split("\n").length} lines) from ${SOURCES.length} sources.`
 );

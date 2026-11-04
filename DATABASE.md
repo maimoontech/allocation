@@ -7,23 +7,46 @@ MySQL.
 Connection implementation:
 - `backend/src/db/pool.ts`
 
-Schema source:
-- `database/mpss_mysql.sql`
+## Migration scripts
 
-Incremental changes:
-- `database/add_party_contact_numbers.sql`
-- `database/add_party_its_no.sql`
-- `database/add_venue_contact_fields.sql`
-- `database/add_venue_location_fields.sql`
-- **`database/membership_live_update.sql`** — what to run against a live database. One
-  self-contained script: a pre-flight that aborts unless this is the MPSS schema, the 20
-  tables, the seed, and BEFORE/AFTER row counts of every existing table. Idempotent, so an
-  interrupted run can be repeated. **Generated** by `node database/build_live_update.mjs`
-  from the two files below, which stay the maintained sources; a test fails if it drifts.
-- `database/membership_schema.sql` — the membership module's 20 tables
-- `database/membership_seed.sql` — lookup values for the module
+**`database/README.md` is the index — it answers "which file do I run?" in its first line.**
+Read it before touching a live database.
+
+Against a live database there is **exactly one file to run**:
+
+```bash
+mysql -h <host> -u <user> -p <database> < database/MEMBERSHIP_LIVE_INSTALL.sql > run.log 2>&1
+```
+
+It is self-contained — a pre-flight that aborts unless this is the MPSS schema, the 20 tables,
+the seed, and BEFORE/AFTER row counts of every pre-existing table. Idempotent, so an
+interrupted run can be repeated. Use the `mysql` CLI, not a driver: it contains `DELIMITER`.
+
+Everything else in `database/` is a source, history, or the rollback:
+
+- `database/sources/membership_schema.sql` — the 20 tables
+- `database/sources/membership_seed.sql` — the ten lookup lists
+
+  These two are the maintained source of truth. `MEMBERSHIP_LIVE_INSTALL.sql` is **generated**
+  from them by `node database/build_live_update.mjs`; it records each source's SHA-256 and a
+  test fails if they drift. Note that `--check` verifies *freshness, not correctness*: it
+  compares the generated file against these sources, so two equally stale sources still report
+  "current". Diffing against a real database is the only check with authority.
+
+- `database/already-applied/` — changes applied to live long ago, kept as a record. Not
+  pending work, and re-running them now fails with error 1060 (`ADD COLUMN` has no
+  `IF NOT EXISTS` in MySQL). Includes the superseded
+  `membership_schema_update_photo_approval.sql`, the standalone `ALTER` whose existence is why
+  the dev database and the migration source drifted apart.
+
 - `database/membership_rollback.sql` — drops the 20 tables and the module's refresh tokens.
   Destructive, and the frontend must be rolled back first or at the same time.
+
+- `database/mpss_mysql.sql` — the original pre-membership schema, for reference. **Never run
+  it against live:** it resets the admin password, and it declares the database as
+  `utf8mb4_unicode_ci` when every live table is actually `utf8mb4_general_ci`.
+
+- `database/local-dev/` — builds a local database from nothing. Local machines only.
 
 ## Core Tables
 
@@ -68,7 +91,7 @@ Lookups — all ten are seeded with reviewed values (`is_draft = 0`):
 - `titles` (2), `sharafs` (3), `halqas` (2), `mozes` (5), `places` (5) — the domain lists.
   These shipped **empty** originally, because inventing Dawoodi Bohra religious and
   organisational terms would have been worse than an empty list. They have since been
-  supplied and reviewed, and `database/membership_seed.sql` now carries them.
+  supplied and reviewed, and `database/sources/membership_seed.sql` now carries them.
 - `sanads` (10), `marital_statuses` (4), `tamreen_frequencies` (6), `skills` (45) — proposed
   and accepted unchanged.
 - `tamreen_methods` (4) — `Self`, `With Party`, `With an Ustad`, `SatulIman`. The seven

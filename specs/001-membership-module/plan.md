@@ -223,8 +223,8 @@ Not blockers for `/sp.tasks`, but each changes the work if you decide differentl
 | [data-model.md](./data-model.md) | 1 — 20 new tables, 0 altered |
 | [contracts/member-api.openapi.yaml](./contracts/member-api.openapi.yaml) | 1 — 10 operations |
 | [quickstart.md](./quickstart.md) | 1 — apply, verify, demonstrate, roll back, release |
-| [../../database/membership_schema.sql](../../database/membership_schema.sql) | 1 — **not executed** |
-| [../../database/membership_seed.sql](../../database/membership_seed.sql) | 1 — **not executed** |
+| [../../database/sources/membership_schema.sql](../../database/sources/membership_schema.sql) | 1 — **not executed** |
+| [../../database/sources/membership_seed.sql](../../database/sources/membership_seed.sql) | 1 — **not executed** |
 | [../../database/membership_rollback.sql](../../database/membership_rollback.sql) | 1 — **not executed** |
 
 **Next**: `/sp.tasks` for the dependency-ordered task list. No application code, schema or

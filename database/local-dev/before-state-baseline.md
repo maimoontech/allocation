@@ -7,10 +7,10 @@ state of the local production copy **before** the Membership Module migration is
 FR-106 ("no existing record altered or removed") and SC-013 can be verified rather than
 asserted.
 
-Re-run the query at the bottom after applying `membership_schema.sql` and
-`membership_seed.sql`. **Every number below must be identical.** The migration is
-additive only — it contains no `ALTER`, `DROP`, `UPDATE` or `DELETE` against an existing
-table — so any difference means something else ran.
+Re-run the query at the bottom after applying `database/MEMBERSHIP_LIVE_INSTALL.sql` (or its
+two sources, `database/sources/membership_schema.sql` and `membership_seed.sql`, by hand).
+**Every number below must be identical.** The migration never writes to one of the 13
+pre-existing tables — so any difference means something else ran.
 
 ---
 

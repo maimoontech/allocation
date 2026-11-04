@@ -110,8 +110,8 @@ Re-run this whole set after every step in §3 and §5.
 cd database   # from the repository root
 
 # Through the mysql CLI — the scripts use DELIMITER, which drivers do not parse
-mysql -h "$DB_HOST" -u "$DB_USER" -p "$DB_NAME" < membership_schema.sql
-mysql -h "$DB_HOST" -u "$DB_USER" -p "$DB_NAME" < membership_seed.sql
+mysql -h "$DB_HOST" -u "$DB_USER" -p "$DB_NAME" < sources/membership_schema.sql
+mysql -h "$DB_HOST" -u "$DB_USER" -p "$DB_NAME" < sources/membership_seed.sql
 ```
 
 Both are idempotent, so a partial run can be repeated.
@@ -406,10 +406,10 @@ The frontend needs no equivalent step: `frontend/dist` is gitignored and Vercel 
 
 1. Take a fresh production backup and **verify it restores**. An unverified backup is not a backup.
 2. Record the §1 row counts from production.
-3. Apply **`database/membership_live_update.sql`** during low usage — one script, both parts, with the verification built in:
+3. Apply **`database/MEMBERSHIP_LIVE_INSTALL.sql`** during low usage — one script, both parts, with the verification built in:
 
    ```bash
-   mysql -h <host> -u <user> -p <database> < database/membership_live_update.sql > run.log 2>&1
+   mysql -h <host> -u <user> -p <database> < database/MEMBERSHIP_LIVE_INSTALL.sql > run.log 2>&1
    ```
 
    Keep `run.log`. It contains a BEFORE and an AFTER table of every existing table's row
@@ -417,9 +417,11 @@ The frontend needs no equivalent step: `frontend/dist` is gitignored and Vercel 
    `zones` exist, so it cannot be pointed at the wrong database by mistake, and it is
    idempotent, so an interrupted run can simply be repeated.
 
-   (`membership_schema.sql` and `membership_seed.sql` remain the maintained sources. The
-   combined file is generated from them by `node database/build_live_update.mjs`, and a test
-   fails if it is ever out of date.)
+   (`database/sources/membership_schema.sql` and `database/sources/membership_seed.sql`
+   remain the maintained sources. The combined file is generated from them by
+   `node database/build_live_update.mjs`, and a test fails if it is ever out of date. Note
+   that `--check` verifies freshness, not correctness: it compares the generated file against
+   those two sources, so sources that are both stale still report "current".)
 4. Re-run the §1 counts — identical.
 5. Deploy backend, then frontend. The backend is backward compatible, so the order is not critical, but this way the API is ready before any UI calls it. (On the way *back*, the order does matter — see §8.)
 6. **Immediately smoke-test Party login on production**, plus one Admin, Zonal Head and Coordinator sign-in. This is the regression that matters most and it takes two minutes.
