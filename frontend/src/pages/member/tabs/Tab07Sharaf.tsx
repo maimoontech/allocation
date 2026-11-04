@@ -1,15 +1,13 @@
 import { RepeatableRows } from "../../../components/ui/RepeatableRows";
 import { Select } from "../../../components/ui/Select";
-import { EMPTY_LOOKUP_NOTE, lookupOptions, yearOptions } from "./shared";
+import {
+  EMPTY_LOOKUP_NOTE,
+  PROFILE_HIJRI_YEAR_MIN,
+  lookupOptions,
+  yearOptions
+} from "./shared";
 import type { TabProps } from "./shared";
 import type { SharafEntry } from "../../../features/member/memberApi";
-
-/**
- * FR-068. The same window as Tab 2's years, for consistency across the form — the server
- * applies the same bounds.
- */
-const YEAR_MIN = 1950;
-const YEAR_MAX = 2026;
 
 /**
  * Tab 7 — Sharaf.
@@ -23,10 +21,13 @@ const YEAR_MAX = 2026;
 export function Tab07Sharaf({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const sharafs = value.sharafs ?? [];
 
+  // Hijri, and the ceiling comes from the server so the list never goes stale (FR-068).
+  const years = yearOptions(PROFILE_HIJRI_YEAR_MIN, lookups.current_hijri_year);
+
   return (
     <div className="space-y-4">
       <div className="text-sm text-textMuted">
-        Add one entry for each Sharaf you have received, with the year.
+        Add one entry for each Sharaf you have received, with the Hijri year.
       </div>
 
       <RepeatableRows<SharafEntry>
@@ -54,10 +55,10 @@ export function Tab07Sharaf({ value, lookups, errorFor, onChange, disabled }: Ta
               disabled={disabled}
             />
             <Select
-              label="Year"
+              label="Year (AH)"
               value={row.sharaf_year === 0 ? "" : String(row.sharaf_year)}
               onChange={(e) => update({ ...row, sharaf_year: Number(e.target.value || 0) })}
-              options={yearOptions(YEAR_MIN, YEAR_MAX)}
+              options={years}
               error={errorFor(`sharafs[${index}].sharaf_year`)}
               disabled={disabled}
             />

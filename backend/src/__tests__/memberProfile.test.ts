@@ -343,9 +343,24 @@ describe("member profile", () => {
       expect(errorFields(res)).toContain("occupation_since_year");
     });
 
-    it("rejects a prefix year outside 1950-2026", async () => {
-      expect((await putProfile(token, { prefix_year: 1949 })).status).toBe(400);
-      expect((await putProfile(token, { prefix_year: 2027 })).status).toBe(400);
+    /**
+     * The window is Hijri: 1401 AH to the current Hijri year, computed per request so it
+     * rolls over on its own. The ceiling is read from the same helper the route uses rather
+     * than written as a literal, which would expire silently at the next Hijri new year.
+     *
+     * A Gregorian year is the case worth stating outright. It is the mistake this field had
+     * for real — 1950-2026 accepted 2006 CE and a Hijri year alike, so the wrong calendar
+     * stored without complaint.
+     */
+    it("rejects a prefix year outside 1401 AH to the current Hijri year", async () => {
+      const current = currentHijriYear();
+
+      expect((await putProfile(token, { prefix_year: 1400 })).status).toBe(400);
+      expect((await putProfile(token, { prefix_year: current + 1 })).status).toBe(400);
+      expect((await putProfile(token, { prefix_year: 2006 })).status).toBe(400);
+
+      expect((await putProfile(token, { prefix_year: 1401 })).status).toBe(200);
+      expect((await putProfile(token, { prefix_year: current })).status).toBe(200);
     });
 
     // FR-029: nothing is written when validation fails.
@@ -468,40 +483,116 @@ describe("member profile", () => {
   });
 
   // -------------------------------------------------------------------------
+  /**
+   * The same Hijri window applies to all five year fields, not just the prefix year.
+   *
+   * A Gregorian value is the probe in every case: it is what these fields used to accept, so
+   * a tab left behind in a future edit fails here rather than silently storing 2020 CE
+   * alongside 1441 AH in the same column.
+   */
+  describe("the Hijri year window (all five fields)", () => {
+    it("rejects a Gregorian year in every field that moved to Hijri", async () => {
+      const gregorian = 2020;
+
+      expect((await putProfile(token, { prefix_year: gregorian })).status).toBe(400);
+      expect((await putProfile(token, { khidmat_since_year: gregorian })).status).toBe(400);
+      expect(
+        (await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: gregorian }] }))
+          .status
+      ).toBe(400);
+      expect(
+        (
+          await putProfile(token, {
+            sharafs: [{ sharaf_id: seeded.sharafId, sharaf_year: gregorian }]
+          })
+        ).status
+      ).toBe(400);
+      expect(
+        (
+          await putProfile(token, {
+            places_visited: [
+              { place_id: seeded.placeA, times_count: 1, years: [gregorian] }
+            ]
+          })
+        ).status
+      ).toBe(400);
+    });
+
+    it("accepts the current Hijri year in every one of them", async () => {
+      const current = currentHijriYear();
+
+      expect((await putProfile(token, { prefix_year: current })).status).toBe(200);
+      expect((await putProfile(token, { khidmat_since_year: current })).status).toBe(200);
+      expect(
+        (await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: current }] }))
+          .status
+      ).toBe(200);
+      expect(
+        (
+          await putProfile(token, {
+            sharafs: [{ sharaf_id: seeded.sharafId, sharaf_year: current }]
+          })
+        ).status
+      ).toBe(200);
+      expect(
+        (
+          await putProfile(token, {
+            places_visited: [{ place_id: seeded.placeA, times_count: 1, years: [current] }]
+          })
+        ).status
+      ).toBe(200);
+    });
+
+    /**
+     * khidmat_since_year used to be checked against the member's GREGORIAN year of birth.
+     * Now that it is Hijri, 1447 AH is numerically less than a 2006 CE birth year, so that
+     * check would reject every valid value. It was moved off that comparison deliberately,
+     * and this pins it — the failure would otherwise look like an unrelated birth-year rule.
+     */
+    it("does not compare the Hijri khidmat year against a Gregorian year of birth", async () => {
+      await putProfile(token, { dob_gregorian: "2006-01-01" });
+
+      const res = await putProfile(token, { khidmat_since_year: 1447 });
+      expect(res.status).toBe(200);
+      expect((await getProfile(token)).body.data.khidmat_since_year).toBe(1447);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   describe("repeatable sections", () => {
     it("saves and returns titles", async () => {
       await putProfile(token, {
         titles: [
-          { title_id: seeded.titleId, title_year: 2012 },
-          { title_id: seeded.titleId, title_year: 2020 }
+          { title_id: seeded.titleId, title_year: 1432 },
+          { title_id: seeded.titleId, title_year: 1440 }
         ]
       });
 
       const read = await getProfile(token);
       expect(read.body.data.titles).toEqual([
-        { title_id: seeded.titleId, title_year: 2012 },
-        { title_id: seeded.titleId, title_year: 2020 }
+        { title_id: seeded.titleId, title_year: 1432 },
+        { title_id: seeded.titleId, title_year: 1440 }
       ]);
     });
 
     it("replaces a section in full rather than appending", async () => {
-      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 2012 }] });
-      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 2020 }] });
+      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 1432 }] });
+      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 1440 }] });
 
       const read = await getProfile(token);
       expect(read.body.data.titles).toHaveLength(1);
-      expect(read.body.data.titles[0].title_year).toBe(2020);
+      expect(read.body.data.titles[0].title_year).toBe(1440);
     });
 
     it("leaves a section untouched when its array is omitted", async () => {
-      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 2012 }] });
+      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 1432 }] });
       await putProfile(token, { name: "Unrelated change" });
 
       expect((await getProfile(token)).body.data.titles).toHaveLength(1);
     });
 
     it("clears a section when its array is empty", async () => {
-      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 2012 }] });
+      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 1432 }] });
       await putProfile(token, { titles: [] });
 
       expect((await getProfile(token)).body.data.titles).toEqual([]);
@@ -510,8 +601,8 @@ describe("member profile", () => {
     it("rejects the same title and year listed twice", async () => {
       const res = await putProfile(token, {
         titles: [
-          { title_id: seeded.titleId, title_year: 2012 },
-          { title_id: seeded.titleId, title_year: 2012 }
+          { title_id: seeded.titleId, title_year: 1432 },
+          { title_id: seeded.titleId, title_year: 1432 }
         ]
       });
       expect(res.status).toBe(400);
@@ -526,20 +617,20 @@ describe("member profile", () => {
       it("saves a place with its count and years", async () => {
         await putProfile(token, {
           places_visited: [
-            { place_id: seeded.placeA, times_count: 3, years: [2019, 2022, 2024] }
+            { place_id: seeded.placeA, times_count: 3, years: [1439, 1442, 1444] }
           ]
         });
 
         const read = await getProfile(token);
         expect(read.body.data.places_visited).toEqual([
-          { place_id: seeded.placeA, times_count: 3, years: [2019, 2022, 2024] }
+          { place_id: seeded.placeA, times_count: 3, years: [1439, 1442, 1444] }
         ]);
       });
 
       // FR-073, and the message must name both numbers so the member knows what to fix.
       it("refuses a count that does not match the years listed", async () => {
         const res = await putProfile(token, {
-          places_visited: [{ place_id: seeded.placeA, times_count: 3, years: [2019, 2022] }]
+          places_visited: [{ place_id: seeded.placeA, times_count: 3, years: [1439, 1442] }]
         });
 
         expect(res.status).toBe(400);
@@ -559,8 +650,8 @@ describe("member profile", () => {
       it("refuses the same place listed twice", async () => {
         const res = await putProfile(token, {
           places_visited: [
-            { place_id: seeded.placeA, times_count: 1, years: [2020] },
-            { place_id: seeded.placeA, times_count: 1, years: [2021] }
+            { place_id: seeded.placeA, times_count: 1, years: [1440] },
+            { place_id: seeded.placeA, times_count: 1, years: [1441] }
           ]
         });
         expect(res.status).toBe(400);
@@ -569,7 +660,7 @@ describe("member profile", () => {
 
       it("refuses a repeated year within one place", async () => {
         const res = await putProfile(token, {
-          places_visited: [{ place_id: seeded.placeA, times_count: 2, years: [2020, 2020] }]
+          places_visited: [{ place_id: seeded.placeA, times_count: 2, years: [1440, 1440] }]
         });
         expect(res.status).toBe(400);
       });
@@ -577,8 +668,8 @@ describe("member profile", () => {
       it("accepts several different places", async () => {
         const res = await putProfile(token, {
           places_visited: [
-            { place_id: seeded.placeA, times_count: 1, years: [2020] },
-            { place_id: seeded.placeB, times_count: 2, years: [2021, 2022] }
+            { place_id: seeded.placeA, times_count: 1, years: [1440] },
+            { place_id: seeded.placeB, times_count: 2, years: [1441, 1442] }
           ]
         });
         expect(res.status).toBe(200);
@@ -663,16 +754,16 @@ describe("member profile", () => {
     // FR-030: the save is one transaction, so a late failure must not leave earlier
     // sections written.
     it("writes no section when a later one fails validation", async () => {
-      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 2012 }] });
+      await putProfile(token, { titles: [{ title_id: seeded.titleId, title_year: 1432 }] });
 
       const res = await putProfile(token, {
-        titles: [{ title_id: seeded.titleId, title_year: 2020 }],
-        places_visited: [{ place_id: seeded.placeA, times_count: 5, years: [2020] }]
+        titles: [{ title_id: seeded.titleId, title_year: 1440 }],
+        places_visited: [{ place_id: seeded.placeA, times_count: 5, years: [1440] }]
       });
 
       expect(res.status).toBe(400);
       // The titles section still holds the ORIGINAL year.
-      expect((await getProfile(token)).body.data.titles[0].title_year).toBe(2012);
+      expect((await getProfile(token)).body.data.titles[0].title_year).toBe(1432);
     });
   });
 

@@ -1,12 +1,14 @@
 import { RepeatableRows } from "../../../components/ui/RepeatableRows";
 import { Select } from "../../../components/ui/Select";
-import { EMPTY_LOOKUP_NOTE, lookupOptions, toNullableId, yearOptions } from "./shared";
+import {
+  EMPTY_LOOKUP_NOTE,
+  PROFILE_HIJRI_YEAR_MIN,
+  lookupOptions,
+  toNullableId,
+  yearOptions
+} from "./shared";
 import type { TabProps } from "./shared";
 import type { TitleEntry } from "../../../features/member/memberApi";
-
-/** FR-044, FR-046. A fixed window named in the requirement, not a rolling one. */
-const YEAR_MIN = 1950;
-const YEAR_MAX = 2026;
 
 /**
  * Tab 2 — Title and Prefix.
@@ -23,6 +25,9 @@ const YEAR_MAX = 2026;
 export function Tab02TitlePrefix({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const prefix = value.first_prefix;
   const hasPrefix = prefix !== null && prefix !== "" && prefix !== "None";
+
+  // Hijri, and the ceiling comes from the server so the list never goes stale (FR-044, FR-046).
+  const years = yearOptions(PROFILE_HIJRI_YEAR_MIN, lookups.current_hijri_year);
 
   const titles = value.titles ?? [];
 
@@ -49,10 +54,10 @@ export function Tab02TitlePrefix({ value, lookups, errorFor, onChange, disabled 
             </div>
 
             <Select
-              label="Prefix Year"
+              label="Prefix Year (AH)"
               value={value.prefix_year == null ? "" : String(value.prefix_year)}
               onChange={(e) => onChange("prefix_year", toNullableId(e.target.value))}
-              options={yearOptions(YEAR_MIN, YEAR_MAX)}
+              options={years}
               error={errorFor("prefix_year")}
               disabled={disabled}
             />
@@ -93,10 +98,10 @@ export function Tab02TitlePrefix({ value, lookups, errorFor, onChange, disabled 
                 disabled={disabled}
               />
               <Select
-                label="Title Year"
+                label="Title Year (AH)"
                 value={row.title_year === 0 ? "" : String(row.title_year)}
                 onChange={(e) => update({ ...row, title_year: Number(e.target.value || 0) })}
-                options={yearOptions(YEAR_MIN, YEAR_MAX)}
+                options={years}
                 error={errorFor(`titles[${index}].title_year`)}
                 disabled={disabled}
               />

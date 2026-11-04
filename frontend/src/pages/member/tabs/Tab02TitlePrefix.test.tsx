@@ -2,7 +2,9 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { Tab02TitlePrefix } from "./Tab02TitlePrefix";
+import { Tab07Sharaf } from "./Tab07Sharaf";
 import { Tab08PlacesVisited } from "./Tab08PlacesVisited";
+import { Tab12Khidmat } from "./Tab12Khidmat";
 import { Tab09Ashara } from "./Tab09Ashara";
 import type { TabProps } from "./shared";
 import type { MemberLookups, MemberProfile } from "../../../features/member/memberApi";
@@ -177,8 +179,8 @@ describe("the repeatable row editor (FR-046)", () => {
     expect(state.value.titles).toEqual([{ title_id: 0, title_year: 0 }]);
 
     fireEvent.change(screen.getByLabelText(/^Title$/), { target: { value: "12" } });
-    fireEvent.change(screen.getByLabelText(/^Title Year/), { target: { value: "1995" } });
-    expect(state.value.titles).toEqual([{ title_id: 12, title_year: 1995 }]);
+    fireEvent.change(screen.getByLabelText(/^Title Year/), { target: { value: "1425" } });
+    expect(state.value.titles).toEqual([{ title_id: 12, title_year: 1425 }]);
 
     fireEvent.click(screen.getByRole("button", { name: /Remove title 1/i }));
     expect(state.value.titles).toEqual([]);
@@ -188,24 +190,24 @@ describe("the repeatable row editor (FR-046)", () => {
     const state = renderTab(Tab02TitlePrefix, {
       first_prefix: "Sheikh",
       titles: [
-        { title_id: 11, title_year: 1990 },
-        { title_id: 12, title_year: 2000 },
-        { title_id: 11, title_year: 2010 }
+        { title_id: 11, title_year: 1420 },
+        { title_id: 12, title_year: 1430 },
+        { title_id: 11, title_year: 1440 }
       ]
     });
 
     fireEvent.click(screen.getByRole("button", { name: /Remove title 2/i }));
 
     expect(state.value.titles).toEqual([
-      { title_id: 11, title_year: 1990 },
-      { title_id: 11, title_year: 2010 }
+      { title_id: 11, title_year: 1420 },
+      { title_id: 11, title_year: 1440 }
     ]);
   });
 
   it("marks draft lookup values as needing review (FR-094)", () => {
     renderTab(Tab02TitlePrefix, {
       first_prefix: "Sheikh",
-      titles: [{ title_id: 11, title_year: 1990 }]
+      titles: [{ title_id: 11, title_year: 1420 }]
     });
 
     expect(screen.getByRole("option", { name: /Sheikh ul Jamea.*DRAFT/ })).toBeInTheDocument();
@@ -215,7 +217,7 @@ describe("the repeatable row editor (FR-046)", () => {
 describe("Tab 8 — places visited (FR-071, FR-073)", () => {
   it("warns as soon as the count and the years disagree, and offers the correction", () => {
     const state = renderTab(Tab08PlacesVisited, {
-      places_visited: [{ place_id: 41, times_count: 3, years: [2019] }]
+      places_visited: [{ place_id: 41, times_count: 3, years: [1439] }]
     });
 
     expect(screen.getByText(/Number of Times is 3 but 1 year is listed/i)).toBeInTheDocument();
@@ -231,29 +233,29 @@ describe("Tab 8 — places visited (FR-071, FR-073)", () => {
       places_visited: [{ place_id: 41, times_count: 0, years: [] }]
     });
 
-    fireEvent.change(screen.getByLabelText("Add a year"), { target: { value: "2020" } });
-    fireEvent.change(screen.getByLabelText("Add a year"), { target: { value: "2015" } });
-    expect(state.value.places_visited[0].years).toEqual([2020, 2015]);
+    fireEvent.change(screen.getByLabelText("Add a year"), { target: { value: "1440" } });
+    fireEvent.change(screen.getByLabelText("Add a year"), { target: { value: "1435" } });
+    expect(state.value.places_visited[0].years).toEqual([1440, 1435]);
 
     // Displayed in order even though they were not entered that way.
     const chips = screen.getAllByRole("button", { name: /^Remove year/ });
     expect(chips.map((c) => c.getAttribute("aria-label"))).toEqual([
-      "Remove year 2015",
-      "Remove year 2020"
+      "Remove year 1435",
+      "Remove year 1440"
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove year 2015" }));
-    expect(state.value.places_visited[0].years).toEqual([2020]);
+    fireEvent.click(screen.getByRole("button", { name: "Remove year 1435" }));
+    expect(state.value.places_visited[0].years).toEqual([1440]);
   });
 
   it("does not offer a year already listed against the same place", () => {
     renderTab(Tab08PlacesVisited, {
-      places_visited: [{ place_id: 41, times_count: 1, years: [2020] }]
+      places_visited: [{ place_id: 41, times_count: 1, years: [1440] }]
     });
 
     const adder = screen.getByLabelText("Add a year");
-    expect(within(adder).queryByRole("option", { name: "2020" })).not.toBeInTheDocument();
-    expect(within(adder).getByRole("option", { name: "2019" })).toBeInTheDocument();
+    expect(within(adder).queryByRole("option", { name: "1440" })).not.toBeInTheDocument();
+    expect(within(adder).getByRole("option", { name: "1439" })).toBeInTheDocument();
   });
 
   it("does not offer a place already used by another row (FR-071)", () => {
@@ -314,5 +316,98 @@ describe("Tab 9 — Ashara Mubaraka (FR-075, FR-076)", () => {
     const selects = screen.getAllByLabelText(/^Hijri Year/);
     expect(within(selects[1]).queryByRole("option", { name: "1440" })).not.toBeInTheDocument();
     expect(within(selects[1]).getByRole("option", { name: "1441" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The five year dropdowns are HIJRI, 1401 AH to the current Hijri year.
+ *
+ * They used to offer Gregorian 1950-2026, which is the kind of mistake nothing catches: a
+ * Hijri year sits inside that range as comfortably as a Gregorian one, so the wrong calendar
+ * saved without complaint and only looked wrong years later, to somebody reading a report.
+ *
+ * Each case asserts the ceiling, the floor and the ABSENCE of a Gregorian year. The last of
+ * those is the one that fails loudly if a tab is missed in a future edit — a range check
+ * alone would still pass if someone restored 1950-2026 and the member picked 2020.
+ */
+describe("the Hijri year dropdowns", () => {
+  const CURRENT = 1448; // LOOKUPS.current_hijri_year — the server's value, not the browser's.
+
+  function optionsOf(select: HTMLElement) {
+    return within(select)
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+  }
+
+  const cases: Array<[string, () => HTMLElement]> = [
+    [
+      "Prefix Year",
+      () => {
+        renderTab(Tab02TitlePrefix, { first_prefix: "Sheikh" });
+        return screen.getByLabelText(/^Prefix Year/);
+      }
+    ],
+    [
+      "Title Year",
+      () => {
+        renderTab(Tab02TitlePrefix, {
+          first_prefix: "Sheikh",
+          titles: [{ title_id: 11, title_year: 1420 }]
+        });
+        return screen.getByLabelText(/^Title Year/);
+      }
+    ],
+    [
+      "Sharaf Year",
+      () => {
+        renderTab(Tab07Sharaf, { sharafs: [{ sharaf_id: 21, sharaf_year: 1420 }] });
+        return screen.getByLabelText(/^Year \(AH\)/);
+      }
+    ],
+    [
+      "Place Visited Year",
+      () => {
+        renderTab(Tab08PlacesVisited, {
+          places_visited: [{ place_id: 41, times_count: 0, years: [] }]
+        });
+        return screen.getByLabelText("Add a year");
+      }
+    ],
+    [
+      "Other Sansta Since Year",
+      () => {
+        renderTab(Tab12Khidmat, { khidmat_type: "Sansta" });
+        return screen.getByLabelText(/^Since/);
+      }
+    ]
+  ];
+
+  it.each(cases)("%s runs from the current Hijri year down to 1401", (_label, open) => {
+    const labels = optionsOf(open());
+
+    // [0] is the placeholder; the years descend, newest first.
+    expect(labels[1]).toBe(String(CURRENT));
+    expect(labels[labels.length - 1]).toBe("1401");
+    expect(labels).toHaveLength(CURRENT - 1401 + 2);
+  });
+
+  it.each(cases)("%s offers no Gregorian year", (_label, open) => {
+    const labels = optionsOf(open());
+
+    for (const gregorian of ["1950", "2000", "2020", "2026"]) {
+      expect(labels).not.toContain(gregorian);
+    }
+  });
+
+  /**
+   * The ceiling must come from the lookups response. A browser with a wrong clock would
+   * otherwise offer years the server refuses, and the member would have no way to tell why.
+   */
+  it("takes its ceiling from the server, not the browser clock", () => {
+    renderTab(Tab02TitlePrefix, { first_prefix: "Sheikh" });
+    const labels = optionsOf(screen.getByLabelText(/^Prefix Year/));
+
+    expect(labels).toContain(String(CURRENT));
+    expect(labels).not.toContain(String(CURRENT + 1));
   });
 });

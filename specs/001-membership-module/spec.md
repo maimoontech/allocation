@@ -251,9 +251,9 @@ expected values.
 #### Tab 2 — Title and Prefix
 
 - **FR-043**: Tab 2 MUST display the First Prefix chosen on Tab 1 only when that prefix is not None, and MUST hide it when it is None.
-- **FR-044**: Tab 2 MUST offer a Prefix Year chosen from 1950 through 2026.
+- **FR-044** *(amended 2026-11-04; previously "from 1950 through 2026")*: Tab 2 MUST offer a Prefix Year chosen from 1401 AH through the current Hijri year. The year is **Hijri, not Gregorian**, and the interface MUST say so. The upper bound MUST be computed on the server so the list extends itself each Hijri year and a client clock cannot widen it.
 - **FR-045**: Tab 2 MUST offer Title from a maintained list of titles.
-- **FR-046**: Tab 2 MUST allow a member to hold several Titles, each with its own Title Year chosen from 1950 through 2026, and MUST allow each to be added, corrected and removed independently.
+- **FR-046** *(amended 2026-11-04; previously "from 1950 through 2026")*: Tab 2 MUST allow a member to hold several Titles, each with its own Title Year chosen from 1401 AH through the current Hijri year on the same terms as FR-044, and MUST allow each to be added, corrected and removed independently.
 
 #### Tab 3 — Hizb
 
@@ -290,7 +290,7 @@ expected values.
 #### Tab 7 — Sharaf
 
 - **FR-067**: Tab 7 MUST offer Sharaf from a maintained list of Sharaf values.
-- **FR-068**: Tab 7 MUST allow several Sharaf entries per member, each with its own year.
+- **FR-068** *(amended 2026-11-04)*: Tab 7 MUST allow several Sharaf entries per member, each with its own year, chosen from 1401 AH through the current Hijri year on the same terms as FR-044.
 - **FR-069**: Tab 7 MUST allow each Sharaf entry to be added, corrected and removed independently.
 
 #### Tab 8 — Places Visited
@@ -303,7 +303,7 @@ Tab 8 records the **places a member has visited**, with how many times and in wh
 
 - **FR-070**: Tab 8 MUST offer Place Visited from a maintained list of places, kept entirely separately from the scheduling calendar.
 - **FR-071**: Tab 8 MUST allow several entries per member, each recording one place, a Number of Times visited, and the years concerned; the same place MUST NOT appear twice for one member, so that its count and years form one coherent record.
-- **FR-072**: Tab 8 MUST allow several years to be recorded against a single place, and MUST allow each entry to be added, corrected and removed independently.
+- **FR-072** *(amended 2026-11-04)*: Tab 8 MUST allow several years to be recorded against a single place, each chosen from 1401 AH through the current Hijri year on the same terms as FR-044, and MUST allow each entry to be added, corrected and removed independently.
 - **FR-073**: Tab 8 MUST refuse a save where the Number of Times recorded for a place does not equal the number of years listed against it, naming the place and both counts.
 
 #### Tab 9 — Ashara Mubaraka
@@ -330,7 +330,7 @@ Tab 8 records the **places a member has visited**, with how many times and in wh
 
 - **FR-085**: Tab 12 MUST offer Khidmat Type as a choice of Sansta, Umoor or Both.
 - **FR-086**: Tab 12 MUST request a Sansta Name when Khidmat Type is Sansta or Both, and an Umoor Name when it is Umoor or Both.
-- **FR-087**: Tab 12 MUST capture Designation as free text and a Since year, and MUST reject a year in the future.
+- **FR-087** *(amended 2026-11-04)*: Tab 12 MUST capture Designation as free text and a Since year chosen from 1401 AH through the current Hijri year on the same terms as FR-044, which is what rejects a year in the future. Because this year is Hijri, it MUST NOT be compared against the member's Gregorian year of birth — a valid Hijri year is numerically smaller and that comparison would reject every one of them. Tab 4's `occupation_since_year` stays Gregorian and keeps that check.
 
 #### Photograph handling
 

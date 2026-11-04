@@ -1,5 +1,34 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-04 — Changed: five profile year fields are now Hijri, not Gregorian
+
+Prefix Year, Title Year, Sharaf Year, Place Visited Year and the Other Sansta "Since" year
+offered Gregorian 1950–2026. They are Hijri years. They now run from **1401 AH to the current
+Hijri year**, and each label says `(AH)`.
+
+This was a silent fault, not a visible one: a Hijri year sits inside 1950–2026 as comfortably
+as a Gregorian one, so whichever the member picked was stored without complaint and the column
+could hold both calendars at once.
+
+- The ceiling is `lookups.current_hijri_year`, computed on the server, so the list extends
+  itself at each Hijri new year and a browser with a wrong clock cannot widen it. The old
+  bounds were a hard-coded `2026` and, on two tabs, `new Date().getFullYear()`.
+- The server enforces the same window through one shared `hijriYearError` helper, so the five
+  fields cannot drift apart. It replaces three different rules that had grown up separately:
+  1950–2026 for prefix and title years, and 1900–2100 for sharaf and visit years.
+- **`khidmat_since_year` was removed from the Gregorian birth-year check.** It had been
+  compared against the member's Gregorian year of birth; now that it is Hijri, `1447 < 2006`
+  would have rejected every valid value with a message about their date of birth.
+  `occupation_since_year` is still Gregorian and keeps that check.
+- Tab 9's Ashara year is unchanged — it was always Hijri, with its own floor of 1400 AH that
+  FR-076 names explicitly.
+- `database/convert_profile_years_to_hijri.sql` converts values already stored in the wrong
+  calendar, using the mid-year approximation checked against the application's own converter.
+  Applied to live: `prefix_year` 2006 → 1427 and a `title_year` 2005 → 1426. It is safe to
+  re-run — a converted value is never converted twice — so run it on any other environment.
+- FR-044, FR-046, FR-068, FR-072 and FR-087 amended, each recording its previous wording.
+
+
 ## 2026-11-04 — Fixed: only the first two profile saves in a session were accepted
 
 A member could select their Zone and Party, press Save Profile, and have nothing reach the

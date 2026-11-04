@@ -47,6 +47,19 @@ export function enumOptions(values: readonly string[], placeholder = "Select..."
   return [{ value: "", label: placeholder }, ...values.map((v) => ({ value: v, label: v }))];
 }
 
+/**
+ * The floor for every Hijri year the member picks on Tabs 2, 7, 8 and 12.
+ *
+ * These five fields — Prefix Year, Title Year, Sharaf Year, Place Visited Year and the Other
+ * Sansta "Since" year — are Hijri (AH), not Gregorian. They used to offer 1950–2026 CE, which
+ * read as a plausible year and silently stored the wrong calendar.
+ *
+ * The CEILING is deliberately not here. It is `lookups.current_hijri_year`, computed on the
+ * server, so the list extends itself every Hijri year and a browser with a wrong clock cannot
+ * widen it. Tab 9 keeps its own floor of 1400 AH, which FR-076 names explicitly.
+ */
+export const PROFILE_HIJRI_YEAR_MIN = 1401;
+
 /** Descending year options, newest first, which is what a member usually wants. */
 export function yearOptions(from: number, to: number, placeholder = "Select..."): SelectOption[] {
   const years: SelectOption[] = [{ value: "", label: placeholder }];

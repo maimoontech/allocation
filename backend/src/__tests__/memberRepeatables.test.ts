@@ -92,26 +92,26 @@ describe("Tab 2 titles — add three, edit the middle, delete the first (FR-046)
     // the rows, so it is also the only thing an edit can change.
     const added = await putProfile({
       titles: [
-        { title_id: seeded.titleId, title_year: 1990 },
-        { title_id: seeded.titleId, title_year: 2000 },
-        { title_id: seeded.titleId, title_year: 2010 }
+        { title_id: seeded.titleId, title_year: 1410 },
+        { title_id: seeded.titleId, title_year: 1420 },
+        { title_id: seeded.titleId, title_year: 1430 }
       ]
     });
     expect(added.status).toBe(200);
     expect(await readSection("titles")).toHaveLength(3);
 
-    // Edit the middle row (2000 -> 2005) and delete the first (1990), in one save.
+    // Edit the middle row (1420 -> 1425) and delete the first (1410), in one save.
     const saved = await putProfile({
       titles: [
-        { title_id: seeded.titleId, title_year: 2005 },
-        { title_id: seeded.titleId, title_year: 2010 }
+        { title_id: seeded.titleId, title_year: 1425 },
+        { title_id: seeded.titleId, title_year: 1430 }
       ]
     });
     expect(saved.status).toBe(200);
 
     expect(await readSection("titles")).toEqual([
-      { title_id: seeded.titleId, title_year: 2005 },
-      { title_id: seeded.titleId, title_year: 2010 }
+      { title_id: seeded.titleId, title_year: 1425 },
+      { title_id: seeded.titleId, title_year: 1430 }
     ]);
   });
 });
@@ -120,31 +120,31 @@ describe("Tab 7 sharafs — add three, edit the middle, delete the first (FR-069
   it("leaves exactly the expected rows", async () => {
     await putProfile({
       sharafs: [
-        { sharaf_id: seeded.sharafId, sharaf_year: 1995 },
-        { sharaf_id: seeded.sharafId, sharaf_year: 2005 },
-        { sharaf_id: seeded.sharafId, sharaf_year: 2015 }
+        { sharaf_id: seeded.sharafId, sharaf_year: 1415 },
+        { sharaf_id: seeded.sharafId, sharaf_year: 1425 },
+        { sharaf_id: seeded.sharafId, sharaf_year: 1435 }
       ]
     });
     expect(await readSection("sharafs")).toHaveLength(3);
 
     const saved = await putProfile({
       sharafs: [
-        { sharaf_id: seeded.sharafId, sharaf_year: 2006 },
-        { sharaf_id: seeded.sharafId, sharaf_year: 2015 }
+        { sharaf_id: seeded.sharafId, sharaf_year: 1426 },
+        { sharaf_id: seeded.sharafId, sharaf_year: 1435 }
       ]
     });
     expect(saved.status).toBe(200);
 
     expect(await readSection("sharafs")).toEqual([
-      { sharaf_id: seeded.sharafId, sharaf_year: 2006 },
-      { sharaf_id: seeded.sharafId, sharaf_year: 2015 }
+      { sharaf_id: seeded.sharafId, sharaf_year: 1426 },
+      { sharaf_id: seeded.sharafId, sharaf_year: 1435 }
     ]);
   });
 
   it("does not disturb titles when only sharafs are sent", async () => {
     await putProfile({
-      titles: [{ title_id: seeded.titleId, title_year: 2001 }],
-      sharafs: [{ sharaf_id: seeded.sharafId, sharaf_year: 2002 }]
+      titles: [{ title_id: seeded.titleId, title_year: 1421 }],
+      sharafs: [{ sharaf_id: seeded.sharafId, sharaf_year: 1422 }]
     });
 
     await putProfile({ sharafs: [] });
@@ -164,15 +164,15 @@ describe("Tab 8 places visited — add three, edit the middle, delete the first 
     // plus a different years list.
     await putProfile({
       places_visited: [
-        { place_id: seeded.placeA, times_count: 1, years: [2018] },
-        { place_id: seeded.placeB, times_count: 2, years: [2019, 2020] }
+        { place_id: seeded.placeA, times_count: 1, years: [1438] },
+        { place_id: seeded.placeB, times_count: 2, years: [1439, 1440] }
       ]
     });
     expect(await readSection<Visit>("places_visited")).toHaveLength(2);
 
     // Edit Place B (add a year, and the count with it) and delete Place A.
     const saved = await putProfile({
-      places_visited: [{ place_id: seeded.placeB, times_count: 3, years: [2019, 2020, 2021] }]
+      places_visited: [{ place_id: seeded.placeB, times_count: 3, years: [1439, 1440, 1441] }]
     });
     expect(saved.status).toBe(200);
 
@@ -180,30 +180,30 @@ describe("Tab 8 places visited — add three, edit the middle, delete the first 
     expect(visits).toHaveLength(1);
     expect(visits[0].place_id).toBe(seeded.placeB);
     expect(visits[0].times_count).toBe(3);
-    expect(visits[0].years).toEqual([2019, 2020, 2021]);
+    expect(visits[0].years).toEqual([1439, 1440, 1441]);
   });
 
   it("removes a year from a place without touching the others", async () => {
     await putProfile({
       places_visited: [
-        { place_id: seeded.placeA, times_count: 3, years: [2016, 2017, 2018] },
-        { place_id: seeded.placeB, times_count: 1, years: [2020] }
+        { place_id: seeded.placeA, times_count: 3, years: [1436, 1437, 1438] },
+        { place_id: seeded.placeB, times_count: 1, years: [1440] }
       ]
     });
 
     // Drop the middle year from Place A. Its count must come down with it (FR-073).
     await putProfile({
       places_visited: [
-        { place_id: seeded.placeA, times_count: 2, years: [2016, 2018] },
-        { place_id: seeded.placeB, times_count: 1, years: [2020] }
+        { place_id: seeded.placeA, times_count: 2, years: [1436, 1438] },
+        { place_id: seeded.placeB, times_count: 1, years: [1440] }
       ]
     });
 
     const visits = await readSection<Visit>("places_visited");
     const a = visits.find((v) => v.place_id === seeded.placeA);
     const b = visits.find((v) => v.place_id === seeded.placeB);
-    expect(a?.years).toEqual([2016, 2018]);
-    expect(b?.years).toEqual([2020]);
+    expect(a?.years).toEqual([1436, 1438]);
+    expect(b?.years).toEqual([1440]);
   });
 });
 
@@ -265,7 +265,7 @@ describe("Tab 9 Ashara Mubaraka — add three, edit the middle, delete the first
 describe("FR-073: a count that disagrees with the years listed", () => {
   it("names the place as well as both counts", async () => {
     const res = await putProfile({
-      places_visited: [{ place_id: seeded.placeA, times_count: 4, years: [2019, 2022] }]
+      places_visited: [{ place_id: seeded.placeA, times_count: 4, years: [1439, 1442] }]
     });
 
     expect(res.status).toBe(400);
@@ -280,8 +280,8 @@ describe("FR-073: a count that disagrees with the years listed", () => {
   it("names the right place when a later row is the one at fault", async () => {
     const res = await putProfile({
       places_visited: [
-        { place_id: seeded.placeA, times_count: 1, years: [2018] },
-        { place_id: seeded.placeB, times_count: 5, years: [2019] }
+        { place_id: seeded.placeA, times_count: 1, years: [1438] },
+        { place_id: seeded.placeB, times_count: 5, years: [1439] }
       ]
     });
 
@@ -296,14 +296,14 @@ describe("FR-073: a count that disagrees with the years listed", () => {
     // A good first save, so there is existing state a failed save could corrupt.
     await putProfile({
       name: "Before The Bad Save",
-      places_visited: [{ place_id: seeded.placeA, times_count: 1, years: [2018] }]
+      places_visited: [{ place_id: seeded.placeA, times_count: 1, years: [1438] }]
     });
 
     const res = await putProfile({
       name: "Should Not Be Stored",
       places_visited: [
-        { place_id: seeded.placeA, times_count: 1, years: [2018] },
-        { place_id: seeded.placeB, times_count: 9, years: [2020] }
+        { place_id: seeded.placeA, times_count: 1, years: [1438] },
+        { place_id: seeded.placeB, times_count: 9, years: [1440] }
       ]
     });
     expect(res.status).toBe(400);
@@ -319,7 +319,7 @@ describe("FR-073: a count that disagrees with the years listed", () => {
     // does not fix a typo, save, and only then learn about the mismatch.
     const res = await putProfile({
       email: "not-an-email",
-      places_visited: [{ place_id: seeded.placeA, times_count: 7, years: [2019] }]
+      places_visited: [{ place_id: seeded.placeA, times_count: 7, years: [1439] }]
     });
 
     expect(res.status).toBe(400);
@@ -406,8 +406,8 @@ describe("uniqueness within a section", () => {
   it("refuses the same place listed twice in one save", async () => {
     const res = await putProfile({
       places_visited: [
-        { place_id: seeded.placeA, times_count: 1, years: [2018] },
-        { place_id: seeded.placeA, times_count: 1, years: [2019] }
+        { place_id: seeded.placeA, times_count: 1, years: [1438] },
+        { place_id: seeded.placeA, times_count: 1, years: [1439] }
       ]
     });
     expect(res.status).toBe(400);
@@ -415,18 +415,18 @@ describe("uniqueness within a section", () => {
 
   it("refuses a repeated year within one place, naming the year", async () => {
     const res = await putProfile({
-      places_visited: [{ place_id: seeded.placeA, times_count: 2, years: [2019, 2019] }]
+      places_visited: [{ place_id: seeded.placeA, times_count: 2, years: [1439, 1439] }]
     });
     expect(res.status).toBe(400);
-    expect(errorMessages(res)[0]).toContain("2019");
+    expect(errorMessages(res)[0]).toContain("1439");
   });
 
   it("allows the same year against two different places", async () => {
     // Visiting two places in one year is ordinary; only a repeat within one place is not.
     const res = await putProfile({
       places_visited: [
-        { place_id: seeded.placeA, times_count: 1, years: [2019] },
-        { place_id: seeded.placeB, times_count: 1, years: [2019] }
+        { place_id: seeded.placeA, times_count: 1, years: [1439] },
+        { place_id: seeded.placeB, times_count: 1, years: [1439] }
       ]
     });
     expect(res.status).toBe(200);

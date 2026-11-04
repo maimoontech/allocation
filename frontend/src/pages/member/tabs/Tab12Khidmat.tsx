@@ -1,12 +1,10 @@
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
-import { enumOptions, toNullableId, yearOptions } from "./shared";
+import { PROFILE_HIJRI_YEAR_MIN, enumOptions, toNullableId, yearOptions } from "./shared";
 import type { TabProps } from "./shared";
 
 /** FR-085. */
 const KHIDMAT_TYPES = ["Sansta", "Umoor", "Both"] as const;
-
-const THIS_YEAR = new Date().getFullYear();
 
 /**
  * Tab 12 — Other Sansta Khidmat.
@@ -16,10 +14,11 @@ const THIS_YEAR = new Date().getFullYear();
  * same update, so a value cannot linger out of sight and then be saved against a type that
  * does not want it.
  *
- * `Since` is a YEAR, not a full date (spec assumption 8), matching the Since Year on Tab 4.
+ * `Since` is a YEAR, not a full date (spec assumption 8). It is Hijri (AH), unlike the Since
+ * Year on Tab 4, which is still Gregorian — only the five fields named in the request moved.
  * That assumption is still awaiting sign-off.
  */
-export function Tab12Khidmat({ value, errorFor, onChange, disabled }: TabProps) {
+export function Tab12Khidmat({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const type = value.khidmat_type;
   const showSansta = type === "Sansta" || type === "Both";
   const showUmoor = type === "Umoor" || type === "Both";
@@ -80,10 +79,10 @@ export function Tab12Khidmat({ value, errorFor, onChange, disabled }: TabProps) 
         />
 
         <Select
-          label="Since"
+          label="Since (AH)"
           value={value.khidmat_since_year == null ? "" : String(value.khidmat_since_year)}
           onChange={(e) => onChange("khidmat_since_year", toNullableId(e.target.value))}
-          options={yearOptions(1950, THIS_YEAR)}
+          options={yearOptions(PROFILE_HIJRI_YEAR_MIN, lookups.current_hijri_year)}
           error={errorFor("khidmat_since_year")}
           disabled={disabled}
         />

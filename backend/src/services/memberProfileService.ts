@@ -173,9 +173,30 @@ const COLUMN_TAB: Record<string, number> = {
   khidmat_since_year: 12
 };
 
-const TITLE_YEAR_MIN = 1950;
-const TITLE_YEAR_MAX = 2026;
+/**
+ * The Hijri window for the five profile years the member picks from a dropdown: Prefix Year,
+ * Title Year, Sharaf Year, Place Visited Year and the Other Sansta "Since" year.
+ *
+ * These were Gregorian 1950-2026. A Hijri year fell inside that range as readily as a
+ * Gregorian one, so the wrong calendar was stored without a word of complaint.
+ *
+ * The ceiling is NOT a constant. `currentHijriYear()` is evaluated per request, so the window
+ * rolls over on its own at each Hijri new year and the server never trails the dropdown.
+ *
+ * Tab 9's Ashara year keeps its own floor of 1400 AH, which FR-076 names explicitly.
+ */
+const PROFILE_HIJRI_YEAR_MIN = 1401;
 const HIJRI_YEAR_MIN = 1400;
+
+/** The one message these five fields share, so they cannot drift apart. */
+function hijriYearError(value: unknown): string | null {
+  const max = currentHijriYear();
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < PROFILE_HIJRI_YEAR_MIN || n > max) {
+    return `Year must be between ${PROFILE_HIJRI_YEAR_MIN} and ${max} AH.`;
+  }
+  return null;
+}
 const EARLIEST_BIRTH_YEAR = 1900;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -508,21 +529,21 @@ export async function saveMemberProfile(
     ? Number(String(values.dob_gregorian).slice(0, 4))
     : null;
 
-  for (const yearField of ["occupation_since_year", "khidmat_since_year"] as const) {
-    const year = values[yearField];
-    if (year == null) continue;
-    const n = Number(year);
-    if (n > thisYear) add(yearField, "Year cannot be in the future.");
+  // Only occupation_since_year is Gregorian now. khidmat_since_year became Hijri and MUST
+  // NOT be compared against a Gregorian birth year here: 1447 AH is less than a 2006 CE
+  // birth year, so this check would reject every valid value.
+  if (values.occupation_since_year != null) {
+    const n = Number(values.occupation_since_year);
+    if (n > thisYear) add("occupation_since_year", "Year cannot be in the future.");
     if (birthYear !== null && n < birthYear) {
-      add(yearField, "Year cannot be before your year of birth.");
+      add("occupation_since_year", "Year cannot be before your year of birth.");
     }
   }
 
-  if (values.prefix_year != null) {
-    const n = Number(values.prefix_year);
-    if (n < TITLE_YEAR_MIN || n > TITLE_YEAR_MAX) {
-      add("prefix_year", `Year must be between ${TITLE_YEAR_MIN} and ${TITLE_YEAR_MAX}.`);
-    }
+  for (const field of ["prefix_year", "khidmat_since_year"] as const) {
+    if (values[field] == null) continue;
+    const message = hijriYearError(values[field]);
+    if (message) add(field, message);
   }
 
   // -------------------------------------------------------------------------
@@ -776,12 +797,9 @@ function parseTitles(value: unknown, add: Add): TitleEntry[] | undefined {
       add(`titles[${index}].title_id`, "Select a title.", 2);
       return;
     }
-    if (!Number.isInteger(title_year) || title_year < TITLE_YEAR_MIN || title_year > TITLE_YEAR_MAX) {
-      add(
-        `titles[${index}].title_year`,
-        `Year must be between ${TITLE_YEAR_MIN} and ${TITLE_YEAR_MAX}.`,
-        2
-      );
+    const yearMessage = hijriYearError(title_year);
+    if (yearMessage) {
+      add(`titles[${index}].title_year`, yearMessage, 2);
       return;
     }
     // The same title in different years is legitimate; the same title in the same year is
@@ -810,8 +828,9 @@ function parseSharafs(value: unknown, add: Add): SharafEntry[] | undefined {
       add(`sharafs[${index}].sharaf_id`, "Select a Sharaf.", 7);
       return;
     }
-    if (!Number.isInteger(sharaf_year) || sharaf_year < 1900 || sharaf_year > 2100) {
-      add(`sharafs[${index}].sharaf_year`, "Enter a valid year.", 7);
+    const yearMessage = hijriYearError(sharaf_year);
+    if (yearMessage) {
+      add(`sharafs[${index}].sharaf_year`, yearMessage, 7);
       return;
     }
     const key = `${sharaf_id}:${sharaf_year}`;
@@ -872,8 +891,9 @@ function parseVisits(value: unknown, add: Add): PlaceVisitEntry[] | undefined {
     const years: number[] = [];
     for (const y of yearsRaw) {
       const year = Number(y);
-      if (!Number.isInteger(year) || year < 1900 || year > 2100) {
-        add(`places_visited[${index}].years`, "Enter valid years.", 8);
+      const yearMessage = hijriYearError(year);
+      if (yearMessage) {
+        add(`places_visited[${index}].years`, yearMessage, 8);
         return;
       }
       if (years.includes(year)) {

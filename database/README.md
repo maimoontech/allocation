@@ -116,11 +116,36 @@ walkthrough; `local-dev/dumps/` is git-ignored because it holds real personal da
 
 ---
 
+## `convert_profile_years_to_hijri.sql` — a one-off data fix, already applied to live
+
+Five profile year fields are Hijri (AH): Prefix Year, Title Year, Sharaf Year, Place Visited
+Year and the Other Sansta "Since" year. They were offered as Gregorian 1950–2026 until
+2026-11-04, so anything entered before then is in the wrong calendar.
+
+This converts only values that are unambiguously Gregorian (`>= 1900`), using the standard
+mid-year approximation `FLOOR((g - 622) * 33 / 32)` — checked against the application's own
+converter in `backend/src/utils/hijriDate.ts`. `occupation_since_year` is deliberately **not**
+touched: it is still Gregorian, and the server validates it against the member's Gregorian
+year of birth.
+
+Applied to live on 2026-11-04. It converted two values — `prefix_year` 2006 → 1427 and a
+`title_year` 2005 → 1426 — and the log is kept beside the backup it was taken with.
+
+Unlike the files in `already-applied/`, this one is **safe to re-run**: the `>= 1900` guard
+means a converted value is never converted twice, which is why it stays here rather than
+moving into that folder. Run it against any other environment that predates the change.
+
+There is no rollback — the original cannot be recovered from the converted value — so take a
+backup first. The script prints every row it will change before it changes it.
+
+---
+
 ## Quick reference
 
 | File | Run it? |
 |---|---|
 | `MEMBERSHIP_LIVE_INSTALL.sql` | **Yes — this is the one.** |
+| `convert_profile_years_to_hijri.sql` | Already applied to live. Re-runnable; run it on any other environment. |
 | `sources/*.sql` | No. Edit these, then regenerate. |
 | `already-applied/*.sql` | No. History; would error. |
 | `membership_rollback.sql` | Only to undo, deliberately. Destroys member data. |

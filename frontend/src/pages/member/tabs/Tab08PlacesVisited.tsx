@@ -2,12 +2,14 @@ import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { RepeatableRows } from "../../../components/ui/RepeatableRows";
 import { Select } from "../../../components/ui/Select";
-import { EMPTY_LOOKUP_NOTE, lookupOptions, yearOptions } from "./shared";
+import {
+  EMPTY_LOOKUP_NOTE,
+  PROFILE_HIJRI_YEAR_MIN,
+  lookupOptions,
+  yearOptions
+} from "./shared";
 import type { TabProps } from "./shared";
 import type { PlaceVisitEntry } from "../../../features/member/memberApi";
-
-const YEAR_MIN = 1950;
-const YEAR_MAX = new Date().getFullYear();
 
 /**
  * The years recorded against one place.
@@ -16,28 +18,31 @@ const YEAR_MAX = new Date().getFullYear();
  * nested cards inside a card is unreadable. The select offers only years not already chosen,
  * so the duplicate the server rejects (`2019 is listed twice`) cannot be entered at all.
  *
- * The UI stops at the current year because a visit cannot have happened in the future. The
- * server accepts 1900 to 2100, so this is the stricter of the two on purpose.
+ * Years are Hijri (AH). The list stops at the current Hijri year because a visit cannot have
+ * happened in the future, and that ceiling is passed in from the lookups response rather than
+ * read off the browser clock — a wrong clock must not widen what the server will accept.
  */
 function YearChips({
   years,
+  maxHijriYear,
   onChange,
   error,
   disabled
 }: {
   years: number[];
+  maxHijriYear: number;
   onChange: (years: number[]) => void;
   error?: string;
   disabled?: boolean;
 }) {
   const taken = new Set(years);
-  const available = yearOptions(YEAR_MIN, YEAR_MAX, "Add a year...").filter(
+  const available = yearOptions(PROFILE_HIJRI_YEAR_MIN, maxHijriYear, "Add a year...").filter(
     (option) => option.value === "" || !taken.has(Number(option.value))
   );
 
   return (
     <div>
-      <div className="mb-1 text-sm font-semibold">Years</div>
+      <div className="mb-1 text-sm font-semibold">Years (AH)</div>
 
       {years.length > 0 ? (
         <div className="mb-2 flex flex-wrap gap-2">
@@ -163,6 +168,7 @@ export function Tab08PlacesVisited({ value, lookups, errorFor, onChange, disable
 
               <YearChips
                 years={row.years}
+                maxHijriYear={lookups.current_hijri_year}
                 onChange={(years) => update({ ...row, years })}
                 error={errorFor(`places_visited[${index}].years`)}
                 disabled={disabled}
