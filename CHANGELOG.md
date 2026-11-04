@@ -1,5 +1,37 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-04 — Changed: `database/` reorganised so one file is obviously the one to run
+
+Asked which script to run against live, because the folder held several. It held eleven files,
+exactly one of which should ever reach production — and the four most similar names differed by
+a single word: `membership_live_update.sql`, `membership_schema.sql`, `membership_seed.sql`,
+`membership_rollback.sql`. One installs, one destroys all member data, two are sources that
+should never be run directly. That is a hazard, not a naming preference.
+
+No SQL changed. The script applied to a scratch database still produces a schema identical to
+the working development database — 192 columns, 70 index columns — verified again after the
+move.
+
+- The one file to run is now **`database/MEMBERSHIP_LIVE_INSTALL.sql`**. Uppercase, names the
+  action, and sorts to the top of a directory listing. Its header now opens by saying it is the
+  only file to run and what each other file is for.
+- `database/sources/` holds the two maintained sources, `membership_schema.sql` and
+  `membership_seed.sql`, away from the generated output so they cannot be mistaken for it.
+- `database/already-applied/` holds the four `add_*.sql` scripts and the superseded
+  `membership_schema_update_photo_approval.sql`. These were applied to live long ago — party
+  sign-in by ITS Number depends on them and is live, and all 11 of their columns are present —
+  so they are history, not pending work. Re-running one now fails with error 1060, since
+  `ADD COLUMN` has no `IF NOT EXISTS` in MySQL.
+- **`database/README.md`** is new and answers "which file do I run?" in its first line, then
+  explains every other file and why it is not the one. `DATABASE.md` points at it.
+- `mpss_mysql.sql` stays where it is, now documented as never to be run against live: it resets
+  the admin password and declares a collation the real database does not use.
+
+Moves were made with `git mv`, so history follows the files. Live references were updated —
+generator, guard test, `DATABASE.md`, `quickstart.md`, the local-dev docs, and the markdown
+links in `plan.md` and `tasks.md` that would otherwise have 404'd. Dated CHANGELOG entries and
+PHRs were left alone: they record what was true when written.
+
 ## 2026-11-04 — Changed: the migration script now matches the running schema
 
 Branch `001-membership-module`. Prepares the membership module for its live apply. No

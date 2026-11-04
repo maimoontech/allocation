@@ -436,7 +436,7 @@ requirements above rather than the implementation.
 ## Dependencies
 
 - **Zones, Parties and Mohallahs** must already be populated for Tabs 3 and 9 to be usable. They are.
-- **The authoritative values** for Title, Sharaf, Halqa, Moze and the Tab 8 place list had to be supplied before the module could collect real data, because all five shipped empty. **Satisfied** — supplied via the Member Lists admin screen and now carried in `database/membership_seed.sql`, so a live apply creates them populated and reviewed. See T018 in [tasks.md](./tasks.md).
+- **The authoritative values** for Title, Sharaf, Halqa, Moze and the Tab 8 place list had to be supplied before the module could collect real data, because all five shipped empty. **Satisfied** — supplied via the Member Lists admin screen and now carried in `database/sources/membership_seed.sql`, so a live apply creates them populated and reviewed. See T018 in [tasks.md](./tasks.md).
 - **The roster of people who should become members**, with their ITS Numbers, must be supplied before any member can sign in.
 - **The project's existing Hijri conversion logic** is depended on for the derived Hijri date of birth and the Tab 9 year range. It currently produces a formatted date for display only and does not expose a year on its own; making a Hijri year available is a dependency for FR-076.
 - **A stated retention position** for member personal data, health values and photographs is needed before the module collects real data.

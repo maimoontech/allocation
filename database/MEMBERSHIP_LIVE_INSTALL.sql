@@ -30,11 +30,19 @@
 -- IT REFUSES TO RUN AGAINST THE WRONG DATABASE
 --   The pre-flight aborts with SQLSTATE 45000 unless `parties` and `zones` exist.
 --
+-- THIS IS THE ONLY FILE YOU RUN AGAINST THE LIVE DATABASE
+--   It is self-contained: the schema and the seed are both inside it, in the right
+--   order, with the verification built in. Nothing else in database/ needs running.
+--   The other files are its two sources (database/sources/), changes already applied
+--   to live long ago (database/already-applied/), the original schema baseline
+--   (mpss_mysql.sql — never run that against live, it resets the admin password), and
+--   the rollback. See database/README.md.
+--
 -- HOW TO RUN IT
 --   Through the mysql CLI, NOT a driver: this file contains DELIMITER, which is a
 --   client command that drivers do not parse.
 --
---     mysql -h <host> -u <user> -p <database> < membership_live_update.sql > run.log 2>&1
+--     mysql -h <host> -u <user> -p <database> < MEMBERSHIP_LIVE_INSTALL.sql > run.log 2>&1
 --
 --   Keep run.log. It contains the BEFORE and AFTER tables you need to compare.
 --

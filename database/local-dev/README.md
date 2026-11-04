@@ -115,7 +115,7 @@ Member accounts and what each is for:
 `titles`, `sharafs`, `halqas` and `mozes` are seeded here with labels like
 `LOCAL TEST Title A`, purely so Tabs 2, 7, 9 and 10 can be exercised.
 
-The **production** seed (`database/membership_seed.sql`)
+The **production** seed (`database/sources/membership_seed.sql`)
 leaves those four tables **empty on purpose** — filling them would mean inventing Dawoodi Bohra
 religious and organisational terms and presenting them as real. The labels here say
 `LOCAL TEST` so they can never be mistaken for the genuine article.
@@ -201,8 +201,8 @@ mysql -h 127.0.0.1 -u root -p mpss_prodcopy < prod-backup-YYYYMMDD-HHMMSS.sql
 
 # 3. Apply the membership migration and seed
 cd ..   # from database/local-dev up to database/
-mysql -h 127.0.0.1 -u root -p mpss_prodcopy < membership_schema.sql
-mysql -h 127.0.0.1 -u root -p mpss_prodcopy < membership_seed.sql
+mysql -h 127.0.0.1 -u root -p mpss_prodcopy < sources/membership_schema.sql
+mysql -h 127.0.0.1 -u root -p mpss_prodcopy < sources/membership_seed.sql
 
 # 4. Re-run the row counts. Every existing number must be identical — the migration is
 #    additive only, so any difference means something else ran.
