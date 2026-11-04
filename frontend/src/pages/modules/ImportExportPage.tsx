@@ -14,7 +14,7 @@ type ImportResult = {
 
 type ApiEnvelope<T> = { success: boolean; data: T; message?: string };
 
-type EntityKey = "zones" | "mohallahs" | "parties" | "venues" | "miqaats";
+type EntityKey = "zones" | "mohallahs" | "parties" | "venues" | "miqaats" | "members";
 
 function downloadTextFile(filename: string, text: string, mime: string) {
   const blob = new Blob([text], { type: mime });
@@ -67,10 +67,18 @@ export function ImportExportPage() {
         { value: "mohallahs", label: "Mohallahs" },
         { value: "parties", label: "Parties" },
         { value: "venues", label: "Venues" },
-        { value: "miqaats", label: "Miqaats" }
+        { value: "miqaats", label: "Miqaats" },
+        { value: "members", label: "Member Logins" }
       ] as Array<{ value: EntityKey; label: string }>,
     []
   );
+
+  const hint =
+    entity === "members"
+      ? "Members: a two-column its_no,password file is enough. member_name and is_active are optional. A member who has already changed their own password keeps it."
+      : entity === "miqaats"
+        ? "Miqaats: english_date must be YYYY-MM-DD. Existing rows with the same name and date are updated."
+        : "Zones / Mohallahs / Parties / Venues: password is required for new records; leave blank to keep the existing password unchanged.";
 
   async function fetchCsv(path: string) {
     const res = await fetch(resolveApiUrl(path), {
@@ -202,9 +210,7 @@ export function ImportExportPage() {
             </Button>
           </div>
 
-          <div className="text-sm text-textMuted">
-            For Zones / Mohallahs / Parties: password is required for new records; leave blank to keep existing password unchanged.
-          </div>
+          <div className="text-sm text-textMuted">{hint}</div>
         </div>
       </Card>
 

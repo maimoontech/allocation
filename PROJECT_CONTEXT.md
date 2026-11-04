@@ -12,9 +12,12 @@ The current repository contains a React/Vite frontend and a Node.js/Express/MySQ
 - Zonal Head
 - Party
 - Coordinator
+- Member
 
 ## Main Functional Areas
 
+0. Membership — member sign-in, forced first-login password change, and the twelve-tab member
+   profile. Added on the `001-membership-module` branch; see `specs/001-membership-module/`.
 1. Authentication and password management
 2. Zones
 3. Mohallahs
@@ -43,6 +46,17 @@ Party users can access their own schedule and submit party-side mic/audio rating
 ### Coordinator
 Coordinator users are associated with a venue and can access assigned parties and submit attendance/performance ratings.
 
+### Member
+Members sign in with their ITS Number and a password, and reach exactly one thing: their own
+profile. Accounts are provisioned by an admin from a roster with a temporary password, and the
+first sign-in forces a password change before the profile is reachable. A member's own token
+is the only thing that identifies them to the API — no endpoint takes a member id — so a
+member cannot read or modify another member's data.
+
+The twelve-tab profile is one page and one save: Personal, Title & Prefix, Hizb, Occupation,
+Education/Hifz, Health & Fitness, Sharaf, Places Visited, Ashara Mubaraka, Asbaq, Tamreen and
+Other Sansta Khidmat.
+
 ## Frontend Routes
 
 Defined in `frontend/src/router/AppRoutes.tsx`.
@@ -63,6 +77,9 @@ Important route/page areas include:
 - Coordinator attendance rating
 - Party schedule
 - Party mic rating
+- Member forced password change
+- Member profile (twelve tabs)
+- Admin member accounts
 
 ## Backend API Groups
 
@@ -77,6 +94,9 @@ Mounted under `/api/v1`:
 - `/reports`
 - `/ratings`
 - `/import-export`
+- `/members` — member-owned profile, lookups and photo; plus admin account management on the
+  same base path, registered after the member routers so a member reading their own profile is
+  not caught by the admin role check
 
 Health endpoint: `/health`.
 

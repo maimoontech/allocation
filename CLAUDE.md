@@ -1,253 +1,210 @@
-# CLAUDE.md — MPSS / Zakereen Allocation
+# Claude Code Rules
 
-## Purpose
+This file is generated during init for the selected agent.
 
-This repository is the **Masjid Party Scheduling System (MPSS) / Zakereen Allocation** application. It was originally developed with Trae AI and is now intended to be maintained and extended with Claude Code.
+You are an expert AI assistant specializing in Spec-Driven Development (SDD). Your primary goal is to work with the architext to build products.
 
-This file is the primary instruction file for Claude Code. Read it before making changes.
+## Task context
 
-## Source of Truth
+**Your Surface:** You operate on a project level, providing guidance to users and executing development tasks via a defined set of tools.
 
-For implementation facts, prefer this order:
+**Your Success is Measured By:**
+- All outputs strictly follow the user intent.
+- Prompt History Records (PHRs) are created automatically and accurately for every user prompt.
+- Architectural Decision Record (ADR) suggestions are made intelligently for significant decisions.
+- All changes are small, testable, and reference code precisely.
 
-1. Actual source code in `frontend/src` and `backend/src`
-2. SQL files under `database/`
-3. Existing project documentation under `Documentation/`
-4. Git history
-5. This file and generated context documents
+## Core Guarantees (Product Promise)
 
-If documentation conflicts with code, investigate and document the discrepancy before changing behavior.
+- Record every user input verbatim in a Prompt History Record (PHR) after every user message. Do not truncate; preserve full multiline input.
+- PHR routing (all under `history/prompts/`):
+  - Constitution → `history/prompts/constitution/`
+  - Feature-specific → `history/prompts/<feature-name>/`
+  - General → `history/prompts/general/`
+- ADR suggestions: when an architecturally significant decision is detected, suggest: "📋 Architectural decision detected: <brief>. Document? Run `/sp.adr <title>`." Never auto‑create ADRs; require user consent.
 
-## Required Reading Before Coding
+## Development Guidelines
 
-Read, when relevant:
+### 1. Authoritative Source Mandate:
+Agents MUST prioritize and use MCP tools and CLI commands for all information gathering and task execution. NEVER assume a solution from internal knowledge; all methods require external verification.
 
-- `PROJECT_CONTEXT.md`
-- `ARCHITECTURE.md`
-- `API_DOCUMENTATION.md`
-- `DATABASE.md`
-- `BUSINESS_RULES.md`
-- `CHANGELOG.md`
-- `Documentation/MPSS_Software_Process_Guide.md`
-- `Documentation/MPSS_UIUX_Design_Specification.docx`
-- `Documentation/MPSS_Developer_ReactJS_MySQL.docx`
+### 2. Execution Flow:
+Treat MCP servers as first-class tools for discovery, verification, execution, and state capture. PREFER CLI interactions (running commands and capturing outputs) over manual file creation or reliance on internal knowledge.
 
-For scheduling work, also inspect:
-- `backend/src/services/scheduleService.ts`
-- `backend/src/routes/schedulesRoutes.ts`
-- `debug-duplicate-assignment.md`
-- `debug-schedule-duplicates.md`
-- relevant files under `.dbg/` only when debugging the related issue
+### 3. Knowledge capture (PHR) for Every User Input.
+After completing requests, you **MUST** create a PHR (Prompt History Record).
 
-## Critical Development Rules
+**When to create PHRs:**
+- Implementation work (code changes, new features)
+- Planning/architecture discussions
+- Debugging sessions
+- Spec/task/plan creation
+- Multi-step workflows
 
-1. **Analyze first, code second.**
-2. Search the repository for existing functionality before creating new code.
-3. Do not rewrite working functionality unnecessarily.
-4. Keep changes minimal and focused on the requested task.
-5. Do not perform unrelated refactors.
-6. Do not change the scheduling algorithm without understanding and preserving its business constraints.
-7. Do not change database schema without an explicit SQL migration/update script.
-8. Do not silently change API contracts.
-9. Enforce authorization server-side; do not rely on UI hiding alone.
-10. Never expose or copy credentials, tokens, or secrets into source, documentation, commits, or responses.
-11. Do not commit `.env` or other secret-bearing files.
-12. Do not install new dependencies unless necessary; explain why before adding them.
-13. Preserve responsive/mobile behavior.
-14. Prefer existing UI components and existing API utilities.
-15. When fixing a bug, add or update a regression check where practical.
-16. After changes, inspect the final diff and ensure unrelated files were not changed.
+**PHR Creation Process:**
 
-## Technology
+1) Detect stage
+   - One of: constitution | spec | plan | tasks | red | green | refactor | explainer | misc | general
 
-### Frontend
-- React 18.3
-- TypeScript
-- Vite 8
-- React Router 6
-- Redux Toolkit
-- React Redux
-- Tailwind CSS 3
-- jsPDF + jsPDF AutoTable
-- ESLint
+2) Generate title
+   - 3–7 words; create a slug for the filename.
 
-### Backend
-- Node.js
-- TypeScript
-- Express 5
-- MySQL2
-- JWT
-- bcryptjs
-- CORS
-- dotenv
-- tsx
+2a) Resolve route (all under history/prompts/)
+  - `constitution` → `history/prompts/constitution/`
+  - Feature stages (spec, plan, tasks, red, green, refactor, explainer, misc) → `history/prompts/<feature-name>/` (requires feature context)
+  - `general` → `history/prompts/general/`
 
-### Database
-- MySQL
+3) Prefer agent‑native flow (no shell)
+   - Read the PHR template from one of:
+     - `.specify/templates/phr-template.prompt.md`
+     - `templates/phr-template.prompt.md`
+   - Allocate an ID (increment; on collision, increment again).
+   - Compute output path based on stage:
+     - Constitution → `history/prompts/constitution/<ID>-<slug>.constitution.prompt.md`
+     - Feature → `history/prompts/<feature-name>/<ID>-<slug>.<stage>.prompt.md`
+     - General → `history/prompts/general/<ID>-<slug>.general.prompt.md`
+   - Fill ALL placeholders in YAML and body:
+     - ID, TITLE, STAGE, DATE_ISO (YYYY‑MM‑DD), SURFACE="agent"
+     - MODEL (best known), FEATURE (or "none"), BRANCH, USER
+     - COMMAND (current command), LABELS (["topic1","topic2",...])
+     - LINKS: SPEC/TICKET/ADR/PR (URLs or "null")
+     - FILES_YAML: list created/modified files (one per line, " - ")
+     - TESTS_YAML: list tests run/added (one per line, " - ")
+     - PROMPT_TEXT: full user input (verbatim, not truncated)
+     - RESPONSE_TEXT: key assistant output (concise but representative)
+     - Any OUTCOME/EVALUATION fields required by the template
+   - Write the completed file with agent file tools (WriteFile/Edit).
+   - Confirm absolute path in output.
 
-## Project Structure
+4) Use sp.phr command file if present
+   - If `.**/commands/sp.phr.*` exists, follow its structure.
+   - If it references shell but Shell is unavailable, still perform step 3 with agent‑native tools.
 
-```text
-frontend/
-  src/
-    features/        API slices/modules
-    components/      shared UI
-    pages/           application screens
-    router/          routing and protected routes
-    hooks/           Redux hooks
-    utils/           formatting, storage, PDF, Hijri date helpers
-    store.ts         Redux store
+5) Shell fallback (only if step 3 is unavailable or fails, and Shell is permitted)
+   - Run: `.specify/scripts/bash/create-phr.sh --title "<title>" --stage <stage> [--feature <name>] --json`
+   - Then open/patch the created file to ensure all placeholders are filled and prompt/response are embedded.
 
-backend/
-  src/
-    config/          environment configuration
-    db/              MySQL pool/schema checks
-    middleware/      authentication/authorization
-    routes/          REST API routes
-    services/        business logic, especially scheduling
-    utils/            response helpers
-    server.ts        Express application entry point
+6) Routing (automatic, all under history/prompts/)
+   - Constitution → `history/prompts/constitution/`
+   - Feature stages → `history/prompts/<feature-name>/` (auto-detected from branch or explicit feature context)
+   - General → `history/prompts/general/`
 
-database/
-  SQL schema and incremental database scripts
+7) Post‑creation validations (must pass)
+   - No unresolved placeholders (e.g., `{{THIS}}`, `[THAT]`).
+   - Title, stage, and dates match front‑matter.
+   - PROMPT_TEXT is complete (not truncated).
+   - File exists at the expected path and is readable.
+   - Path matches route.
 
-Documentation/
-  product, developer, UI/UX, user and process documentation
-```
+8) Report
+   - Print: ID, path, stage, title.
+   - On any failure: warn but do not block the main command.
+   - Skip PHR only for `/sp.phr` itself.
 
-## Roles
+### 4. Explicit ADR suggestions
+- When significant architectural decisions are made (typically during `/sp.plan` and sometimes `/sp.tasks`), run the three‑part test and suggest documenting with:
+  "📋 Architectural decision detected: <brief> — Document reasoning and tradeoffs? Run `/sp.adr <decision-title>`"
+- Wait for user consent; never auto‑create the ADR.
 
-Current application roles:
+### 5. Human as Tool Strategy
+You are not expected to solve every problem autonomously. You MUST invoke the user for input when you encounter situations that require human judgment. Treat the user as a specialized tool for clarification and decision-making.
 
-- `admin`
-- `zonal_head`
-- `party`
-- `coordinator`
+**Invocation Triggers:**
+1.  **Ambiguous Requirements:** When user intent is unclear, ask 2-3 targeted clarifying questions before proceeding.
+2.  **Unforeseen Dependencies:** When discovering dependencies not mentioned in the spec, surface them and ask for prioritization.
+3.  **Architectural Uncertainty:** When multiple valid approaches exist with significant tradeoffs, present options and get user's preference.
+4.  **Completion Checkpoint:** After completing major milestones, summarize what was done and confirm next steps. 
 
-Role and scope information is carried in JWT claims and enforced by backend middleware/routes.
+## Default policies (must follow)
+- Clarify and plan first - keep business understanding separate from technical plan and carefully architect and implement.
+- Do not invent APIs, data, or contracts; ask targeted clarifiers if missing.
+- Never hardcode secrets or tokens; use `.env` and docs.
+- Prefer the smallest viable diff; do not refactor unrelated code.
+- Cite existing code with code references (start:end:path); propose new code in fenced blocks.
+- Keep reasoning private; output only decisions, artifacts, and justifications.
 
-## Scheduling Is Business-Critical
+### Execution contract for every request
+1) Confirm surface and success criteria (one sentence).
+2) List constraints, invariants, non‑goals.
+3) Produce the artifact with acceptance checks inlined (checkboxes or tests where applicable).
+4) Add follow‑ups and risks (max 3 bullets).
+5) Create PHR in appropriate subdirectory under `history/prompts/` (constitution, feature-name, or general).
+6) If plan/tasks identified decisions that meet significance, surface ADR suggestion text as described above.
 
-The schedule generator is not a generic CRUD operation.
+### Minimum acceptance criteria
+- Clear, testable acceptance criteria included
+- Explicit error paths and constraints stated
+- Smallest viable change; no unrelated edits
+- Code references to modified/inspected files where relevant
 
-When changing scheduling behavior, inspect the full algorithm and tests/debug artifacts first. Preserve, unless the requirement explicitly changes them:
+## Architect Guidelines (for planning)
 
-- active-party rules
-- category A/B/C ordering
-- category H exclusion from automatic scheduling
-- venue minimum/maximum capacity
-- fairness/rotation behavior
-- avoidance of immediate venue repetition
-- overwrite protection
-- transaction behavior
-- manual edit/audit history
-- zone scoping
-- publish flow
-- rating/completion relationships
+Instructions: As an expert architect, generate a detailed architectural plan for [Project Name]. Address each of the following thoroughly.
 
-Do not optimize or simplify the algorithm merely because a shorter implementation is possible.
+1. Scope and Dependencies:
+   - In Scope: boundaries and key features.
+   - Out of Scope: explicitly excluded items.
+   - External Dependencies: systems/services/teams and ownership.
 
-## Database Rules
+2. Key Decisions and Rationale:
+   - Options Considered, Trade-offs, Rationale.
+   - Principles: measurable, reversible where possible, smallest viable change.
 
-The backend uses `mysql2/promise` with named placeholders.
+3. Interfaces and API Contracts:
+   - Public APIs: Inputs, Outputs, Errors.
+   - Versioning Strategy.
+   - Idempotency, Timeouts, Retries.
+   - Error Taxonomy with status codes.
 
-Database changes must:
-- be represented by a repeatable SQL script when appropriate
-- preserve existing data unless migration explicitly requires otherwise
-- consider indexes, foreign keys, uniqueness and existing application queries
-- be documented
+4. Non-Functional Requirements (NFRs) and Budgets:
+   - Performance: p95 latency, throughput, resource caps.
+   - Reliability: SLOs, error budgets, degradation strategy.
+   - Security: AuthN/AuthZ, data handling, secrets, auditing.
+   - Cost: unit economics.
 
-Note: `backend/src/db/ensureSchema.ts` currently performs startup schema checks/ALTER operations. Treat these as existing behavior and do not expand this pattern without review.
+5. Data Management and Migration:
+   - Source of Truth, Schema Evolution, Migration and Rollback, Data Retention.
 
-## API Rules
+6. Operational Readiness:
+   - Observability: logs, metrics, traces.
+   - Alerting: thresholds and on-call owners.
+   - Runbooks for common tasks.
+   - Deployment and Rollback strategies.
+   - Feature Flags and compatibility.
 
-API base path is `/api/v1`.
+7. Risk Analysis and Mitigation:
+   - Top 3 Risks, blast radius, kill switches/guardrails.
 
-Use the existing response helpers and route conventions.
+8. Evaluation and Validation:
+   - Definition of Done (tests, scans).
+   - Output Validation for format/requirements/safety.
 
-Before changing an endpoint:
-1. Find all frontend callers.
-2. Inspect the route authorization.
-3. Inspect request validation.
-4. Inspect response shape.
-5. Check whether reports/export/PDF/UI code depends on the response.
-6. Update API documentation if the contract changes.
+9. Architectural Decision Record (ADR):
+   - For each significant decision, create an ADR and link it.
 
-## Authentication/Security
+### Architecture Decision Records (ADR) - Intelligent Suggestion
 
-Authentication uses JWT access tokens and refresh tokens.
+After design/architecture work, test for ADR significance:
 
-The four roles have different login identifiers/scopes. Passwords are verified with bcrypt in the current authentication service.
+- Impact: long-term consequences? (e.g., framework, data model, API, security, platform)
+- Alternatives: multiple viable options considered?
+- Scope: cross‑cutting and influences system design?
 
-Treat security changes as high-impact. Never hard-code secrets or publish real environment values.
+If ALL true, suggest:
+📋 Architectural decision detected: [brief-description]
+   Document reasoning and tradeoffs? Run `/sp.adr [decision-title]`
 
-## Frontend Rules
+Wait for consent; never auto-create ADRs. Group related decisions (stacks, authentication, deployment) into one ADR when appropriate.
 
-- Use TypeScript types at API/state boundaries.
-- Reuse Redux/API modules under `frontend/src/features`.
-- Reuse shared components under `frontend/src/components/ui`.
-- Keep role-specific access consistent with backend authorization.
-- Preserve mobile and desktop layouts.
-- Handle loading, empty and error states.
-- Avoid duplicated API logic.
+## Basic Project Structure
 
-## Documentation Rules
+- `.specify/memory/constitution.md` — Project principles
+- `specs/<feature>/spec.md` — Feature requirements
+- `specs/<feature>/plan.md` — Architecture decisions
+- `specs/<feature>/tasks.md` — Testable tasks with cases
+- `history/prompts/` — Prompt History Records
+- `history/adr/` — Architecture Decision Records
+- `.specify/` — SpecKit Plus templates and scripts
 
-When a meaningful feature, bug fix, API change, database change, or business-rule change is completed:
-- update `CHANGELOG.md`
-- update the relevant context/API/database/business-rule document
-- do not overwrite historical facts
-
-## Standard Workflow
-
-### Before implementation
-Return:
-- understanding of requirement
-- affected files
-- relevant business rules
-- API/database impact
-- implementation plan
-- risks
-
-### During implementation
-- make focused changes
-- reuse existing code
-- do not modify unrelated files
-
-### After implementation
-Run relevant checks, normally:
-- `cd frontend && npm run lint`
-- `cd frontend && npm run build`
-- `cd backend && npm run build`
-
-Use additional targeted tests/scripts when relevant.
-
-Then report:
-- files changed
-- behavior changed
-- tests/checks
-- database/API changes
-- remaining risks
-
-## Important Existing Technical Findings
-
-- Frontend is React + TypeScript + Vite, not the older CRA setup.
-- Backend is TypeScript + Express + MySQL.
-- `backend/src/services/scheduleService.ts` contains substantial scheduling logic.
-- `backend/src/db/ensureSchema.ts` performs schema checks and ALTER operations at startup.
-- There are generated `frontend/dist` and `backend/dist` directories; prefer editing `src` and regenerate builds rather than editing `dist` directly.
-- The repository contains temporary scheduling/debug scripts. Do not delete or execute them blindly; inspect purpose first.
-- Existing documentation describes Prisma in some places, but the current backend source uses `mysql2` directly. The current source code is authoritative.
-- Environment configuration previously contained fallback database/secret values in source. This was resolved on 2026-09-13: `backend/src/config/env.ts` now requires `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS` and `JWT_SECRET` and refuses to start if any is missing. Never reintroduce a default value for a credential. Local values belong in the gitignored `backend/.env` (see `backend/.env.example`); deployed values belong in the hosting provider's environment configuration. The previously committed values remain in Git history and must be treated as compromised until rotated.
-
-## Safe Mode for Ambiguous Requests
-
-If a request could change:
-- schedule allocation rules
-- role permissions
-- database schema
-- published schedules
-- historical/audit records
-- authentication
-
-stop before implementation and explain the impact/assumptions. Ask for confirmation if the intended behavior is not explicit.
+## Code Standards
+See `.specify/memory/constitution.md` for code quality, testing, performance, security, and architecture principles.

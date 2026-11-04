@@ -26,3 +26,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .env
+
+# Local database dumps — real personal data, never commit
+database/local-dev/*.sql.bak
+database/local-dev/*-backup-*.sql
+database/local-dev/prod-*.sql
+database/local-dev/dumps/
