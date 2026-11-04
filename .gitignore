@@ -32,3 +32,6 @@ database/local-dev/*.sql.bak
 database/local-dev/*-backup-*.sql
 database/local-dev/prod-*.sql
 database/local-dev/dumps/
+
+# Database backups: production data and password hashes. Never commit.
+database/backups/
