@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Card } from "../../components/ui/Card";
+import { Input } from "../../components/ui/Input";
+import { Select } from "../../components/ui/Select";
+import { Button } from "../../components/ui/Button";
 import { useAppSelector } from "../../hooks/storeHooks";
 import {
   useCreateMemberAccountMutation,
@@ -20,11 +24,6 @@ import {
  *
  * One page for both roles, because they do the same job with the same fields. The server
  * decides what a Zonal Head may see and touch; this page only adjusts its wording.
- *
- * Laid out like a Dynamics 365 entity grid: a command bar, a view selector as the title, a
- * dense grid with a record-count footer, and a quick-create panel that slides in from the
- * right. The Fluent palette lives in `d365` below rather than the shared theme, so no other
- * page changes.
  */
 
 const PAGE_SIZE = 25;
@@ -32,19 +31,10 @@ const PAGE_SIZE = 25;
 const PREFIX_PLACEHOLDER = "None";
 
 const activeFilterOptions = [
-  { value: "all", label: "All member accounts" },
-  { value: "active", label: "Active member accounts" },
-  { value: "inactive", label: "Inactive member accounts" }
+  { value: "all", label: "All accounts" },
+  { value: "active", label: "Active only" },
+  { value: "inactive", label: "Inactive only" }
 ];
-
-/** Fluent 2 tokens, as Tailwind arbitrary values. */
-const d365 = {
-  font: "font-['Segoe_UI','Segoe_UI_Web_(West_European)',-apple-system,system-ui,sans-serif]",
-  focus:
-    "focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#0f6cbd]",
-  field:
-    "w-full rounded-[4px] border border-[#d1d1d1] border-b-[#616161] bg-white px-2.5 py-[5px] text-sm text-[#242424] placeholder:text-[#707070] hover:border-[#c7c7c7] hover:border-b-[#575757] focus:border-b-2 focus:border-b-[#0f6cbd] focus:outline-none"
-};
 
 /**
  * Described rather than re-implemented. The authoritative rule is `validateMemberPassword`
@@ -71,22 +61,6 @@ function initials(member: MemberAccount): string {
     .join("");
 }
 
-/** Dynamics colours an initials avatar from the record, so the same person keeps one colour. */
-const AVATAR_COLOURS = [
-  "bg-[#ebf3fc] text-[#0f6cbd]",
-  "bg-[#f1faf1] text-[#0e700e]",
-  "bg-[#fdf6f3] text-[#bc4b09]",
-  "bg-[#f9f0fc] text-[#8764b8]",
-  "bg-[#e9f5f6] text-[#00666d]",
-  "bg-[#fdf3f4] text-[#a4262c]"
-];
-
-function avatarColour(seed: string) {
-  let hash = 0;
-  for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return AVATAR_COLOURS[hash % AVATAR_COLOURS.length];
-}
-
 function MemberThumb({ member }: { member: MemberAccount }) {
   const { data: blob } = useGetMemberPhotoQuery(member.id, { skip: !member.has_photo });
   const [entry, setEntry] = useState<{ blob: Blob; url: string } | null>(null);
@@ -106,15 +80,13 @@ function MemberThumb({ member }: { member: MemberAccount }) {
       <img
         src={url}
         alt={`${memberFullName(member) || member.its_no} photograph`}
-        className="h-8 w-8 rounded-full object-cover"
+        className="h-10 w-10 rounded-full object-cover"
       />
     );
   }
 
   return (
-    <div
-      className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold ${avatarColour(member.its_no)}`}
-    >
+    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-xs font-semibold text-textMuted">
       {initials(member) || "—"}
     </div>
   );
@@ -124,176 +96,10 @@ function contactNumber(primary: string | null, secondary: string | null) {
   return primary || secondary || "—";
 }
 
-/** A blank value, drawn quieter than real data so filled cells stand out. */
-function Cell({ value }: { value: string | null | undefined }) {
-  return value ? <>{value}</> : <span className="text-[#a0a0a0]">—</span>;
-}
-
-/* ---------- Fluent icons (20px regular), inline so nothing new is installed ---------- */
-
-function Icon({ d, className = "" }: { d: string; className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-      className={`h-4 w-4 shrink-0 fill-current ${className}`}
-    >
-      <path d={d} />
-    </svg>
-  );
-}
-
-const ICON = {
-  add: "M10 2.5a.5.5 0 0 1 .5.5v6.5H17a.5.5 0 0 1 0 1h-6.5V17a.5.5 0 0 1-1 0v-6.5H3a.5.5 0 0 1 0-1h6.5V3a.5.5 0 0 1 .5-.5Z",
-  refresh:
-    "M15.65 4.35A7.5 7.5 0 1 0 17.5 10a.5.5 0 0 0-1 0 6.5 6.5 0 1 1-1.9-4.6H12a.5.5 0 0 0 0 1h3.5a.5.5 0 0 0 .5-.5V2.5a.5.5 0 0 0-1 0v1.85Z",
-  search:
-    "M8.5 3a5.5 5.5 0 0 1 4.23 9.02l4.12 4.13a.5.5 0 0 1-.63.76l-.07-.06-4.13-4.12A5.5 5.5 0 1 1 8.5 3Zm0 1a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z",
-  info: "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm0 6a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0v-4A.5.5 0 0 1 10 9Zm0-2.75a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5Z",
-  error:
-    "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm0 9.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5Zm0-6.5a.5.5 0 0 1 .5.5v4.5a.5.5 0 0 1-1 0V6.5A.5.5 0 0 1 10 6Z",
-  success:
-    "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm3.36 4.15a.5.5 0 0 1 .06.63l-.06.07-4 4a.5.5 0 0 1-.64.06l-.07-.06-2-2a.5.5 0 0 1 .64-.76l.07.06L9 10.79l3.65-3.64a.5.5 0 0 1 .71 0Z",
-  dismiss:
-    "m4.09 4.22.06-.07a.5.5 0 0 1 .63-.06l.07.06L10 9.29l5.15-5.14a.5.5 0 0 1 .63-.06l.07.06c.18.17.2.44.06.63l-.06.07L10.71 10l5.14 5.15c.18.17.2.44.06.63l-.06.07a.5.5 0 0 1-.63.06l-.07-.06L10 10.71l-5.15 5.14a.5.5 0 0 1-.63.06l-.07-.06a.5.5 0 0 1-.06-.63l.06-.07L9.29 10 4.15 4.85a.5.5 0 0 1-.06-.63l.06-.07-.06.07Z",
-  block:
-    "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm5.06 3.65L5.65 15.06A7 7 0 0 0 15.06 5.65ZM10 3a7 7 0 0 0-5.06 11.35l9.41-9.41A6.97 6.97 0 0 0 10 3Z",
-  play: "M7.6 3.2A1 1 0 0 0 6 4v12a1 1 0 0 0 1.6.8l8-6a1 1 0 0 0 0-1.6l-8-6ZM7 4l8 6-8 6V4Z",
-  chevronLeft:
-    "M12.35 15.85a.5.5 0 0 1-.7 0L6.16 10.4a.55.55 0 0 1 0-.78l5.49-5.46a.5.5 0 1 1 .7.7L7.2 10l5.16 5.15c.2.2.2.5 0 .7Z",
-  chevronRight:
-    "M7.65 4.15c.2-.2.5-.2.7 0l5.49 5.46c.21.22.21.57 0 .78l-5.49 5.46a.5.5 0 0 1-.7-.7L12.8 10 7.65 4.85a.5.5 0 0 1 0-.7Z"
-};
-
-/* ---------- Building blocks ---------- */
-
-type CommandProps = {
-  icon: string;
-  children: ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-};
-
-/** A command-bar button: icon and label, no fill until hovered. */
-function Command({ icon, children, onClick, disabled }: CommandProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex h-8 items-center gap-1.5 rounded-[4px] px-2 text-sm text-[#242424] hover:bg-[#f5f5f5] active:bg-[#e0e0e0] disabled:cursor-not-allowed disabled:text-[#bdbdbd] disabled:hover:bg-transparent ${d365.focus}`}
-    >
-      <Icon d={icon} className="text-[#0f6cbd]" />
-      {children}
-    </button>
-  );
-}
-
-type FluentButtonProps = {
-  appearance?: "primary" | "secondary";
-  type?: "button" | "submit";
-  disabled?: boolean;
-  onClick?: () => void;
-  children: ReactNode;
-};
-
-function FluentButton({
-  appearance = "secondary",
-  type = "button",
-  disabled,
-  onClick,
-  children
-}: FluentButtonProps) {
-  const look =
-    appearance === "primary"
-      ? "border-transparent bg-[#0f6cbd] text-white hover:bg-[#115ea3] active:bg-[#0c3b5e]"
-      : "border-[#d1d1d1] bg-white text-[#242424] hover:bg-[#f5f5f5] hover:border-[#c7c7c7] active:bg-[#e0e0e0]";
-
-  return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
-      className={`inline-flex h-8 min-w-[96px] items-center justify-center rounded-[4px] border px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:border-[#e0e0e0] disabled:bg-[#f0f0f0] disabled:text-[#bdbdbd] ${look} ${d365.focus}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-type Intent = "info" | "error" | "success";
-
-const messageBarLook: Record<Intent, { box: string; icon: string; glyph: string }> = {
-  info: { box: "bg-[#f5f5f5] border-[#e0e0e0]", icon: "text-[#616161]", glyph: ICON.info },
-  error: { box: "bg-[#fdf3f4] border-[#eeacb2]", icon: "text-[#c50f1f]", glyph: ICON.error },
-  success: { box: "bg-[#f1faf1] border-[#9fd89f]", icon: "text-[#107c10]", glyph: ICON.success }
-};
-
-/** Fluent message bar: one band, icon first, optional dismiss on the right. */
-function MessageBar({
-  intent,
-  children,
-  onDismiss,
-  role
-}: {
-  intent: Intent;
-  children: ReactNode;
-  onDismiss?: () => void;
-  role?: "alert" | "status";
-}) {
-  const look = messageBarLook[intent];
-  return (
-    <div
-      role={role}
-      className={`flex items-start gap-2 rounded-[4px] border px-3 py-2 text-[13px] leading-5 text-[#242424] ${look.box}`}
-    >
-      <Icon d={look.glyph} className={`mt-0.5 ${look.icon}`} />
-      <div className="min-w-0 flex-1">{children}</div>
-      {onDismiss ? (
-        <button
-          type="button"
-          onClick={onDismiss}
-          className={`-mr-1 rounded-[4px] p-1 text-[#424242] hover:bg-black/5 ${d365.focus}`}
-        >
-          Dismiss
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function Field({
-  label,
-  hint,
-  required,
-  children
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-sm font-semibold text-[#242424]">
-        {label}
-        {required ? (
-          <span aria-hidden="true" className="ml-1 text-[#c50f1f]">
-            *
-          </span>
-        ) : null}
-      </span>
-      {children}
-      {hint ? <span className="mt-1 block text-xs text-[#616161]">{hint}</span> : null}
-    </label>
-  );
-}
-
 const EMPTY_FORM = { its_no: "", member_name: "", password: "" };
 
 /**
- * Creates one account: ITS number, full name, password. Shown as a Dynamics quick-create
- * panel over the grid, so the operator keeps their place in the list.
+ * Creates one account: ITS number, full name, password.
  *
  * The password is shown on request rather than confirmed in a second field. A typo here is
  * expensive — the member cannot sign in, and this page cannot reset a password — so the
@@ -313,14 +119,6 @@ function AddMemberForm({
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [createMember, createState] = useCreateMemberAccountMutation();
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   function set(field: keyof typeof EMPTY_FORM, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -364,112 +162,88 @@ function AddMemberForm({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} aria-hidden="true" />
-      <form
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="quick-create-title"
-        onSubmit={onSubmit}
-        className={`relative flex h-full w-full max-w-[440px] flex-col bg-white shadow-[0_0_8px_rgba(0,0,0,0.12),0_32px_64px_rgba(0,0,0,0.14)] motion-safe:animate-[d365-slide_200ms_cubic-bezier(0.1,0.9,0.2,1)] ${d365.font}`}
-      >
-        <div className="flex items-center justify-between border-b border-[#e0e0e0] px-6 py-4">
-          <h2 id="quick-create-title" className="text-xl font-semibold text-[#242424]">
-            Quick create: Member
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className={`rounded-[4px] p-1.5 text-[#424242] hover:bg-[#f5f5f5] ${d365.focus}`}
-          >
-            <Icon d={ICON.dismiss} />
-          </button>
+    <Card>
+      <form className="space-y-3" onSubmit={onSubmit}>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="text-lg font-semibold">Add member</div>
+          <div className="text-xs text-textMuted">
+            Zone, party and the rest of the profile are filled in by the member.
+          </div>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          <p className="text-[13px] text-[#616161]">
-            Zone, party and the rest of the profile are filled in by the member.
-          </p>
-
-          <Field label="ITS No" hint="6 to 20 digits" required>
-            <input
-              className={d365.field}
-              value={form.its_no}
-              onChange={(e) => set("its_no", e.target.value)}
-              inputMode="numeric"
-              autoComplete="off"
-              placeholder="e.g. 40480241"
-              required
-              autoFocus
-            />
-          </Field>
-
-          <Field label="Full Name" required>
-            <input
-              className={d365.field}
-              value={form.member_name}
-              onChange={(e) => set("member_name", e.target.value)}
-              autoComplete="off"
-              placeholder="First Prefix, Name, Father Name, Surname"
-              maxLength={150}
-              required
-            />
-          </Field>
-
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Input
+            label="ITS No"
+            value={form.its_no}
+            onChange={(e) => set("its_no", e.target.value)}
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="e.g. 40480241"
+            helperText="6 to 20 digits"
+            required
+          />
+          <Input
+            label="Full Name"
+            value={form.member_name}
+            onChange={(e) => set("member_name", e.target.value)}
+            autoComplete="off"
+            placeholder="First Prefix, Name, Father Name, Surname"
+            maxLength={150}
+            required
+          />
           <div>
-            <Field label="Password" hint={PASSWORD_RULE} required>
-              <input
-                className={d365.field}
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) => set("password", e.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </Field>
+            <Input
+              label="Password"
+              type={showPassword ? "text" : "password"}
+              value={form.password}
+              onChange={(e) => set("password", e.target.value)}
+              autoComplete="new-password"
+              helperText={PASSWORD_RULE}
+              required
+            />
             <button
               type="button"
-              className={`mt-1 rounded-[2px] text-xs font-semibold text-[#0f6cbd] hover:underline ${d365.focus}`}
+              className="mt-1 text-xs font-semibold text-primary underline"
               onClick={() => setShowPassword((v) => !v)}
             >
               {showPassword ? "Hide password" : "Show password"}
             </button>
           </div>
+        </div>
 
-          <MessageBar intent="info">
-            The member signs in with this password once and must then set their own. Note it
-            down before saving — it cannot be read back, and this page cannot reset it.
-            {isZonalHead ? (
-              <>
-                {" "}
-                <strong>They will not appear in your list yet.</strong>{" "}
-                A new account has no zone until the member chooses one in their own profile.
-              </>
-            ) : null}
-          </MessageBar>
-
-          {formError ? (
-            <MessageBar intent="error" role="alert">
-              {formError}
-            </MessageBar>
+        <div className="rounded-input border border-border bg-surface p-2 text-xs text-textMuted">
+          The member signs in with this password once and must then set their own. Note it
+          down before saving — it cannot be read back, and this page cannot reset it.
+          {isZonalHead ? (
+            <>
+              {" "}
+              <strong>They will not appear in your list yet.</strong>{" "}
+              A new account has no zone until the member chooses one in their own profile.
+            </>
           ) : null}
         </div>
 
-        <div className="flex gap-2 border-t border-[#e0e0e0] px-6 py-4">
-          <FluentButton appearance="primary" type="submit" disabled={createState.isLoading}>
+        {formError ? (
+          <div
+            role="alert"
+            className="rounded-input border border-danger bg-danger/5 p-2 text-sm text-danger"
+          >
+            {formError}
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={createState.isLoading}>
             {createState.isLoading ? "Creating..." : "Create member"}
-          </FluentButton>
-          <FluentButton onClick={onClose}>Cancel</FluentButton>
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
         </div>
       </form>
-    </div>
+    </Card>
   );
 }
-
-const headerCell =
-  "h-10 border-b border-[#e0e0e0] px-3 text-left text-[13px] font-semibold text-[#424242] whitespace-nowrap";
-const bodyCell = "h-11 px-3 text-sm text-[#242424] whitespace-nowrap";
 
 export function MembersPage() {
   const role = useAppSelector((s) => s.auth.user?.role);
@@ -492,14 +266,12 @@ export function MembersPage() {
     [search, activeFilter, page]
   );
 
-  const { data, isLoading, isFetching, error, refetch } = useGetMemberAccountsQuery(queryArg);
+  const { data, isLoading, isFetching, error } = useGetMemberAccountsQuery(queryArg);
   const [setMemberActive, setActiveState] = useSetMemberActiveMutation();
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const firstRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const lastRow = Math.min(total, page * PAGE_SIZE);
 
   async function onToggle(member: MemberAccount) {
     setActionError(null);
@@ -513,211 +285,16 @@ export function MembersPage() {
   }
 
   return (
-    <div className={`-m-1 overflow-hidden rounded-[4px] bg-[#faf9f8] ${d365.font}`}>
-      <style>{`@keyframes d365-slide { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }`}</style>
-
-      {/* Command bar */}
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-[#e0e0e0] bg-white px-2 py-1">
-        <Command icon={ICON.add} onClick={() => setShowAddForm(true)}>
-          Add member
-        </Command>
-        <Command icon={ICON.refresh} onClick={() => refetch()} disabled={isFetching}>
-          Refresh
-        </Command>
-      </div>
-
-      <div className="space-y-3 p-4">
-        {/* View header: the view selector is the title, the quick find sits opposite */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1">
-            <label htmlFor="members-view" className="sr-only">
-              View
-            </label>
-            <select
-              id="members-view"
-              value={activeFilter}
-              onChange={(e) => {
-                setActiveFilter(e.target.value);
-                setPage(1);
-              }}
-              className={`cursor-pointer appearance-none rounded-[4px] bg-transparent bg-[url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='%23242424' d='M15.85 7.65a.5.5 0 0 1 0 .7l-5.5 5.5a.5.5 0 0 1-.7 0l-5.5-5.5a.5.5 0 1 1 .7-.7L10 12.79l5.15-5.14a.5.5 0 0 1 .7 0Z'/%3E%3C/svg%3E")] bg-[length:16px] bg-[right_6px_center] bg-no-repeat py-1 pl-2 pr-8 text-xl font-semibold text-[#242424] hover:bg-[#f0f0f0] ${d365.focus}`}
-            >
-              {activeFilterOptions.map((o) => (
-                <option key={o.value} value={o.value} className="text-sm font-normal">
-                  {o.label}
-                </option>
-              ))}
-            </select>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-2xl font-bold">Members</div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-textMuted">
+            {isLoading ? "Loading..." : `${total} account${total === 1 ? "" : "s"}`}
           </div>
-
-          <div className="relative w-full sm:w-72">
-            <Icon
-              d={ICON.search}
-              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#616161]"
-            />
-            <input
-              type="search"
-              aria-label="Filter by ITS No or name"
-              placeholder="Filter by ITS No or name"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className={`${d365.field} pl-8`}
-            />
-          </div>
-        </div>
-
-        {/* Kept on screen after the form closes. For a Zonal Head this is the ONLY confirmation
-            the account exists, since a member with no zone yet is outside their list. */}
-        {created.length ? (
-          <MessageBar intent="success" role="status" onDismiss={() => setCreated([])}>
-            <div className="font-semibold">
-              Created {created.length} member{created.length === 1 ? "" : "s"} just now
-            </div>
-            <ul className="mt-0.5 space-y-0.5">
-              {created.map((account) => (
-                <li key={account.id}>
-                  <span className="font-semibold">{account.its_no}</span> {account.member_name}
-                  <span className="text-[#616161]">, must change password at first sign-in</span>
-                </li>
-              ))}
-            </ul>
-          </MessageBar>
-        ) : null}
-
-        <MessageBar intent="info">
-          {isZonalHead
-            ? "This list shows members posted to your zone. A member appears here once they have chosen your zone in their own profile, so an account you have just created is not listed yet."
-            : "Accounts can be added here one at a time, or from a roster under Import/Export."}{" "}
-          The member&apos;s health and other profile answers stay private to them.{" "}
-          {/* Asked twice why these columns were blank. They are blank because the member has
-              not filled them: nothing on this page can set them, so saying where they come
-              from is more use than another dash. */}
-          Zone, Party, WhatsApp and Mobile numbers are entered by the member in their own
-          profile — contact numbers on <strong>Tab 1 Personal</strong>, Zone and Party on{" "}
-          <strong>Tab 3 Hizb</strong>. Each shows a dash until the member saves it, and it
-          cannot be filled in from here.
-        </MessageBar>
-
-        {error ? (
-          <MessageBar intent="error" role="alert">
-            Could not load member accounts.
-          </MessageBar>
-        ) : null}
-
-        {actionError ? (
-          <MessageBar intent="error" role="alert">
-            {actionError}
-          </MessageBar>
-        ) : null}
-
-        {/* Grid */}
-        <div className="overflow-hidden rounded-[4px] border border-[#e0e0e0] bg-white shadow-[0_0_2px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.14)]">
-          {isLoading ? (
-            <div className="px-4 py-10 text-center text-sm text-[#616161]">Loading accounts...</div>
-          ) : items.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-[#616161]">
-              {isZonalHead
-                ? "No members are posted to your zone yet. A member you create appears here after they choose your zone in their profile."
-                : "No member accounts match. Add one above, or upload a roster under Import/Export."}
-            </div>
-          ) : (
-            <div className={`overflow-x-auto transition-opacity ${isFetching ? "opacity-60" : ""}`}>
-              <table className="w-full min-w-[56rem] border-collapse">
-                <thead className="bg-white">
-                  <tr>
-                    <th className={`${headerCell} w-14`}>Picture</th>
-                    <th className={headerCell}>ITS No</th>
-                    <th className={headerCell}>Name</th>
-                    <th className={headerCell}>Zone</th>
-                    <th className={headerCell}>Party</th>
-                    <th className={headerCell}>WhatsApp No.</th>
-                    <th className={headerCell}>Mobile No.</th>
-                    <th className={`${headerCell} text-right`}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((member) => (
-                    <tr
-                      key={member.id}
-                      className={`border-b border-[#f0f0f0] last:border-0 hover:bg-[#f5f5f5] ${
-                        member.is_active ? "" : "text-[#707070]"
-                      }`}
-                    >
-                      <td className={bodyCell}>
-                        <MemberThumb member={member} />
-                      </td>
-                      <td className={`${bodyCell} font-semibold text-[#0f6cbd] tabular-nums`}>
-                        {member.its_no}
-                      </td>
-                      <td className={bodyCell}>
-                        {memberFullName(member) || member.member_name || "—"}
-                      </td>
-                      <td className={bodyCell}>
-                        <Cell value={member.zone_name} />
-                      </td>
-                      <td className={bodyCell}>
-                        <Cell value={member.party_name} />
-                      </td>
-                      <td className={`${bodyCell} tabular-nums`}>
-                        {contactNumber(member.whatsapp_no_1, member.whatsapp_no_2)}
-                      </td>
-                      <td className={`${bodyCell} tabular-nums`}>
-                        {contactNumber(member.mobile_no_1, member.mobile_no_2)}
-                      </td>
-                      <td className={`${bodyCell} text-right`}>
-                        <button
-                          type="button"
-                          disabled={setActiveState.isLoading}
-                          onClick={() => onToggle(member)}
-                          className={`inline-flex h-7 items-center gap-1.5 rounded-[4px] px-2 text-[13px] font-semibold hover:bg-[#ebebeb] disabled:cursor-not-allowed disabled:text-[#bdbdbd] ${
-                            member.is_active ? "text-[#c50f1f]" : "text-[#0f6cbd]"
-                          } ${d365.focus}`}
-                        >
-                          <Icon d={member.is_active ? ICON.block : ICON.play} />
-                          {member.is_active ? "Deactivate" : "Activate"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Footer: record range on the left, paging on the right, as in Dynamics */}
-          <div className="flex items-center justify-between gap-2 border-t border-[#e0e0e0] px-3 py-1.5 text-[13px] text-[#424242]">
-            <div aria-live="polite">
-              {isLoading ? "Loading..." : `Rows: ${firstRow} - ${lastRow} of ${total}`}
-            </div>
-            {lastPage > 1 ? (
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Previous"
-                  disabled={page <= 1 || isFetching}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className={`rounded-[4px] p-1.5 hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:text-[#bdbdbd] disabled:hover:bg-transparent ${d365.focus}`}
-                >
-                  <Icon d={ICON.chevronLeft} />
-                </button>
-                <span>
-                  Page {page} of {lastPage}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Next"
-                  disabled={page >= lastPage || isFetching}
-                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
-                  className={`rounded-[4px] p-1.5 hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:text-[#bdbdbd] disabled:hover:bg-transparent ${d365.focus}`}
-                >
-                  <Icon d={ICON.chevronRight} />
-                </button>
-              </div>
-            ) : null}
-          </div>
+          {!showAddForm ? (
+            <Button onClick={() => setShowAddForm(true)}>Add member</Button>
+          ) : null}
         </div>
       </div>
 
@@ -727,6 +304,170 @@ export function MembersPage() {
           onCreated={(account) => setCreated((prev) => [account, ...prev])}
           onClose={() => setShowAddForm(false)}
         />
+      ) : null}
+
+      {/* Kept on screen after the form closes. For a Zonal Head this is the ONLY confirmation
+          the account exists, since a member with no zone yet is outside their list. */}
+      {created.length ? (
+        <div className="rounded-input border border-primary bg-primary/5 p-3 text-sm">
+          <div className="font-semibold">
+            Created {created.length} member{created.length === 1 ? "" : "s"} just now
+          </div>
+          <ul className="mt-1 space-y-0.5">
+            {created.map((account) => (
+              <li key={account.id}>
+                <span className="font-semibold">{account.its_no}</span> — {account.member_name}
+                <span className="text-textMuted"> · must change password at first sign-in</span>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="mt-2 text-xs font-semibold text-primary underline"
+            onClick={() => setCreated([])}
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
+      <Card>
+        <div className="space-y-3">
+          <div className="text-sm text-textMuted">
+            {isZonalHead
+              ? "This list shows members posted to your zone. A member appears here once they have chosen your zone in their own profile, so an account you have just created is not listed yet."
+              : "Accounts can be added here one at a time, or from a roster under Import/Export."}{" "}
+            The member&apos;s health and other profile answers stay private to them.
+          </div>
+
+          {/* Asked twice why these columns were blank. They are blank because the member has
+              not filled them: nothing on this page can set them, so saying where they come
+              from is more use than another dash. */}
+          <div className="rounded-input border border-border bg-surface p-2 text-xs text-textMuted">
+            Zone, Party, WhatsApp and Mobile numbers are entered by the member in their own
+            profile — contact numbers on <strong>Tab 1 Personal</strong>, Zone and Party on{" "}
+            <strong>Tab 3 Hizb</strong>. Each shows a dash until the member saves it, and it
+            cannot be filled in from here.
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input
+              label="Search"
+              placeholder="ITS No or name"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+            />
+            <Select
+              label="Status"
+              value={activeFilter}
+              onChange={(e) => {
+                setActiveFilter(e.target.value);
+                setPage(1);
+              }}
+              options={activeFilterOptions}
+            />
+          </div>
+        </div>
+      </Card>
+
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-input border border-danger bg-danger/5 p-2 text-sm text-danger"
+        >
+          Could not load member accounts.
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <div
+          role="alert"
+          className="rounded-input border border-danger bg-danger/5 p-2 text-sm text-danger"
+        >
+          {actionError}
+        </div>
+      ) : null}
+
+      <Card>
+        {isLoading ? (
+          <div className="p-2 text-sm text-textMuted">Loading accounts...</div>
+        ) : items.length === 0 ? (
+          <div className="p-2 text-sm text-textMuted">
+            {isZonalHead
+              ? "No members are posted to your zone yet. A member you create appears here after they choose your zone in their profile."
+              : "No member accounts match. Add one above, or upload a roster under Import/Export."}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[52rem] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border text-xs uppercase text-textMuted">
+                  <th className="px-2 py-2">Picture</th>
+                  <th className="px-2 py-2">ITS No</th>
+                  <th className="px-2 py-2">Name</th>
+                  <th className="px-2 py-2">Zone</th>
+                  <th className="px-2 py-2">Party</th>
+                  <th className="px-2 py-2">WhatsApp No.</th>
+                  <th className="px-2 py-2">Mobile No.</th>
+                  <th className="px-2 py-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((member) => (
+                  <tr key={member.id} className="border-b border-border last:border-0">
+                    <td className="px-2 py-2">
+                      <MemberThumb member={member} />
+                    </td>
+                    <td className="px-2 py-2 font-semibold">{member.its_no}</td>
+                    <td className="px-2 py-2">{memberFullName(member) || member.member_name || "—"}</td>
+                    <td className="px-2 py-2">{member.zone_name || "—"}</td>
+                    <td className="px-2 py-2">{member.party_name || "—"}</td>
+                    <td className="px-2 py-2">
+                      {contactNumber(member.whatsapp_no_1, member.whatsapp_no_2)}
+                    </td>
+                    <td className="px-2 py-2">
+                      {contactNumber(member.mobile_no_1, member.mobile_no_2)}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <Button
+                        variant={member.is_active ? "danger" : "primary"}
+                        disabled={setActiveState.isLoading}
+                        onClick={() => onToggle(member)}
+                      >
+                        {member.is_active ? "Deactivate" : "Activate"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {lastPage > 1 ? (
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            variant="secondary"
+            disabled={page <= 1 || isFetching}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Previous
+          </Button>
+          <div className="text-sm text-textMuted">
+            Page {page} of {lastPage}
+          </div>
+          <Button
+            variant="secondary"
+            disabled={page >= lastPage || isFetching}
+            onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+          >
+            Next
+          </Button>
+        </div>
       ) : null}
     </div>
   );
