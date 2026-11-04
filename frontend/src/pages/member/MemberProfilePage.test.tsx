@@ -1,0 +1,287 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { MemberProfilePage } from "./MemberProfilePage";
+import { renderWithProviders } from "../../test-utils";
+
+/**
+ * The twelve-tab shell, Tab 1 and Tab 3.
+ *
+ * The claim worth testing above all others is FR-026: only the active panel is rendered, so
+ * if unsaved values lived in the inputs they would vanish on every tab switch. They live in
+ * the profile slice instead. "Type into Tab 1, go to Tab 3, come back" is the whole point.
+ *
+ * `fetch` is stubbed rather than MSW-mocked, because the page makes exactly three calls and
+ * the shapes are small enough to state inline.
+ */
+
+const PROFILE = {
+  its_no: "99900101",
+  has_photo: false,
+  updated_at: "2026-10-30T10:00:00.000Z",
+  first_prefix: "None",
+  name: null,
+  father_prefix: "None",
+  father_name: null,
+  surname: null,
+  dob_gregorian: null,
+  dob_hijri_day: null,
+  dob_hijri_month: null,
+  dob_hijri_year: null,
+  dob_hijri_text: null,
+  marital_status_id: null,
+  residence_address: null,
+  phone_no: null,
+  mobile_no_1: null,
+  mobile_no_2: null,
+  whatsapp_no_1: null,
+  whatsapp_no_2: null,
+  email: null,
+  prefix_year: null,
+  zone_id: null,
+  party_id: null,
+  hizb_role: null,
+  bmi: null,
+  titles: [],
+  sharafs: [],
+  skill_ids: [],
+  places_visited: [],
+  ashara_attendances: []
+};
+
+const LOOKUPS = {
+  titles: [],
+  sharafs: [],
+  halqas: [],
+  mozes: [],
+  places: [],
+  sanads: [],
+  marital_statuses: [{ id: 1, name: "Married", is_draft: true }],
+  skills: [],
+  tamreen_frequencies: [],
+  tamreen_methods: [],
+  zones: [
+    { id: 1, name: "Zone One", is_draft: false },
+    { id: 2, name: "Zone Two", is_draft: false }
+  ],
+  parties: [
+    { id: 10, name: "Hizb In One", zone_id: 1 },
+    { id: 20, name: "Hizb In Two", zone_id: 2 }
+  ],
+  mohallahs: [],
+  current_hijri_year: 1448
+};
+
+/**
+ * A REAL Response, not a hand-rolled object.
+ *
+ * `fetchBaseQuery` does more with the response than call `text()` — it inspects headers and
+ * may clone it — so a partial stub leaves the query stuck in its loading state with no error
+ * to show. jsdom provides the genuine class, so there is no reason to fake it.
+ */
+function envelope(data: unknown): Response {
+  return new Response(JSON.stringify({ success: true, data, message: "OK" }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+let saveBodies: unknown[] = [];
+
+beforeEach(() => {
+  saveBodies = [];
+  sessionStorage.clear();
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      // fetchBaseQuery calls fetch with a single Request object, not (url, init). Reading
+      // the method and body off `init` alone silently treats every call as a GET.
+      const isRequest = typeof Request !== "undefined" && input instanceof Request;
+      const url = isRequest ? input.url : String(input);
+      const method = (isRequest ? input.method : init?.method) ?? "GET";
+
+      if (url.includes("/members/lookups")) return envelope(LOOKUPS);
+
+      if (url.includes("/members/me/profile")) {
+        if (method.toUpperCase() === "PUT") {
+          const raw = isRequest ? await input.clone().text() : String(init?.body ?? "{}");
+          saveBodies.push(JSON.parse(raw));
+          return envelope({ ...PROFILE, name: "Saved" });
+        }
+        return envelope(PROFILE);
+      }
+
+      return envelope({});
+    })
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** The identifier fields put helper text inside the label, so match by prefix. */
+const nameField = () => screen.getByLabelText(/^Name/) as HTMLInputElement;
+
+describe("MemberProfilePage", () => {
+  it("renders all twelve tabs", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+  });
+
+  it("shows the member's ITS number read-only", async () => {
+    renderWithProviders(<MemberProfilePage />);
+
+    const field = await waitFor(() => screen.getByLabelText(/^ITS No\./) as HTMLInputElement);
+    expect(field.value).toBe("99900101");
+    expect(field).toHaveAttribute("readonly");
+  });
+
+  /**
+   * FR-026 — the reason the draft lives in the slice.
+   */
+  it("keeps typed values when moving between tabs and back", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    fireEvent.change(nameField(), { target: { value: "Typed On Tab One" } });
+
+    fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+    await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+    // Tab 1's input is genuinely gone, not merely hidden.
+    expect(screen.queryByLabelText(/^Name/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Personal/ }));
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+    expect(nameField().value).toBe("Typed On Tab One");
+  });
+
+  /**
+   * The same guarantee as above, across the whole form rather than one hop.
+   *
+   * This replaced a test that visited a tab which had not been built yet — every tab now
+   * exists, so that test had no subject. Walking all twelve is the stronger version anyway:
+   * it would catch a single tab whose mount or unmount disturbed the draft, which a single
+   * there-and-back could not.
+   */
+  it("keeps a typed value through a visit to every other tab", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    fireEvent.change(nameField(), { target: { value: "Still Here" } });
+
+    for (const tab of screen.getAllByRole("tab")) {
+      fireEvent.click(tab);
+    }
+
+    fireEvent.click(screen.getByRole("tab", { name: /Personal/ }));
+    await waitFor(() => expect(nameField().value).toBe("Still Here"));
+  });
+
+  it("announces unsaved changes and offers to discard them", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
+
+    fireEvent.change(nameField(), { target: { value: "Dirty" } });
+    expect(screen.getByText(/unsaved changes/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Discard changes/i }));
+    await waitFor(() => expect(nameField().value).toBe(""));
+    expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
+  });
+
+  it("disables Save until something changes", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    const save = screen.getByRole("button", { name: /Save Profile/i });
+    expect(save).toBeDisabled();
+
+    fireEvent.change(nameField(), { target: { value: "Something" } });
+    expect(save).toBeEnabled();
+  });
+
+  // The draft holds only what changed, so a save cannot overwrite a field nobody touched.
+  it("sends only the changed fields, plus the version it was based on", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    fireEvent.change(nameField(), { target: { value: "Only This" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+    await waitFor(() => expect(saveBodies).toHaveLength(1));
+    expect(saveBodies[0]).toEqual({
+      name: "Only This",
+      if_unmodified_since: "2026-10-30T10:00:00.000Z"
+    });
+  });
+
+  it("confirms a successful save and clears the dirty state", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    fireEvent.change(nameField(), { target: { value: "Saved Value" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+    await waitFor(() => expect(screen.getByText(/has been saved/i)).toBeInTheDocument());
+    expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
+  });
+
+  // FR-094: a value awaiting review must not look authoritative.
+  it("marks draft lookup values for review", async () => {
+    renderWithProviders(<MemberProfilePage />);
+
+    const select = await waitFor(
+      () => screen.getByLabelText("Marital Status") as HTMLSelectElement
+    );
+    const labels = Array.from(select.options).map((o) => o.textContent);
+    expect(labels.some((l) => l?.includes("DRAFT — NEEDS REVIEW"))).toBe(true);
+  });
+
+  // FR-048 — the dependent dropdown, and the clearing behaviour that keeps it honest.
+  describe("Tab 3 dependent dropdown", () => {
+    async function openHizb() {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+    }
+
+    it("disables Party until a Zone is chosen", async () => {
+      await openHizb();
+      expect(screen.getByLabelText("Party")).toBeDisabled();
+    });
+
+    it("offers only the parties in the chosen Zone", async () => {
+      await openHizb();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const labels = Array.from(party.options).map((o) => o.textContent);
+      expect(labels).toContain("Hizb In One");
+      expect(labels).not.toContain("Hizb In Two");
+    });
+
+    /**
+     * Changing the Zone must clear a Party that no longer belongs to it. Left behind, the
+     * member would see a Party that is not in the list and the save would be refused by the
+     * server's cross-zone check with nothing on screen to explain why.
+     */
+    it("clears a Party that does not belong to the newly chosen Zone", async () => {
+      await openHizb();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText("Party"), { target: { value: "10" } });
+      expect((screen.getByLabelText("Party") as HTMLSelectElement).value).toBe("10");
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "2" } });
+
+      await waitFor(() =>
+        expect((screen.getByLabelText("Party") as HTMLSelectElement).value).toBe("")
+      );
+    });
+  });
+});

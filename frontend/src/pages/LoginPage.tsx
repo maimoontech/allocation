@@ -13,12 +13,14 @@ const roleOptions = [
   { value: "admin", label: "Admin" },
   { value: "zonal_head", label: "Zonal Head" },
   { value: "party", label: "Party" },
-  { value: "coordinator", label: "Venue Coordinator" }
+  { value: "coordinator", label: "Venue Coordinator" },
+  { value: "member", label: "Member" }
 ];
 
 function defaultPathByRole(role: Role) {
   if (role === "party") return "/my-schedule";
   if (role === "coordinator") return "/assigned-parties";
+  if (role === "member") return "/member-profile";
   return "/dashboard";
 }
 
@@ -38,6 +40,7 @@ export function LoginPage() {
     if (role === "admin") return "Use your Admin username";
     if (role === "zonal_head") return "Use your Zone name or Zone ID";
     if (role === "party") return "Use your ITS No as User ID";
+    if (role === "member") return "Use your ITS No";
     return "Use your Venue name or Venue ID";
   }, [role]);
 
@@ -64,7 +67,14 @@ export function LoginPage() {
                     user: result.user
                   })
                 );
-                navigate(defaultPathByRole(role), { replace: true });
+                // A member with an outstanding change cannot reach the profile anyway —
+                // every member route returns PASSWORD_CHANGE_REQUIRED — so send them
+                // straight there rather than bouncing through a 403 (FR-017).
+                const destination =
+                  result.user.role === "member" && result.user.mustChangePassword
+                    ? "/member-change-password"
+                    : defaultPathByRole(role);
+                navigate(destination, { replace: true });
               } catch (err: any) {
                 const message =
                   err?.data?.message ||
@@ -85,7 +95,7 @@ export function LoginPage() {
               options={roleOptions}
             />
             <Input
-              label={role === "party" ? "ITS No" : "ID / Name"}
+              label={role === "party" || role === "member" ? "ITS No" : "ID / Name"}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               autoComplete="username"

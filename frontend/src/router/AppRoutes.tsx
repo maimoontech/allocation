@@ -12,10 +12,17 @@ import { SchedulesPage } from "../pages/modules/SchedulesPage";
 import { ReportsPage } from "../pages/modules/ReportsPage";
 import { ImportExportPage } from "../pages/modules/ImportExportPage";
 import { MySchedulePage } from "../pages/party/MySchedulePage";
+import { PartyMembersPage } from "../pages/party/PartyMembersPage";
 import { RateMicPage } from "../pages/party/RateMicPage";
 import { AssignedPartiesPage } from "../pages/coordinator/AssignedPartiesPage";
 import { AttendanceRatingPage } from "../pages/coordinator/AttendanceRatingPage";
 import { ChangePasswordPage } from "../pages/ChangePasswordPage";
+import { MemberChangePasswordPage } from "../pages/member/MemberChangePasswordPage";
+import { MemberProfilePage } from "../pages/member/MemberProfilePage";
+import { MembersPage } from "../pages/modules/MembersPage";
+import { MemberPhotoApprovalPage } from "../pages/modules/MemberPhotoApprovalPage";
+import { MemberLookupsPage } from "../pages/modules/MemberLookupsPage";
+import { MemberLookupEditPage } from "../pages/modules/MemberLookupEditPage";
 
 export function AppRoutes() {
   return (
@@ -36,10 +43,21 @@ export function AppRoutes() {
 
         <Route element={<ProtectedRoute roles={["admin"]} />}>
           <Route path="/import-export" element={<ImportExportPage />} />
+          {/* Account status only. Accounts are created from a roster under Import/Export. */}
+          <Route path="/members" element={<MembersPage />} />
+          {/* The dropdown options members choose from. Five of the ten lists ship empty, so
+              this is how they get their authoritative values. */}
+          <Route path="/member-lookups" element={<MemberLookupsPage />} />
+          <Route path="/member-lookups/:entity" element={<MemberLookupEditPage />} />
+        </Route>
+
+        <Route element={<ProtectedRoute roles={["admin", "zonal_head"]} />}> 
+          <Route path="/member-photo-approvals" element={<MemberPhotoApprovalPage />} /> 
         </Route>
 
         <Route element={<ProtectedRoute roles={["party"]} />}>
           <Route path="/my-schedule" element={<MySchedulePage />} />
+          <Route path="/party-members" element={<PartyMembersPage />} />
           <Route path="/rate-mic" element={<RateMicPage />} />
         </Route>
 
@@ -52,6 +70,20 @@ export function AppRoutes() {
           <Route path="/change-password" element={<ChangePasswordPage />} />
         </Route>
 
+        {/*
+          Member routes. ProtectedRoute diverts a member with an outstanding forced password
+          change to /member-change-password, so that route is the only one reachable until it
+          is done.
+
+          /member-profile is the twelve-tab form. Tabs 2 and 4 to 12 are still being built;
+          their tab buttons are shown disabled rather than hidden, so the member can see the
+          shape of what they are completing.
+        */}
+        <Route element={<ProtectedRoute roles={["member"]} />}>
+          <Route path="/member-change-password" element={<MemberChangePasswordPage />} />
+          <Route path="/member-profile" element={<MemberProfilePage />} />
+        </Route>
+
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Route>
 
@@ -59,3 +91,9 @@ export function AppRoutes() {
     </Routes>
   );
 }
+
+
+
+
+
+

@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
 import { clearAuth } from "../../features/auth/authSlice";
 import { Button } from "../ui/Button";
 import { RoleAvatar } from "./RoleAvatar";
+import { useMemberAvatarUrl } from "../../features/member/useMemberAvatarUrl";
 import type { Role } from "../../types";
 
 type NavItem = { to: string; label: string };
@@ -17,6 +18,9 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/miqaats", label: "Miqaats" },
     { to: "/schedules", label: "Schedules" },
     { to: "/reports", label: "Reports" },
+    { to: "/members", label: "Members" },
+    { to: "/member-lookups", label: "Member Lists" },
+    { to: "/member-photo-approvals", label: "Photo Approvals" },
     { to: "/import-export", label: "Import/Export" }
   ],
   zonal_head: [
@@ -25,10 +29,12 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/venues", label: "Venues" },
     { to: "/schedules", label: "Schedules" },
     { to: "/reports", label: "Reports" },
+    { to: "/member-photo-approvals", label: "Photo Approvals" },
     { to: "/change-password", label: "Change Password" }
   ],
   party: [
     { to: "/my-schedule", label: "My Schedule" },
+    { to: "/party-members", label: "Members" },
     { to: "/rate-mic", label: "Rate Mic" },
     { to: "/change-password", label: "Change Password" }
   ],
@@ -36,6 +42,10 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/assigned-parties", label: "Assigned Parties" },
     { to: "/attendance-rating", label: "Attendance & Rating" },
     { to: "/change-password", label: "Change Password" }
+  ],
+  member: [
+    { to: "/member-profile", label: "My Profile" },
+    { to: "/member-change-password", label: "Change Password" }
   ]
 };
 
@@ -43,6 +53,9 @@ export function AppShell() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector((s) => s.auth.user);
+  // Called before the early return below, as hook order requires; it is a no-op for every role
+  // other than member.
+  const avatarUrl = useMemberAvatarUrl(user?.role === "member");
 
   if (!user) return <Outlet />;
 
@@ -75,7 +88,7 @@ export function AppShell() {
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-white px-4 py-3">
-          <RoleAvatar role={user.role} name={user.displayName} />
+          <RoleAvatar role={user.role} name={user.displayName} photoUrl={avatarUrl} />
           <Button
             variant="ghost"
             onClick={() => {
@@ -115,3 +128,4 @@ export function AppShell() {
     </div>
   );
 }
+

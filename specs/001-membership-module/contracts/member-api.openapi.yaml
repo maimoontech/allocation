@@ -1,0 +1,873 @@
+openapi: 3.0.3
+
+info:
+  title: MPSS Membership Module API
+  version: 0.1.0-draft
+  description: |
+    Contract for the Membership Module (`specs/001-membership-module`).
+
+    **Status: draft, not implemented.** Stage 2 is pending approval.
+
+    Conventions inherited from the existing API and not restated per operation:
+
+    - Every response is the envelope from `backend/src/utils/response.ts`:
+      `{ success, data, message }`. Failures carry `success: false, data: null`.
+    - Authentication is `Authorization: Bearer <jwt>`, verified by `requireAuth`
+      (`backend/src/middleware/auth.ts`).
+    - Member routes additionally pass `requireMember`, which reads the account row and
+      enforces FR-007 (active), FR-018 (password change outstanding) and FR-022 (token
+      predates the password change). See research R3.
+    - The member is always taken from the token. No endpoint accepts a member id or ITS
+      Number identifying *whose* data to act on (FR-034, FR-098).
+
+    **Two existing endpoints are extended rather than replaced** — `/auth/login` and
+    `/auth/change-password` — because Party Login must keep working unchanged (FR-102).
+
+servers:
+  - url: /api/v1
+    description: Existing API base. No new base path is introduced.
+
+tags:
+  - name: auth
+    description: Existing endpoints, extended for the member role
+  - name: member-profile
+    description: New. Member acting on their own profile
+  - name: member-lookups
+    description: New. Selectable values for the form
+  - name: member-admin
+    description: New. Administrator provisioning and account state
+
+paths:
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Sign in (EXISTING — extended with role "member")
+      description: |
+        Unchanged for the four existing roles. `role: "member"` is handled by a **new explicit
+        branch inserted before the unguarded fallthrough** at `authService.ts:113`; without
+        that placement a member request would be answered by the venue query.
+
+        FR-013: the refusal is identical whether the ITS Number is unknown or the password is
+        wrong. FR-014: repeated failures are throttled on the ITS Number and on a hashed client
+        address, and a throttled response reveals nothing about whether the account exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password, role]
+              properties:
+                identifier:
+                  type: string
+                  description: For `member`, the ITS Number.
+                  example: "30456789"
+                password:
+                  type: string
+                  format: password
+                role:
+                  type: string
+                  enum: [admin, zonal_head, party, coordinator, member]
+                  description: "`member` is the only added value."
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+                          refresh_token:
+                            type: string
+                          user:
+                            $ref: "#/components/schemas/AuthUser"
+        "401":
+          $ref: "#/components/responses/InvalidCredentials"
+        "429":
+          $ref: "#/components/responses/Throttled"
+
+  /auth/change-password:
+    post:
+      tags: [auth]
+      summary: Change own password (EXISTING — extended with the member role)
+      description: |
+        The role guard at `authRoutes.ts:51` gains `member`, and `changePassword` gains a member
+        branch — `tableForSelfServiceRole` cannot be reused, because the member update must also
+        set `must_change_password = 0` and `password_changed_at = NOW()`.
+
+        **This is the one member endpoint reachable while a password change is outstanding**
+        (FR-018). On success, sessions established with the previous password stop working
+        (FR-022).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password, confirm_password]
+              properties:
+                current_password:
+                  type: string
+                  format: password
+                new_password:
+                  type: string
+                  format: password
+                  description: FR-020 policy; FR-021 forbids reusing the current password.
+                confirm_password:
+                  type: string
+                  format: password
+                  description: FR-019. Also checked server-side, not only in the browser.
+      responses:
+        "200":
+          description: Changed. Any previously issued member token is now rejected.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: |
+            Current password wrong, confirmation mismatch, policy failure, or reuse of the
+            current password. The message names the rule that failed (FR-020).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /members/me/profile:
+    get:
+      tags: [member-profile]
+      summary: Read own profile, with every repeatable section
+      description: |
+        Returns all twelve tabs in one response so the form opens with a single request.
+        The photograph is **not** included — it is binary and would be dragged into every read.
+        `its_no` and `bmi` are read-only and derived (FR-034, FR-064).
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: The signed-in member's profile. Absent sections come back empty, not missing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MemberProfile" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+
+    put:
+      tags: [member-profile]
+      summary: Save own profile in full
+      description: |
+        One call for all twelve tabs, applied in a single transaction: either every section is
+        recorded or none is (FR-030). Repeatable sections are **replace-in-full** — the arrays
+        sent are the complete intended contents, which is what makes add, edit and delete
+        (FR-046, FR-069, FR-072, FR-074) one operation rather than three endpoints each.
+
+        Omitting an array leaves that section untouched; sending `[]` clears it (story 6
+        scenario 6).
+
+        Server-side validation is authoritative (FR-028). `its_no`, `bmi` and the derived Hijri
+        fields are ignored if present (FR-034, FR-039, FR-064). On failure nothing is written
+        and the previously stored profile is unchanged (FR-029).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MemberProfileInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/MemberProfile" }
+        "400":
+          description: |
+            Validation failed. Nothing was written. `data.errors` names each offending field
+            and its tab (FR-029). Includes the Tab 8 count-versus-years refusal, which names
+            the place and both counts (FR-073), and the Party-outside-Zone refusal (FR-048).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValidationFailure" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "409":
+          description: |
+            The profile was changed by another session since it was read. The member is told
+            rather than silently overwriting (edge case: two sessions for one member).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /members/me/photo:
+    get:
+      tags: [member-profile]
+      summary: Read own photograph
+      description: |
+        Returns the image bytes, not the envelope — this is the only non-envelope response in
+        the module, because the browser consumes it as an image. Authenticated, so FR-090 is
+        enforced by the same middleware as every other member route; there is no public URL.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: The image
+          headers:
+            Cache-Control:
+              schema: { type: string }
+              description: "`private, max-age=0, must-revalidate` — never a shared cache (FR-090)."
+            ETag:
+              schema: { type: string }
+              description: The stored SHA-256, so an unchanged photo is not re-sent.
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "404":
+          description: No photograph set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+    put:
+      tags: [member-profile]
+      summary: Set or replace own photograph
+      description: |
+        Base64 inside the existing JSON body, so no multipart dependency is added and the
+        existing `express.json({ limit: "5mb" })` applies. The 2 MB cap leaves headroom for
+        base64's one-third inflation.
+
+        The type is verified from the **file's magic bytes**, not `content_type` or any filename
+        (FR-089). Replacing overwrites the single row under its unique key, so no earlier image
+        survives (FR-091).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_type, data_base64]
+              properties:
+                content_type:
+                  type: string
+                  enum: [image/jpeg, image/png, image/webp]
+                  description: Declared, then verified against the magic bytes. A mismatch is rejected.
+                data_base64:
+                  type: string
+                  format: byte
+                  description: Image bytes, base64. Decoded size must not exceed 2097152.
+      responses:
+        "200":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/PhotoMeta" }
+        "400":
+          description: Not a real image, a type that is not accepted, a declared/actual mismatch, or malformed base64 (FR-088, FR-089)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+        "413":
+          description: Decoded image exceeds 2 MB (FR-088)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+    delete:
+      tags: [member-profile]
+      summary: Remove own photograph
+      description: Deletes the row, leaving no image retrievable (FR-091). Idempotent.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Removed, or there was none
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+
+  /members/lookups:
+    get:
+      tags: [member-lookups]
+      summary: Every selectable value the form needs, in one call
+      description: |
+        Thirteen lists in one response, so opening a twelve-tab form costs one request rather
+        than thirteen.
+
+        Two details carry requirements:
+
+        - **Parties include `zone_id`**, so Tab 3's dependent dropdown filters client-side with no second request (FR-048).
+        - **`current_hijri_year`** is computed server-side, so Tab 9's range needs no extra call and cannot be set from a client clock (FR-076).
+
+        Each lookup value carries `is_draft`, which the UI renders as `DRAFT — NEEDS REVIEW`
+        (FR-094). Only `is_active` values are returned. An empty list is returned as an empty
+        array, and the UI explains it rather than blocking the save (FR-095).
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: All lists
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Lookups" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/PasswordChangeRequired"
+
+  /members:
+    get:
+      tags: [member-admin]
+      summary: List member accounts (admin)
+      description: |
+        Administrator view for provisioning and support. Returns account state and the
+        roster name only — **never** contact details, health values or photographs (FR-101).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Match on ITS Number or roster name.
+        - name: is_active
+          in: query
+          schema: { type: boolean }
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: page_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: A page of accounts
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: "#/components/schemas/MemberAccountAdminView" }
+                          total: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /members/{id}:
+    patch:
+      tags: [member-admin]
+      summary: Activate or deactivate a member account (admin)
+      description: |
+        The only field an administrator may change here. FR-007: a deactivated account is
+        refused at sign-in while its profile data is **retained, not deleted**.
+
+        Passwords are not settable through this route — provisioning goes through the import
+        path so that one code path hashes passwords (FR-015).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties:
+                is_active: { type: boolean }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No such account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Envelope" }
+
+  /import-export/members/template:
+    get:
+      tags: [member-admin]
+      summary: Download the provisioning CSV template (admin, EXISTING route, new entity)
+      description: |
+        `members` is added to the entity switch in `importExportRoutes.ts`. Columns:
+        `its_no`, `member_name`, `password`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: CSV template
+          content:
+            text/csv:
+              schema: { type: string }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /import-export/members/export:
+    get:
+      tags: [member-admin]
+      summary: Export member accounts (admin, EXISTING route, new entity)
+      description: |
+        Follows the existing convention of emitting `'' AS password`, so no hash ever leaves the
+        system (FR-015). Account fields only — no profile, contact, health or photo data
+        (FR-101).
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema: { type: string }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /import-export/members/import:
+    post:
+      tags: [member-admin]
+      summary: Provision member accounts from a roster (admin, EXISTING route, new entity)
+      description: |
+        Reuses the existing CSV parsing, transaction and bcrypt hashing
+        (`importExportRoutes.ts:379-419`). Per row:
+
+        - **New ITS Number** → create with `must_change_password = 1` (FR-004).
+        - **Existing, member has not yet set a password** (`password_changed_at IS NULL`) → update the password, requirement stays in force.
+        - **Existing, member has already set a password** → name and active state may update; the **password and the requirement are left alone** (FR-005).
+
+        No duplicate is ever created, because `its_no` is UNIQUE (FR-002, FR-003). Unusable
+        rows are reported individually and the valid rows still apply (FR-008).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [csv]
+              properties:
+                csv:
+                  type: string
+                  description: |
+                    CSV content as text. Matches the existing import contract, where the
+                    browser reads the file and posts its text — there is no multipart upload
+                    anywhere in this system.
+      responses:
+        "200":
+          description: Processed. Per-row outcomes are reported even when some rows failed.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          created: { type: integer }
+                          updated: { type: integer }
+                          skipped: { type: integer }
+                          errors:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                row: { type: integer }
+                                its_no: { type: string }
+                                message: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Missing, invalid or expired token — or a token issued before the member's password changed (FR-022)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Envelope" }
+    Forbidden:
+      description: Authenticated, but not permitted. Members cannot reach admin routes; the four existing roles cannot reach member routes (FR-100, FR-107)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Envelope" }
+    PasswordChangeRequired:
+      description: |
+        A password change is outstanding, so no profile data is readable or writable
+        (FR-018). `data.code` is `PASSWORD_CHANGE_REQUIRED`, which the client uses to route to
+        the change screen. `/auth/change-password` is the only call that succeeds in this state.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Envelope"
+              - type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                        enum: [PASSWORD_CHANGE_REQUIRED]
+    InvalidCredentials:
+      description: |
+        One message regardless of whether the identifier is unknown or the password is wrong
+        (FR-013). Also returned for a deactivated account, so account state is not disclosed
+        (FR-007).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Envelope" }
+    Throttled:
+      description: |
+        Too many recent failures for this ITS Number or origin (FR-014). The body is the same
+        shape as any other refusal and reveals nothing about whether the account exists.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the next attempt is accepted.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Envelope" }
+
+  schemas:
+
+    Envelope:
+      type: object
+      required: [success, message]
+      properties:
+        success: { type: boolean }
+        data: { nullable: true }
+        message: { type: string }
+
+    ValidationFailure:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                errors:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      tab:
+                        type: integer
+                        minimum: 1
+                        maximum: 12
+                        description: Lets the UI focus the offending tab (FR-029).
+                      field: { type: string }
+                      message: { type: string }
+
+    AuthUser:
+      type: object
+      description: Matches the existing `AuthUser` shape, with `memberId` added alongside `partyId` and `venueId`.
+      properties:
+        role:
+          type: string
+          enum: [admin, zonal_head, party, coordinator, member]
+        id: { type: integer }
+        displayName: { type: string }
+        zoneId: { type: integer, nullable: true }
+        partyId: { type: integer, nullable: true }
+        venueId: { type: integer, nullable: true }
+        memberId:
+          type: integer
+          nullable: true
+          description: Set only for the member role.
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        mustChangePassword:
+          type: boolean
+          description: Member role only. Lets the client route straight to the change screen (FR-017).
+
+    LookupValue:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        is_draft:
+          type: boolean
+          description: True until reviewed. Rendered as `DRAFT — NEEDS REVIEW` (FR-094).
+
+    PartyOption:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        zone_id:
+          type: integer
+          description: Lets Tab 3 filter client-side without another request (FR-048).
+
+    Lookups:
+      type: object
+      properties:
+        titles: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        sharafs: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        halqas: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        mozes: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        places: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        sanads: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        marital_statuses: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        skills: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        tamreen_frequencies: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        tamreen_methods: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        zones: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        parties: { type: array, items: { $ref: "#/components/schemas/PartyOption" } }
+        mohallahs: { type: array, items: { $ref: "#/components/schemas/LookupValue" } }
+        current_hijri_year:
+          type: integer
+          example: 1447
+          description: Server-computed upper bound for Tab 9 (FR-076).
+
+    PhotoMeta:
+      type: object
+      properties:
+        content_type: { type: string }
+        byte_size: { type: integer }
+        width: { type: integer, nullable: true }
+        height: { type: integer, nullable: true }
+        sha256: { type: string }
+        updated_at: { type: string, format: date-time }
+
+    TitleEntry:
+      type: object
+      required: [title_id, title_year]
+      properties:
+        title_id: { type: integer }
+        title_year: { type: integer, minimum: 1950, maximum: 2026 }
+
+    SharafEntry:
+      type: object
+      required: [sharaf_id, sharaf_year]
+      properties:
+        sharaf_id: { type: integer }
+        sharaf_year: { type: integer }
+
+    PlaceVisitEntry:
+      type: object
+      required: [place_id, times_count, years]
+      description: |
+        Tab 8: one **place** the member has visited, how many times, and in which years.
+
+        Unrelated to the existing `miqaats` scheduling calendar — the places come from the
+        separate `places` lookup returned by `/members/lookups`.
+
+        FR-073: `times_count` must equal the length of `years`, or the whole save is refused.
+        FR-071: a place may appear at most once per member.
+      properties:
+        place_id:
+          type: integer
+          description: From `Lookups.places`, not from the scheduling calendar.
+        times_count: { type: integer, minimum: 0 }
+        years:
+          type: array
+          items: { type: integer }
+          description: Distinct years the place was visited. A repeat is rejected.
+
+    AsharaEntry:
+      type: object
+      required: [attended_with, hijri_year]
+      properties:
+        attended_with:
+          type: string
+          enum: ["With Aqa Moula TUS", "With Aamil"]
+        hijri_year:
+          type: integer
+          minimum: 1400
+          description: Upper bound is `current_hijri_year` from the lookups response (FR-076).
+        moze_id: { type: integer, nullable: true }
+        mohallah_id: { type: integer, nullable: true }
+
+    MemberProfileCommon:
+      type: object
+      description: Fields shared by the read and write shapes. Tab numbers refer to the spec.
+      properties:
+        first_prefix: { type: string, enum: [None, Sheikh, Mulla] }
+        name: { type: string, nullable: true }
+        father_prefix: { type: string, enum: [None, Sheikh, Mulla] }
+        father_name: { type: string, nullable: true }
+        surname: { type: string, nullable: true }
+        dob_gregorian: { type: string, format: date, nullable: true }
+        marital_status_id: { type: integer, nullable: true }
+        residence_address: { type: string, nullable: true }
+        phone_no: { type: string, nullable: true }
+        mobile_no_1: { type: string, nullable: true }
+        mobile_no_2: { type: string, nullable: true }
+        whatsapp_no_1: { type: string, nullable: true }
+        whatsapp_no_2: { type: string, nullable: true }
+        email: { type: string, format: email, nullable: true }
+        prefix_year: { type: integer, nullable: true, minimum: 1950, maximum: 2026 }
+        zone_id: { type: integer, nullable: true }
+        party_id: { type: integer, nullable: true }
+        hizb_role: { type: string, nullable: true, enum: [Leader, "Side Lead", Member] }
+        occupation_type: { type: string, nullable: true, enum: [Job, Business] }
+        organisation_name: { type: string, nullable: true }
+        designation: { type: string, nullable: true, description: Ignored unless occupation_type is Job (FR-052). }
+        occupation_since_year: { type: integer, nullable: true }
+        work_address: { type: string, nullable: true }
+        work_phone_no: { type: string, nullable: true }
+        education_level:
+          type: string
+          nullable: true
+          enum: [Primary, Middle, Secondary, Intermediate, Bachelors, Masters, PhD]
+        major_subjects: { type: string, nullable: true }
+        education_status: { type: string, nullable: true, enum: [Complete, Ongoing] }
+        has_hifz_sanad: { type: boolean, nullable: true }
+        sanad_id: { type: integer, nullable: true, description: Required when has_hifz_sanad is true (FR-059). }
+        hifz_current_surah: { type: string, nullable: true }
+        hifz_current_ayyah: { type: string, nullable: true }
+        hifz_last_update: { type: string, format: date, nullable: true }
+        blood_group: { type: string, nullable: true, enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] }
+        is_regular_donor: { type: boolean, nullable: true }
+        last_donation_date: { type: string, format: date, nullable: true }
+        height_cm: { type: number, nullable: true, exclusiveMinimum: 0 }
+        weight_kg: { type: number, nullable: true, exclusiveMinimum: 0 }
+        asbaq_level: { type: string, nullable: true, enum: [Zaher, Taweel, Haqiqat] }
+        halqa_id: { type: integer, nullable: true }
+        asbaq_ustad: { type: string, nullable: true }
+        attends_karachi_tamreen: { type: boolean, nullable: true }
+        tamreen_absence_reason:
+          type: string
+          nullable: true
+          description: Required when attends_karachi_tamreen is false (FR-081).
+        party_tamreen_frequency_id: { type: integer, nullable: true }
+        solo_tamreen_frequency_id: { type: integer, nullable: true }
+        tamreen_method_id: { type: integer, nullable: true }
+        takes_ustad_assistance: { type: boolean, nullable: true }
+        uses_idaratuz_zakereen_books: { type: boolean, nullable: true }
+        khidmat_type: { type: string, nullable: true, enum: [Sansta, Umoor, Both] }
+        sansta_name: { type: string, nullable: true }
+        umoor_name: { type: string, nullable: true }
+        khidmat_designation: { type: string, nullable: true }
+        khidmat_since_year: { type: integer, nullable: true }
+
+    MemberProfile:
+      allOf:
+        - $ref: "#/components/schemas/MemberProfileCommon"
+        - type: object
+          description: Read shape. Adds the read-only and derived values.
+          properties:
+            its_no:
+              type: string
+              readOnly: true
+              description: From the token's account, never from a submission (FR-034).
+            dob_hijri_day: { type: integer, nullable: true, readOnly: true }
+            dob_hijri_month: { type: integer, nullable: true, readOnly: true }
+            dob_hijri_year: { type: integer, nullable: true, readOnly: true }
+            dob_hijri_text:
+              type: string
+              nullable: true
+              readOnly: true
+              example: "9th Moharram-ul-Haram 1447 AH"
+              description: Derived server-side from dob_gregorian (FR-039).
+            bmi:
+              type: number
+              nullable: true
+              readOnly: true
+              description: Database-generated. Null unless both height and weight are positive (FR-064).
+            has_photo: { type: boolean }
+            titles: { type: array, items: { $ref: "#/components/schemas/TitleEntry" } }
+            sharafs: { type: array, items: { $ref: "#/components/schemas/SharafEntry" } }
+            skill_ids: { type: array, items: { type: integer } }
+            places_visited: { type: array, items: { $ref: "#/components/schemas/PlaceVisitEntry" } }
+            ashara_attendances: { type: array, items: { $ref: "#/components/schemas/AsharaEntry" } }
+            updated_at:
+              type: string
+              format: date-time
+              nullable: true
+              description: Send back as `if_unmodified_since` to detect a concurrent edit.
+
+    MemberProfileInput:
+      allOf:
+        - $ref: "#/components/schemas/MemberProfileCommon"
+        - type: object
+          description: |
+            Write shape. Repeatable arrays are replace-in-full: omit to leave a section alone,
+            send `[]` to clear it. Read-only and derived fields are ignored if present.
+          properties:
+            titles: { type: array, items: { $ref: "#/components/schemas/TitleEntry" } }
+            sharafs: { type: array, items: { $ref: "#/components/schemas/SharafEntry" } }
+            skill_ids: { type: array, items: { type: integer } }
+            places_visited: { type: array, items: { $ref: "#/components/schemas/PlaceVisitEntry" } }
+            ashara_attendances: { type: array, items: { $ref: "#/components/schemas/AsharaEntry" } }
+            if_unmodified_since:
+              type: string
+              format: date-time
+              nullable: true
+              description: The `updated_at` last read. A mismatch returns 409 instead of overwriting.
+
+    MemberAccountAdminView:
+      type: object
+      description: Account state only. Deliberately carries no contact, health or photo data (FR-101).
+      properties:
+        id: { type: integer }
+        its_no: { type: string }
+        member_name: { type: string, nullable: true }
+        must_change_password: { type: boolean }
+        is_active: { type: boolean }
+        has_profile: { type: boolean }
+        last_login_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }

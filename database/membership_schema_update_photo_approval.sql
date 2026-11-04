@@ -1,0 +1,46 @@
+-- ============================================================================
+-- SUPERSEDED — DO NOT RUN THIS FILE
+-- ============================================================================
+--
+-- This was a standalone ALTER that added the photo approval workflow to a
+-- member_photos table which already existed. It was applied to the development
+-- database on its own, and the migration script was not updated to match — so
+-- membership_live_update.sql would have created a member_photos with none of
+-- these columns on production, where every approval query then fails with
+-- error 1054, unknown column. That gap was found and closed on 2026-11-04.
+--
+-- WHERE THIS LIVES NOW
+--   database/membership_schema.sql
+--     section 3   declares all five columns and both indexes in the
+--                 member_photos CREATE TABLE
+--     section 3b  mm_backfill_photo_approval() adds them to a database that
+--                 created the table before they existed, each one behind its
+--                 own existence check
+--
+--   Both are carried into database/membership_live_update.sql by
+--   node database/build_live_update.mjs, and asserted by the test
+--   backend/src/__tests__/liveUpdateScript.test.ts
+--   ("creates member_photos with the approval columns, and can backfill them").
+--
+-- WHY IT IS KEPT RATHER THAN DELETED
+--   It is the record of how the development database acquired these columns,
+--   which is the reason the two drifted apart. It is also quoted in
+--   CHANGELOG.md.
+--
+-- RUNNING IT NOW WOULD FAIL. ADD COLUMN has no IF NOT EXISTS in MySQL, so
+-- against any database that has the columns it aborts with error 1060,
+-- duplicate column name. Apply membership_live_update.sql instead: it is
+-- idempotent and reaches the same end state from either starting point.
+--
+-- The original statements are below, commented out so they cannot be run by
+-- redirecting this file into a client.
+-- ============================================================================
+
+-- ALTER TABLE member_photos
+-- ADD COLUMN approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending' COMMENT 'Photo approval status',
+-- ADD COLUMN approved_by INT UNSIGNED NULL COMMENT 'User ID who approved/rejected',
+-- ADD COLUMN approved_by_role ENUM('admin', 'zonal_head') NULL COMMENT 'Role of approver',
+-- ADD COLUMN approved_at DATETIME NULL COMMENT 'When approved/rejected',
+-- ADD COLUMN rejection_reason TEXT NULL COMMENT 'Reason for rejection',
+-- ADD INDEX idx_member_photos_approval (approval_status),
+-- ADD INDEX idx_member_photos_approved_by (approved_by, approved_by_role);

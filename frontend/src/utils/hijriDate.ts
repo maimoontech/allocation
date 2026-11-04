@@ -53,11 +53,28 @@ function ordinal(day: number) {
   return `${day}th`;
 }
 
-export function calculateHijriDate(value: string, adjustment = 0) {
-  const parsed = parseDateParts(value);
-  if (!parsed) return "";
+export type HijriParts = {
+  day: number;
+  month: number;
+  year: number;
+  monthName: string;
+  formatted: string;
+};
 
-  let { day, month, year } = adjustment ? addDays(parsed, adjustment) : parsed;
+/**
+ * Gregorian -> Hijri, returning the numeric components alongside the formatted string.
+ *
+ * `calculateHijriDate` returns only the display string, which is all the Miqaat screen
+ * needs. The membership module needs the parts: a Hijri year on its own for the Ashara
+ * Mubaraka year range, and day/month/year to store a Hijri date of birth.
+ *
+ * Returns null for input that is not a valid YYYY-MM-DD date.
+ */
+export function calculateHijriParts(value: string, adjustment = 0): HijriParts | null {
+  const parsed = parseDateParts(value);
+  if (!parsed) return null;
+
+  const { day, month, year } = adjustment ? addDays(parsed, adjustment) : parsed;
   let m = month;
   let y = year;
   if (m < 3) {
@@ -65,7 +82,7 @@ export function calculateHijriDate(value: string, adjustment = 0) {
     m += 12;
   }
 
-  let a = Math.floor(y / 100);
+  const a = Math.floor(y / 100);
   let b = 2 - a + Math.floor(a / 4);
   if (y < 1583) b = 0;
   if (y === 1582) {
@@ -77,23 +94,6 @@ export function calculateHijriDate(value: string, adjustment = 0) {
   }
 
   const jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + day + b - 1524;
-  b = 0;
-  if (jd > 2299160) {
-    a = Math.floor((jd - 1867216.25) / 36524.25);
-    b = 1 + a - Math.floor(a / 4);
-  }
-
-  const bb = jd + b + 1524;
-  let cc = Math.floor((bb - 122.1) / 365.25);
-  const dd = Math.floor(365.25 * cc);
-  const ee = Math.floor((bb - dd) / 30.6001);
-  day = bb - dd - Math.floor(30.6001 * ee);
-  month = ee - 1;
-  if (ee > 13) {
-    cc += 1;
-    month = ee - 13;
-  }
-  year = cc - 4716;
 
   const iyear = 10631 / 30;
   const epochastro = 1948084;
@@ -109,6 +109,17 @@ export function calculateHijriDate(value: string, adjustment = 0) {
   const id = z - Math.floor(29.5001 * im - 29);
 
   const monthName = HIJRI_MONTH_NAMES[im - 1];
-  if (!monthName) return "";
-  return `${ordinal(id)} ${monthName} ${iy} AH`;
+  if (!monthName) return null;
+
+  return {
+    day: id,
+    month: im,
+    year: iy,
+    monthName,
+    formatted: `${ordinal(id)} ${monthName} ${iy} AH`
+  };
+}
+
+export function calculateHijriDate(value: string, adjustment = 0) {
+  return calculateHijriParts(value, adjustment)?.formatted ?? "";
 }

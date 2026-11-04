@@ -227,6 +227,25 @@ const entityConfig = {
   miqaats: {
     templateHeaders: ["miqaat_name", "english_date", "hijri_date", "is_active"],
     exportHeaders: ["miqaat_name", "english_date", "hijri_date", "is_active"]
+  },
+  // Member account provisioning (FR-001 to FR-008). Only the sign-in account is created
+  // here; the member fills in their own profile. The export deliberately carries no
+  // contact, health or photo data (FR-101).
+  members: {
+    templateHeaders: ["its_no", "member_name", "password", "is_active"],
+    // An ITS Number and a password are all an account needs (FR-001). member_name and
+    // is_active are roster conveniences, so a two-column "its_no,password" file imports
+    // as-is instead of being rejected for columns it does not carry.
+    requiredHeaders: ["its_no", "password"],
+    exportHeaders: [
+      "its_no",
+      "member_name",
+      "is_active",
+      "must_change_password",
+      "has_profile",
+      "last_login_at",
+      "password"
+    ]
   }
 } as const;
 
@@ -302,6 +321,25 @@ importExportRoutes.get("/:entity/export", async (req, res) => {
     return csvResponse(res, "miqaats.csv", toCsv(rows, cfg.exportHeaders));
   }
 
+  if (entity === "members") {
+    // `'' AS password` follows the convention used by every other entity: a hash must never
+    // leave the system (FR-015). Nothing from member_profiles is joined in — no contact
+    // details, health values or photographs (FR-101).
+    const [rows] = await pool.query<any[]>(
+      `SELECT ma.its_no,
+              ma.member_name,
+              ma.is_active,
+              ma.must_change_password,
+              IF(mp.id IS NULL, 0, 1) AS has_profile,
+              DATE_FORMAT(ma.last_login_at, '%Y-%m-%d %H:%i:%s') AS last_login_at,
+              '' AS password
+       FROM member_accounts ma
+       LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
+       ORDER BY ma.its_no`
+    );
+    return csvResponse(res, "members.csv", toCsv(rows, cfg.exportHeaders));
+  }
+
   return fail(res, "Invalid entity", 400);
 });
 
@@ -322,7 +360,10 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
     if (h) headerIndex[h] = idx;
   });
 
-  const requiredHeaders = cfg.templateHeaders.map((h: string) => normalizeHeader(h));
+  // Entities may declare a narrower requiredHeaders; otherwise the whole template is required.
+  const requiredHeaders = (cfg.requiredHeaders ?? cfg.templateHeaders).map((h: string) =>
+    normalizeHeader(h)
+  );
   for (const h of requiredHeaders) {
     if (!(h in headerIndex)) return fail(res, `Missing column: ${h}`, 400);
   }
@@ -356,6 +397,19 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
     for (const p of parties) {
       const key = `${String(p.zone_name).trim()}||${String(p.party_name).trim()}`;
       partyByKey.set(key, Number(p.id));
+    }
+
+    // Existing member accounts, so the import can tell an insert from an update without a
+    // query per row. password_changed_at is carried because FR-005 turns on it.
+    const [memberAccounts] = await conn.query<any[]>(
+      "SELECT id, its_no, password_changed_at FROM member_accounts"
+    );
+    const memberByIts = new Map<string, { id: number; passwordChangedAt: Date | null }>();
+    for (const m of memberAccounts) {
+      memberByIts.set(String(m.its_no).trim(), {
+        id: Number(m.id),
+        passwordChangedAt: m.password_changed_at ?? null
+      });
     }
 
     const [miqaats] = await conn.query<any[]>(
@@ -621,6 +675,72 @@ importExportRoutes.post("/:entity/import", async (req, res) => {
             const affected = Number((r as any).affectedRows ?? 0);
             if (affected === 1) result.inserted += 1;
             else result.skipped += 1;
+          }
+          continue;
+        }
+
+        if (entity === "members") {
+          const its_no = required(get("its_no"));
+          const member_name = get("member_name") || null;
+          const password = get("password");
+          const is_active = asBool01(get("is_active"));
+
+          if (!its_no) throw new Error("its_no is required");
+          // ITS numbers are digits. Rejecting anything else here keeps a mistyped column
+          // from silently creating an unusable account (FR-008).
+          if (!/^\d{6,20}$/.test(its_no)) {
+            throw new Error("its_no must be 6 to 20 digits");
+          }
+
+          const existing = memberByIts.get(its_no) ?? null;
+
+          if (existing) {
+            // FR-005. A member who has already chosen their own password keeps it, and the
+            // forced-change requirement is NOT re-imposed. Only the roster-supplied fields
+            // are refreshed. Re-running a roster must be safe at any time.
+            const hasChosenOwnPassword = existing.passwordChangedAt !== null;
+
+            // `any` to match mysql2's QueryValues, as the other branches in this file do.
+            const params: any = {
+              id: existing.id,
+              member_name,
+              is_active: is_active ?? 1
+            };
+            let passwordSql = "";
+            if (password && !hasChosenOwnPassword) {
+              params.password_hash = await bcrypt.hash(String(password), 10);
+              passwordSql = ", password_hash = :password_hash, must_change_password = 1";
+            }
+
+            const [r] = await conn.query<any>(
+              `UPDATE member_accounts
+               SET member_name = COALESCE(:member_name, member_name),
+                   is_active = :is_active
+                   ${passwordSql}
+               WHERE id = :id`,
+              params
+            );
+            const affected = Number((r as any).affectedRows ?? 0);
+            if (affected === 1) result.updated += 1;
+            else result.skipped += 1;
+          } else {
+            if (!password) throw new Error("password is required for a new member");
+            const password_hash = await bcrypt.hash(String(password), 10);
+            // must_change_password defaults to 1 in the schema and is set explicitly here
+            // so the intent is visible at the call site (FR-004).
+            const [r] = await conn.query<any>(
+              `INSERT INTO member_accounts
+                 (its_no, member_name, password_hash, must_change_password, password_changed_at, is_active)
+               VALUES (:its_no, :member_name, :password_hash, 1, NULL, :is_active)`,
+              { its_no, member_name, password_hash, is_active: is_active ?? 1 }
+            );
+            result.inserted += 1;
+            const insertId = Number((r as any).insertId ?? 0);
+            if (Number.isFinite(insertId) && insertId > 0) {
+              // Keeps a duplicate ITS number later in the SAME file from inserting twice:
+              // the second row is treated as an update instead (FR-002, FR-003).
+              memberByIts.set(its_no, { id: insertId, passwordChangedAt: null });
+            }
           }
           continue;
         }

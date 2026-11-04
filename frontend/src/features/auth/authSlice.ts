@@ -29,6 +29,18 @@ const authSlice = createSlice({
       authStorage.setRefreshToken(state.refreshToken);
       authStorage.setUser(state.user);
     },
+    /**
+     * Swaps the access token alone, keeping the refresh token and user.
+     *
+     * Used by the 401 interceptor after a successful refresh: `POST /auth/refresh` returns a
+     * new access token and nothing else, so overwriting the whole slice with `setAuth` would
+     * need a user object it was never given.
+     */
+    setToken(state, action: PayloadAction<string>) {
+      state.token = action.payload;
+      authStorage.setToken(state.token);
+    },
+
     clearAuth(state) {
       state.token = null;
       state.refreshToken = null;
@@ -38,6 +50,6 @@ const authSlice = createSlice({
   }
 });
 
-export const { setAuth, clearAuth } = authSlice.actions;
+export const { setAuth, setToken, clearAuth } = authSlice.actions;
 export const authReducer = authSlice.reducer;
 

@@ -1,8 +1,9 @@
 import express from "express";
 import cors from "cors";
+import { statSync } from "node:fs";
 import { env } from "./config/env";
 import { ensureSchema } from "./db/ensureSchema";
-import { fail } from "./utils/response";
+import { corsOptions, terminalErrorHandler } from "./middleware/httpBoundary";
 import { authRoutes } from "./routes/authRoutes";
 import { zonesRoutes } from "./routes/zonesRoutes";
 import { mohallahsRoutes } from "./routes/mohallahsRoutes";
@@ -13,6 +14,13 @@ import { schedulesRoutes } from "./routes/schedulesRoutes";
 import { reportsRoutes } from "./routes/reportsRoutes";
 import { ratingsRoutes } from "./routes/ratingsRoutes";
 import { importExportRoutes } from "./routes/importExportRoutes";
+import { memberAdminRoutes } from "./routes/memberAdminRoutes";
+import { memberLookupAdminRoutes } from "./routes/memberLookupAdminRoutes";
+import { memberLookupsRoutes } from "./routes/memberLookupsRoutes";
+import { memberProfileRoutes } from "./routes/memberProfileRoutes";
+import { memberPhotoRoutes } from "./routes/memberPhotoRoutes";
+import { memberPhotoApprovalRoutes } from "./routes/memberPhotoApprovalRoutes";
+import { partyMemberRoutes } from "./routes/partyMemberRoutes";
 
 const app = express();
 const backendPackage = require("../package.json") as { version?: string };
@@ -23,14 +31,7 @@ const backendBuildId =
   process.env.COMMIT_SHA ||
   "local";
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || env.cors.allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("CORS_NOT_ALLOWED"));
-    }
-  })
-);
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "5mb" }));
 
 app.get("/health", (_req, res) =>
@@ -54,23 +55,69 @@ app.use("/api/v1/schedules", schedulesRoutes);
 app.use("/api/v1/reports", reportsRoutes);
 app.use("/api/v1/ratings", ratingsRoutes);
 app.use("/api/v1/import-export", importExportRoutes);
+// Member self-service routes are mounted BEFORE the admin router on the same base path.
+// Express matches in order, and the admin router applies requireRole(["admin"]) to
+// everything under it — so if it came first, a member hitting /members/me/profile would be
+// refused 403 by the admin guard before reaching their own route. The specific "/me/..."
+// paths cannot collide with the admin router's "/" and "/:id".
+app.use("/api/v1/members", memberProfileRoutes);
+app.use("/api/v1/members", memberPhotoRoutes);
+app.use("/api/v1/members/lookups", memberLookupsRoutes);
+app.use("/api/v1/members", memberAdminRoutes);
 
-app.use((err: any, _req: any, res: any, _next: any) => {
-  if (res.headersSent) return;
-  const code = String(err?.code ?? "");
-  if (code === "ER_DUP_ENTRY") return fail(res, "Duplicate entry", 409);
-  return fail(res, "Internal server error", 500);
-});
+// Admin maintenance of the membership lookup lists. A separate base path from
+// /api/v1/members on purpose: that path is shared by the member-owned routers and an
+// admin-only router, and adding a third set of rules to that overlap is how the 403-on-
+// your-own-profile bug would come back.
+app.use("/api/v1/member-lookups", memberLookupAdminRoutes);
+app.use("/api/v1/member-photo-approvals", memberPhotoApprovalRoutes);
+// The party's view of its own members. Its own base path, so the party-only guard cannot
+// reach any other role's routes.
+app.use("/api/v1/party-members", partyMemberRoutes);
+
+app.use(terminalErrorHandler);
 
 async function startServer() {
   await ensureSchema();
 
-  app.listen(env.port, () => {
-    process.stdout.write(`API listening on http://localhost:${env.port}\\n`);
+  const server = app.listen(env.port, () => {
+    // On Windows this 'listening' callback fires even when the bind then fails with
+    // EADDRINUSE — the 'error' event arrives immediately AFTER it, and address() is still
+    // null here. Announcing success unconditionally is exactly what makes a failed restart
+    // look like a successful one, so say nothing and let the error handler below speak.
+    if (server.address() === null) return;
+
+    // The build timestamp is printed because `npm start` runs the COMPILED output: when this
+    // is older than your last `npm run build`, the process is serving stale code, and no
+    // amount of refreshing the browser will show a source change.
+    const builtAt = statSync(__filename).mtime.toLocaleString();
+    process.stdout.write(`API listening on http://localhost:${env.port} (build ${builtAt})\n`);
+  });
+
+  // Without this listener EADDRINUSE arrives as an asynchronous 'error' event AFTER
+  // app.listen() has returned and startServer() has already resolved, so the .catch() below
+  // never sees it. A restart that quietly loses the port to an older, still-running process
+  // then looks exactly like a successful one — while the stale process goes on answering
+  // with whatever code IT was started with.
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      process.stderr.write(
+        `\nPort ${env.port} is already in use. THIS SERVER IS NOT RUNNING.\n` +
+          `An older process still owns the port and is answering requests with its own, ` +
+          `probably outdated, code. Stop it first:\n\n` +
+          `  Get-NetTCPConnection -LocalPort ${env.port} -State Listen   # shows OwningProcess\n` +
+          `  Stop-Process -Id <OwningProcess> -Force\n\n` +
+          `Then start again. For local work prefer "npm run dev", which reloads from source ` +
+          `on save and needs no build step.\n`
+      );
+    } else {
+      process.stderr.write(`Server failed to start: ${String(error)}\n`);
+    }
+    process.exit(1);
   });
 }
 
 startServer().catch((error) => {
-  process.stderr.write(`Failed to start server: ${String(error)}\\n`);
+  process.stderr.write(`Failed to start server: ${String(error)}\n`);
   process.exit(1);
 });
