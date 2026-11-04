@@ -3,25 +3,28 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // Each token reads a CSS variable so a part of the app can re-theme itself by setting
+      // them on a wrapper (see `.theme-d365` in index.css). The defaults in `:root` are the
+      // original values, so nothing outside such a wrapper changes.
       colors: {
-        primary: "#1E3A5F",
-        secondary: "#2E75B6",
-        accent: "#7C3AED",
-        success: "#059669",
-        warning: "#D97706",
-        danger: "#DC2626",
-        surface: "#F8FAFC",
-        border: "#E2E8F0",
-        textPrimary: "#1F2937",
-        textMuted: "#6B7280"
+        primary: "rgb(var(--color-primary) / <alpha-value>)",
+        secondary: "rgb(var(--color-secondary) / <alpha-value>)",
+        accent: "rgb(var(--color-accent) / <alpha-value>)",
+        success: "rgb(var(--color-success) / <alpha-value>)",
+        warning: "rgb(var(--color-warning) / <alpha-value>)",
+        danger: "rgb(var(--color-danger) / <alpha-value>)",
+        surface: "rgb(var(--color-surface) / <alpha-value>)",
+        border: "rgb(var(--color-border) / <alpha-value>)",
+        textPrimary: "rgb(var(--color-text-primary) / <alpha-value>)",
+        textMuted: "rgb(var(--color-text-muted) / <alpha-value>)"
       },
       borderRadius: {
-        card: "12px",
-        button: "8px",
-        input: "6px"
+        card: "var(--radius-card)",
+        button: "var(--radius-button)",
+        input: "var(--radius-input)"
       },
       boxShadow: {
-        card: "0 1px 2px rgba(0,0,0,0.06), 0 8px 24px rgba(0,0,0,0.06)"
+        card: "var(--shadow-card)"
       }
     }
   },

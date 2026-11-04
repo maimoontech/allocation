@@ -96,8 +96,8 @@ export function MemberChangePasswordPage() {
   }
 
   return (
-    <div className="mx-auto max-w-xl space-y-4">
-      <div className="text-2xl font-bold">
+    <div className="mx-auto max-w-xl space-y-4 p-4 sm:p-6">
+      <div className="text-xl font-semibold">
         {isForced ? "Set Your Password" : "Change Password"}
       </div>
 

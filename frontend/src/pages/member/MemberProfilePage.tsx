@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Card } from "../../components/ui/Card";
-import { Button } from "../../components/ui/Button";
 import { Tabs, type TabDefinition } from "../../components/ui/Tabs";
 import type { ImageUploadValue } from "../../components/ui/ImageUpload";
 import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
+import { useMemberAvatarUrl } from "../../features/member/useMemberAvatarUrl";
 import {
   useDeleteMemberPhotoMutation,
   useGetMemberLookupsQuery,
@@ -116,6 +116,7 @@ export function MemberProfilePage() {
   const [activeTab, setActiveTab] = useState<string>(TAB_IDS.personal);
   const [banner, setBanner] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [photoVersion, setPhotoVersion] = useState(0);
+  const avatarUrl = useMemberAvatarUrl(true);
 
   const isDirty = Object.keys(draft).length > 0;
 
@@ -222,16 +223,15 @@ export function MemberProfilePage() {
   }));
 
   if (profileLoading || lookupsLoading) {
-    return <div className="p-2 text-sm text-textMuted">Loading your profile...</div>;
+    return <div className="p-6 text-sm text-textMuted">Loading your profile...</div>;
   }
 
   if (profileError || lookupsError || !merged || !lookups) {
     return (
-      <div
-        role="alert"
-        className="rounded-input border border-danger bg-danger/5 p-3 text-sm text-danger"
-      >
-        Could not load your profile. Please reload the page.
+      <div className="p-4 sm:p-6">
+        <MessageBar intent="error" role="alert">
+          Could not load your profile. Please reload the page.
+        </MessageBar>
       </div>
     );
   }
@@ -247,94 +247,202 @@ export function MemberProfilePage() {
     disabled: isBusy
   };
 
+  const fullName = merged.name ? `${merged.name} ${merged.surname ?? ""}`.trim() : merged.its_no;
+  const initials =
+    fullName
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "M";
+
+  function onDiscard() {
+    dispatch(discardDraft());
+    dispatch(setFieldErrors([]));
+    setBanner(null);
+  }
+
+  // Laid out as a Dynamics 365 record form: command bar, record header, tabs, then the
+  // active tab's section. The colours come from the `theme-d365` wrapper in MemberShell.
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="text-2xl font-bold">My Profile</div>
-        <div className="text-sm text-textMuted">
-          {merged.name ? `${merged.name} ${merged.surname ?? ""}`.trim() : merged.its_no}
-        </div>
-      </div>
-
-      {banner ? (
-        <div
-          role="alert"
-          className={[
-            "rounded-input border p-2 text-sm",
-            banner.kind === "ok"
-              ? "border-success bg-success/5 text-success"
-              : "border-danger bg-danger/5 text-danger"
-          ].join(" ")}
-        >
-          {banner.text}
-        </div>
-      ) : null}
-
-      {isDirty ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-input border border-warning bg-warning/5 p-2 text-sm text-warning">
-          <span>You have unsaved changes. They are kept as you move between tabs.</span>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={isBusy}
-            onClick={() => {
-              dispatch(discardDraft());
-              dispatch(setFieldErrors([]));
-              setBanner(null);
-            }}
-          >
-            Discard changes
-          </Button>
-        </div>
-      ) : null}
-
-      <Tabs tabs={tabs} activeId={activeTab} onChange={setActiveTab}>
-        <Card>
-          {activeTab === TAB_IDS.personal ? (
-            <Tab01Personal
-              {...tabProps}
-              onPhotoSelect={onPhotoSelect}
-              onPhotoRemove={onPhotoRemove}
-              photoBusy={photoState.isLoading || removePhotoState.isLoading}
-              photoVersion={photoVersion}
-            />
-          ) : activeTab === TAB_IDS.hizb ? (
-            <Tab03Hizb {...tabProps} />
-          ) : activeTab === TAB_IDS.occupation ? (
-            <Tab04Occupation {...tabProps} />
-          ) : activeTab === TAB_IDS.education ? (
-            <Tab05EducationHifz {...tabProps} />
-          ) : activeTab === TAB_IDS.health ? (
-            <Tab06Health {...tabProps} />
-          ) : activeTab === TAB_IDS.asbaq ? (
-            <Tab10Asbaq {...tabProps} />
-          ) : activeTab === TAB_IDS.tamreen ? (
-            <Tab11Tamreen {...tabProps} />
-          ) : activeTab === TAB_IDS.khidmat ? (
-            <Tab12Khidmat {...tabProps} />
-          ) : activeTab === TAB_IDS.title ? (
-            <Tab02TitlePrefix {...tabProps} />
-          ) : activeTab === TAB_IDS.sharaf ? (
-            <Tab07Sharaf {...tabProps} />
-          ) : activeTab === TAB_IDS.places ? (
-            <Tab08PlacesVisited {...tabProps} />
-          ) : (
-            <Tab09Ashara {...tabProps} />
-          )}
-        </Card>
-      </Tabs>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={onSave} disabled={isBusy || !isDirty}>
+    <div>
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-0.5 border-b border-[#e0e0e0] bg-white px-2 py-1">
+        <CommandButton icon={ICON.save} onClick={onSave} disabled={isBusy || !isDirty}>
           {isBusy ? "Saving..." : "Save Profile"}
-        </Button>
-        {!isDirty && !banner ? (
-          <span className="text-sm text-textMuted">No changes to save.</span>
-        ) : null}
-        <span className="text-sm text-textMuted">
+        </CommandButton>
+        <CommandButton icon={ICON.undo} onClick={onDiscard} disabled={isBusy || !isDirty}>
+          Discard changes
+        </CommandButton>
+        <div className="ml-auto hidden px-2 text-[13px] text-textMuted sm:block">
+          {!isDirty && !banner ? "No changes to save. " : null}
           Saving applies every tab, not only this one.
-        </span>
+        </div>
       </div>
+
+      <div className="space-y-4 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center gap-4">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt=""
+              className="h-14 w-14 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ebf3fc] text-lg font-semibold text-primary">
+              {initials}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-semibold text-textPrimary">
+              {fullName}
+              <span className="font-normal text-textMuted">
+                {" "}
+                - {isDirty ? "Unsaved" : "Saved"}
+              </span>
+            </h1>
+            <div className="text-sm text-textMuted">Member profile</div>
+          </div>
+          <dl className="flex gap-6 border-l border-[#e0e0e0] pl-4 text-sm">
+            <div className="flex flex-col-reverse">
+              <dt className="text-xs text-textMuted">ITS No</dt>
+              <dd className="font-semibold tabular-nums text-textPrimary">{merged.its_no}</dd>
+            </div>
+            {fieldErrors.length ? (
+              <div className="flex flex-col-reverse">
+                <dt className="text-xs text-textMuted">Needs attention</dt>
+                <dd className="font-semibold text-danger">
+                  {fieldErrors.length} field{fieldErrors.length === 1 ? "" : "s"}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
+
+        {banner ? (
+          <MessageBar intent={banner.kind === "ok" ? "success" : "error"} role="alert">
+            {banner.text}
+          </MessageBar>
+        ) : null}
+
+        {isDirty ? (
+          <MessageBar intent="warning">
+            You have unsaved changes. They are kept as you move between tabs.
+          </MessageBar>
+        ) : null}
+
+        <Tabs tabs={tabs} activeId={activeTab} onChange={setActiveTab}>
+          <Card>
+            {activeTab === TAB_IDS.personal ? (
+              <Tab01Personal
+                {...tabProps}
+                onPhotoSelect={onPhotoSelect}
+                onPhotoRemove={onPhotoRemove}
+                photoBusy={photoState.isLoading || removePhotoState.isLoading}
+                photoVersion={photoVersion}
+              />
+            ) : activeTab === TAB_IDS.hizb ? (
+              <Tab03Hizb {...tabProps} />
+            ) : activeTab === TAB_IDS.occupation ? (
+              <Tab04Occupation {...tabProps} />
+            ) : activeTab === TAB_IDS.education ? (
+              <Tab05EducationHifz {...tabProps} />
+            ) : activeTab === TAB_IDS.health ? (
+              <Tab06Health {...tabProps} />
+            ) : activeTab === TAB_IDS.asbaq ? (
+              <Tab10Asbaq {...tabProps} />
+            ) : activeTab === TAB_IDS.tamreen ? (
+              <Tab11Tamreen {...tabProps} />
+            ) : activeTab === TAB_IDS.khidmat ? (
+              <Tab12Khidmat {...tabProps} />
+            ) : activeTab === TAB_IDS.title ? (
+              <Tab02TitlePrefix {...tabProps} />
+            ) : activeTab === TAB_IDS.sharaf ? (
+              <Tab07Sharaf {...tabProps} />
+            ) : activeTab === TAB_IDS.places ? (
+              <Tab08PlacesVisited {...tabProps} />
+            ) : (
+              <Tab09Ashara {...tabProps} />
+            )}
+          </Card>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Dynamics 365 building blocks for this page ---------- */
+
+/** Fluent 20px regular glyphs, inline so nothing new is installed. */
+const ICON = {
+  save: "M3 5a2 2 0 0 1 2-2h8.59c.4 0 .78.16 1.06.44l1.91 1.91c.28.28.44.67.44 1.06V15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm2-1a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1v-4.5c0-.83.67-1.5 1.5-1.5h7c.83 0 1.5.67 1.5 1.5V16a1 1 0 0 0 1-1V6.41a.5.5 0 0 0-.15-.35l-1.91-1.91A.5.5 0 0 0 14 4v2.5c0 .83-.67 1.5-1.5 1.5h-4A1.5 1.5 0 0 1 7 6.5V4H5Zm9 12v-4.5a.5.5 0 0 0-.5-.5h-7a.5.5 0 0 0-.5.5V16h8ZM8 4v2.5c0 .28.22.5.5.5h4a.5.5 0 0 0 .5-.5V4H8Z",
+  undo: "M4 3.5a.5.5 0 0 0-1 0v5c0 .28.22.5.5.5h5a.5.5 0 0 0 0-1H4.89l2.49-2.33A5.5 5.5 0 1 1 5.04 13a.5.5 0 1 0-.9.42 6.5 6.5 0 1 0 2.56-8.48L4 7.46V3.5Z",
+  info: "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm0 6a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0v-4A.5.5 0 0 1 10 9Zm0-2.75a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5Z",
+  error:
+    "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm0 9.5a.75.75 0 1 1 0 1.5.75.75 0 0 1 0-1.5Zm0-6.5a.5.5 0 0 1 .5.5v4.5a.5.5 0 0 1-1 0V6.5A.5.5 0 0 1 10 6Z",
+  success:
+    "M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 1a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm3.36 4.15a.5.5 0 0 1 .06.63l-.06.07-4 4a.5.5 0 0 1-.64.06l-.07-.06-2-2a.5.5 0 0 1 .64-.76l.07.06L9 10.79l3.65-3.64a.5.5 0 0 1 .71 0Z"
+};
+
+function Glyph({ d, className = "" }: { d: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className={`h-4 w-4 shrink-0 fill-current ${className}`}>
+      <path d={d} />
+    </svg>
+  );
+}
+
+/** A command-bar button: blue icon and label, no fill until hovered. */
+function CommandButton({
+  icon,
+  onClick,
+  disabled,
+  children
+}: {
+  icon: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="group inline-flex h-8 items-center gap-1.5 rounded-button px-2 text-sm text-textPrimary hover:bg-[#f5f5f5] active:bg-[#e0e0e0] disabled:cursor-not-allowed disabled:text-[#bdbdbd] disabled:hover:bg-transparent focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+    >
+      <Glyph d={icon} className="text-primary group-disabled:text-[#bdbdbd]" />
+      {children}
+    </button>
+  );
+}
+
+type Intent = "info" | "warning" | "error" | "success";
+
+const messageBarLook: Record<Intent, { box: string; icon: string; glyph: string }> = {
+  info: { box: "border-[#e0e0e0] bg-[#f5f5f5]", icon: "text-[#616161]", glyph: ICON.info },
+  warning: { box: "border-[#fdcfb4] bg-[#fff9f5]", icon: "text-warning", glyph: ICON.error },
+  error: { box: "border-[#eeacb2] bg-[#fdf3f4]", icon: "text-danger", glyph: ICON.error },
+  success: { box: "border-[#9fd89f] bg-[#f1faf1]", icon: "text-success", glyph: ICON.success }
+};
+
+/** Fluent message bar: one band with the intent's icon first. */
+function MessageBar({
+  intent,
+  role,
+  children
+}: {
+  intent: Intent;
+  role?: "alert" | "status";
+  children: ReactNode;
+}) {
+  const look = messageBarLook[intent];
+  return (
+    <div
+      role={role}
+      className={`flex items-start gap-2 rounded-input border px-3 py-2 text-[13px] leading-5 text-textPrimary ${look.box}`}
+    >
+      <Glyph d={look.glyph} className={`mt-0.5 ${look.icon}`} />
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }

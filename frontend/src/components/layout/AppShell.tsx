@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
 import { clearAuth } from "../../features/auth/authSlice";
 import { Button } from "../ui/Button";
 import { RoleAvatar } from "./RoleAvatar";
+import { MemberShell } from "./MemberShell";
 import { useMemberAvatarUrl } from "../../features/member/useMemberAvatarUrl";
 import type { Role } from "../../types";
 
@@ -61,6 +62,21 @@ export function AppShell() {
   if (!user) return <Outlet />;
 
   const nav = navByRole[user.role];
+
+  // A member gets the Dynamics 365 styled frame; every other role keeps this one.
+  if (user.role === "member") {
+    return (
+      <MemberShell
+        nav={nav}
+        displayName={user.displayName}
+        avatarUrl={avatarUrl}
+        onLogout={() => {
+          dispatch(clearAuth());
+          navigate("/login", { replace: true });
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex h-full min-h-screen bg-surface">
