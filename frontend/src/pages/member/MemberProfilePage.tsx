@@ -166,8 +166,14 @@ export function MemberProfilePage() {
   async function onSave() {
     setBanner(null);
     try {
-      await saveProfile({ ...draft, if_unmodified_since: baseUpdatedAt }).unwrap();
+      const saved = await saveProfile({ ...draft, if_unmodified_since: baseUpdatedAt }).unwrap();
       dispatch(clearDraft());
+      // Re-base on the version the save just produced. Without this the SECOND save in a
+      // page session still carries the FIRST read's `updated_at`, the server sees its own
+      // completed write as someone else's and answers 409 — and the effect above cannot
+      // recover it, because it only re-seeds while baseUpdatedAt is null. The response is
+      // the saved profile, so this needs no refetch.
+      dispatch(setDraftBase(saved.updated_at));
       setBanner({ kind: "ok", text: "Your profile has been saved." });
     } catch (err: unknown) {
       const errors = extractFieldErrors(err);

@@ -1,5 +1,31 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-04 — Fixed: only the first two profile saves in a session were accepted
+
+A member could select their Zone and Party, press Save Profile, and have nothing reach the
+database — while the form went on showing the selections, so the loss was invisible until an
+administrator looked at the Members list and saw a dash.
+
+The profile form sends `if_unmodified_since` so a concurrent edit is reported rather than
+silently overwritten. After a successful save the page cleared the draft but **not** the
+version stamp it was based on, and the effect that seeds that stamp only runs while it is
+null — so every later save in the same page session still carried the version from the
+original read. The server compared it against its own completed write, concluded another
+session had edited the profile, and answered 409.
+
+The first save was always correct, which is why this went unnoticed: it only bites from the
+second save onwards, and a page reload reset it. The live profile shows exactly the
+signature — two saves landed (01:41:03, 01:43:17) and Tab 3 never did.
+
+- `onSave` now re-bases on the `updated_at` the save itself returned. The response is the
+  saved profile, so this costs no extra request and cannot race a refetch.
+- Two regression tests, both verified to fail without the fix: one asserts the **second**
+  save's `if_unmodified_since` is the version the first save returned, the other reproduces
+  the member's actual path — save Tab 1, then choose a Zone and Party on Tab 3 and save again.
+- The profile test's PUT stub now returns a fresh `updated_at` per save, as the real server
+  does. Echoing the original hid this entire class of bug.
+
+
 ## 2026-11-04 — Added: Admin and Zonal Head can create a member account
 
 Both roles can now add a member from three fields — ITS No, Full Name, Password — instead of

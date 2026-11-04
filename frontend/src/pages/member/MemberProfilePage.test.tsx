@@ -86,9 +86,18 @@ function envelope(data: unknown): Response {
 }
 
 let saveBodies: unknown[] = [];
+let saveCount = 0;
+
+/**
+ * Each save gets a FRESH `updated_at`, because the real server stamps one on every write.
+ * A stub that echoed the original would hide the whole class of bug this file now covers:
+ * the page re-basing its concurrency stamp after a save.
+ */
+const savedUpdatedAt = (n: number) => `2026-10-30T10:0${n}:00.000Z`;
 
 beforeEach(() => {
   saveBodies = [];
+  saveCount = 0;
   sessionStorage.clear();
 
   vi.stubGlobal(
@@ -106,7 +115,8 @@ beforeEach(() => {
         if (method.toUpperCase() === "PUT") {
           const raw = isRequest ? await input.clone().text() : String(init?.body ?? "{}");
           saveBodies.push(JSON.parse(raw));
-          return envelope({ ...PROFILE, name: "Saved" });
+          saveCount += 1;
+          return envelope({ ...PROFILE, name: "Saved", updated_at: savedUpdatedAt(saveCount) });
         }
         return envelope(PROFILE);
       }
@@ -227,6 +237,64 @@ describe("MemberProfilePage", () => {
 
     await waitFor(() => expect(screen.getByText(/has been saved/i)).toBeInTheDocument());
     expect(screen.queryByText(/unsaved changes/i)).not.toBeInTheDocument();
+  });
+
+  /**
+   * A live member saved Tab 1 twice and then could not save Tab 3 at all.
+   *
+   * `clearDraft` resets the draft but not `baseUpdatedAt`, and the effect that seeds it only
+   * runs while it is null — so every save after the first kept sending the FIRST read's
+   * version. The server compared it against its own completed write, decided another session
+   * had edited the profile, and answered 409. The member saw their Zone and Party selected on
+   * screen and nothing reaching the database.
+   *
+   * Asserting on the SECOND save's `if_unmodified_since` is the whole test: the first was
+   * always correct, which is why this survived.
+   */
+  it("re-bases the version stamp after each save, so consecutive saves are not rejected", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    fireEvent.change(nameField(), { target: { value: "First" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+    await waitFor(() => expect(saveBodies).toHaveLength(1));
+
+    fireEvent.change(nameField(), { target: { value: "Second" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+    await waitFor(() => expect(saveBodies).toHaveLength(2));
+
+    expect(saveBodies[0]).toEqual({
+      name: "First",
+      if_unmodified_since: "2026-10-30T10:00:00.000Z"
+    });
+    // The version the FIRST save returned — not the one the page was originally read at.
+    expect(saveBodies[1]).toEqual({
+      name: "Second",
+      if_unmodified_since: savedUpdatedAt(1)
+    });
+  });
+
+  /** The same failure as above, reached the way the member actually reached it. */
+  it("saves a Zone and Party chosen after an earlier save has already succeeded", async () => {
+    renderWithProviders(<MemberProfilePage />);
+    await waitFor(() => expect(nameField()).toBeInTheDocument());
+
+    fireEvent.change(nameField(), { target: { value: "Tab One First" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+    await waitFor(() => expect(saveBodies).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+    await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Party"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+    await waitFor(() => expect(saveBodies).toHaveLength(2));
+    expect(saveBodies[1]).toEqual({
+      zone_id: 1,
+      party_id: 10,
+      if_unmodified_since: savedUpdatedAt(1)
+    });
   });
 
   // FR-094: a value awaiting review must not look authoritative.
