@@ -98,6 +98,7 @@ const LOOKUPS: MemberLookups = {
   sharafs: [{ id: 21, name: "Khidmat Sharaf", is_draft: true }],
   halqas: [],
   mozes: [{ id: 31, name: "Karachi", is_draft: true }],
+  aqa_moula_asharas: [{ id: 61, name: "Colombo", is_draft: true }],
   places: [
     { id: 41, name: "Nairobi", is_draft: true },
     { id: 42, name: "Colombo", is_draft: true }
@@ -409,5 +410,93 @@ describe("the Hijri year dropdowns", () => {
 
     expect(labels).toContain(String(CURRENT));
     expect(labels).not.toContain(String(CURRENT + 1));
+  });
+});
+
+/**
+ * FR-077a — the location field follows the Attended With answer.
+ *
+ * "With Aqa Moula TUS" asks where Aqa Moula held Ashara that year: one short list, the same
+ * for everybody. "With Aamil" asks about the member's own Jamaat — their Moze, optionally
+ * their Mohallah. One list cannot serve both, so the fields swap.
+ *
+ * The clearing tests are the ones that matter. A value left behind by a changed answer would
+ * be saved against a record whose form never showed it, and nobody looking at the form could
+ * tell it was there.
+ */
+describe("Tab 9 — where the member attended (FR-077a)", () => {
+  const AAMIL = (over = {}) => ({
+    attended_with: "With Aamil",
+    hijri_year: 1440,
+    moze_id: null,
+    mohallah_id: null,
+    aqa_moula_ashara_id: null,
+    ...over
+  });
+
+  it("shows Moze and Mohallah for With Aamil, and not the Aqa Moula list", () => {
+    renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
+
+    expect(screen.getByLabelText("Moze")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Mohallah/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Ashara with Aqa Moula")).not.toBeInTheDocument();
+  });
+
+  it("shows the Aqa Moula list for With Aqa Moula TUS, and not Moze or Mohallah", () => {
+    renderTab(Tab09Ashara, {
+      ashara_attendances: [AAMIL({ attended_with: "With Aqa Moula TUS" })]
+    });
+
+    expect(screen.getByLabelText("Ashara with Aqa Moula")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Moze")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Mohallah/)).not.toBeInTheDocument();
+  });
+
+  it("offers the values an administrator entered, marked draft until reviewed", () => {
+    renderTab(Tab09Ashara, {
+      ashara_attendances: [AAMIL({ attended_with: "With Aqa Moula TUS" })]
+    });
+
+    const select = screen.getByLabelText("Ashara with Aqa Moula");
+    expect(within(select).getByRole("option", { name: /Colombo.*DRAFT/ })).toBeInTheDocument();
+  });
+
+  it("clears Moze and Mohallah when the answer changes to With Aqa Moula TUS", () => {
+    const state = renderTab(Tab09Ashara, {
+      ashara_attendances: [AAMIL({ moze_id: 31, mohallah_id: 51 })]
+    });
+
+    fireEvent.click(screen.getByLabelText("With Aqa Moula TUS"));
+
+    const row = state.value.ashara_attendances[0];
+    expect(row.attended_with).toBe("With Aqa Moula TUS");
+    expect(row.moze_id).toBeNull();
+    expect(row.mohallah_id).toBeNull();
+  });
+
+  it("clears the Aqa Moula place when the answer changes to With Aamil", () => {
+    const state = renderTab(Tab09Ashara, {
+      ashara_attendances: [
+        AAMIL({ attended_with: "With Aqa Moula TUS", aqa_moula_ashara_id: 61 })
+      ]
+    });
+
+    fireEvent.click(screen.getByLabelText("With Aamil"));
+
+    const row = state.value.ashara_attendances[0];
+    expect(row.attended_with).toBe("With Aamil");
+    expect(row.aqa_moula_ashara_id).toBeNull();
+  });
+
+  it("records the chosen Aqa Moula place", () => {
+    const state = renderTab(Tab09Ashara, {
+      ashara_attendances: [AAMIL({ attended_with: "With Aqa Moula TUS" })]
+    });
+
+    fireEvent.change(screen.getByLabelText("Ashara with Aqa Moula"), {
+      target: { value: "61" }
+    });
+
+    expect(state.value.ashara_attendances[0].aqa_moula_ashara_id).toBe(61);
   });
 });

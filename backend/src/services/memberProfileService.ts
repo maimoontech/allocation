@@ -27,8 +27,12 @@ export type PlaceVisitEntry = { place_id: number; times_count: number; years: nu
 export type AsharaEntry = {
   attended_with: string;
   hijri_year: number;
+  /** With Aamil only. Cleared when the member attended with Aqa Moula TUS. */
   moze_id?: number | null;
+  /** With Aamil only. Cleared when the member attended with Aqa Moula TUS. */
   mohallah_id?: number | null;
+  /** With Aqa Moula TUS only. Cleared when the member attended with their Aamil. */
+  aqa_moula_ashara_id?: number | null;
 };
 
 export type SaveResult =
@@ -248,7 +252,7 @@ export async function readMemberProfile(memberAccountId: number) {
     { id: memberAccountId }
   );
   const [ashara] = await pool.query<any[]>(
-    `SELECT attended_with, hijri_year, moze_id, mohallah_id
+    `SELECT attended_with, hijri_year, moze_id, mohallah_id, aqa_moula_ashara_id
      FROM member_ashara_attendances
      WHERE member_account_id = :id ORDER BY hijri_year`,
     { id: memberAccountId }
@@ -316,7 +320,9 @@ export async function readMemberProfile(memberAccountId: number) {
     attended_with: a.attended_with,
     hijri_year: Number(a.hijri_year),
     moze_id: a.moze_id === null ? null : Number(a.moze_id),
-    mohallah_id: a.mohallah_id === null ? null : Number(a.mohallah_id)
+    mohallah_id: a.mohallah_id === null ? null : Number(a.mohallah_id),
+    aqa_moula_ashara_id:
+      a.aqa_moula_ashara_id === null ? null : Number(a.aqa_moula_ashara_id)
   }));
 
   return profile;
@@ -700,7 +706,8 @@ export async function saveMemberProfile(
           attended_with: a.attended_with,
           hijri_year: a.hijri_year,
           moze_id: a.moze_id ?? null,
-          mohallah_id: a.mohallah_id ?? null
+          mohallah_id: a.mohallah_id ?? null,
+          aqa_moula_ashara_id: a.aqa_moula_ashara_id ?? null
         })
       );
     }
@@ -961,7 +968,32 @@ function parseAshara(value: unknown, add: Add): AsharaEntry[] | undefined {
       return;
     }
 
-    out.push({ attended_with: with_, hijri_year, moze_id, mohallah_id });
+    const aqa_moula_ashara_id =
+      entry?.aqa_moula_ashara_id == null || entry.aqa_moula_ashara_id === ""
+        ? null
+        : Number(entry.aqa_moula_ashara_id);
+
+    if (
+      aqa_moula_ashara_id !== null &&
+      (!Number.isInteger(aqa_moula_ashara_id) || aqa_moula_ashara_id <= 0)
+    ) {
+      add(`ashara_attendances[${index}].aqa_moula_ashara_id`, "Invalid place.", 9);
+      return;
+    }
+
+    // FR-077a. The two answers ask different questions, so each CLEARS the other's
+    // fields rather than rejecting them. Same treatment as the conditional rules on
+    // Tabs 4, 11 and 12: a member who picks one answer, fills it in, then changes their
+    // mind must not leave a contradictory value behind in a field nobody can see.
+    const withAqaMoula = with_ === "With Aqa Moula TUS";
+
+    out.push({
+      attended_with: with_,
+      hijri_year,
+      moze_id: withAqaMoula ? null : moze_id,
+      mohallah_id: withAqaMoula ? null : mohallah_id,
+      aqa_moula_ashara_id: withAqaMoula ? aqa_moula_ashara_id : null
+    });
   });
 
   return out;
@@ -1097,16 +1129,27 @@ async function checkReferences(
 
   if (ashara?.length) {
     const mozeIds = ashara.map((a) => a.moze_id).filter((id): id is number => id != null);
+    const aqaMoulaIds = ashara
+      .map((a) => a.aqa_moula_ashara_id)
+      .filter((id): id is number => id != null);
     const mohallahIds = ashara
       .map((a) => a.mohallah_id)
       .filter((id): id is number => id != null);
 
     const foundMoze = await existingIds("mozes", mozeIds);
     const foundMohallah = await existingIds("mohallahs", mohallahIds);
+    const foundAqaMoula = await existingIds("aqa_moula_asharas", aqaMoulaIds);
 
     ashara.forEach((a, i) => {
       if (a.moze_id != null && !foundMoze.has(a.moze_id)) {
         add(`ashara_attendances[${i}].moze_id`, "Selection is no longer available.", 9);
+      }
+      if (a.aqa_moula_ashara_id != null && !foundAqaMoula.has(a.aqa_moula_ashara_id)) {
+        add(
+          `ashara_attendances[${i}].aqa_moula_ashara_id`,
+          "Selection is no longer available.",
+          9
+        );
       }
       if (a.mohallah_id != null && !foundMohallah.has(a.mohallah_id)) {
         add(`ashara_attendances[${i}].mohallah_id`, "Selection is no longer available.", 9);

@@ -311,7 +311,8 @@ Tab 8 records the **places a member has visited**, with how many times and in wh
 - **FR-074**: Tab 9 MUST allow several attendance records per member, each added, corrected and removed independently.
 - **FR-075**: Tab 9 MUST capture Attended With as a choice between With Aqa Moula TUS and With Aamil.
 - **FR-076**: Tab 9 MUST offer a Hijri Year from 1400 AH through the current Hijri year, determined using the project's existing Hijri logic, and MUST NOT offer a later year.
-- **FR-077**: Tab 9 MUST capture Moze, and MUST capture Mohallah as an optional value offered from the Mohallahs already held by the system.
+- **FR-077** *(amended 2026-11-05; previously unconditional)*: Tab 9 MUST capture Moze, and MUST capture Mohallah as an optional value offered from the Mohallahs already held by the system. Both apply ONLY to a record attended **With Aamil** — see FR-077a.
+- **FR-077a** *(authorised 2026-11-05)*: Where a member attended MUST follow who they attended with, because the two answers ask different questions. A record attended **With Aqa Moula TUS** MUST offer a new master list, "Ashara with Aqa Moula", naming where Aqa Moula TUS held Ashara Mubaraka that year, and MUST NOT offer Moze or Mohallah. A record attended **With Aamil** MUST offer Moze and the optional Mohallah, and MUST NOT offer the Aqa Moula list. Changing the answer MUST clear the fields the other answer owns, on the client and again on the server, so a value cannot survive in a field the form no longer shows. The new list MUST be maintainable by an administrator through the Dropdown Lists panel on the same terms as the other lookups, and MUST ship empty: supplying values would mean stating a religious calendar the organisation has not confirmed.
 
 #### Tab 10 — Asbaq
 

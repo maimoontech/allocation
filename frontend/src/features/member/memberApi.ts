@@ -43,6 +43,8 @@ export type MemberLookups = {
   sharafs: LookupValue[];
   halqas: LookupValue[];
   mozes: LookupValue[];
+  /** Where Aqa Moula TUS held Ashara Mubaraka. Separate from `mozes` — see Tab 9. */
+  aqa_moula_asharas: LookupValue[];
   places: LookupValue[];
   sanads: LookupValue[];
   marital_statuses: LookupValue[];
@@ -62,8 +64,12 @@ export type PlaceVisitEntry = { place_id: number; times_count: number; years: nu
 export type AsharaEntry = {
   attended_with: string;
   hijri_year: number;
+  /** With Aamil only. The server clears it when the member attended with Aqa Moula TUS. */
   moze_id: number | null;
+  /** With Aamil only. The server clears it when the member attended with Aqa Moula TUS. */
   mohallah_id: number | null;
+  /** With Aqa Moula TUS only. The server clears it when they attended with their Aamil. */
+  aqa_moula_ashara_id: number | null;
 };
 
 /**

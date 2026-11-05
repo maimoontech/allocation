@@ -373,7 +373,10 @@ UNION ALL SELECT 'places',              COUNT(*), SUM(is_active), SUM(is_draft) 
 UNION ALL SELECT 'titles',              COUNT(*), SUM(is_active), SUM(is_draft) FROM titles
 UNION ALL SELECT 'sharafs',             COUNT(*), SUM(is_active), SUM(is_draft) FROM sharafs
 UNION ALL SELECT 'halqas',              COUNT(*), SUM(is_active), SUM(is_draft) FROM halqas
-UNION ALL SELECT 'mozes',               COUNT(*), SUM(is_active), SUM(is_draft) FROM mozes;
+UNION ALL SELECT 'mozes',               COUNT(*), SUM(is_active), SUM(is_draft) FROM mozes
+-- Seeded with nothing on purpose. Reported anyway, so "empty" is a value you can see
+-- in the log rather than a line that is simply missing from it.
+UNION ALL SELECT 'aqa_moula_asharas',   COUNT(*), SUM(is_active), SUM(is_draft) FROM aqa_moula_asharas;
 
 -- Expected on a FIRST run (production — no earlier seed applied):
 --   lookup_table          rows  active  draft
@@ -387,6 +390,7 @@ UNION ALL SELECT 'mozes',               COUNT(*), SUM(is_active), SUM(is_draft) 
 --   sharafs                  3       3      0
 --   halqas                   2       2      0
 --   mozes                    5       5      0
+--   aqa_moula_asharas        0    NULL   NULL
 --
 -- EVERY still_draft MUST BE 0. A non-zero value means a row was added outside this
 -- file and has not been reviewed; it is not an error, but the UI will render it as

@@ -23,10 +23,10 @@ every number must match. Also check, near the end:
 
 | Check | Expected |
 |---|---|
-| `new_tables_created` | 20 |
+| `new_tables_created` | 21 |
 | `approval_columns_present` | 5 |
 | `approval_indexes_present` | 2 |
-| `still_draft` (all ten lookup lists) | 0 |
+| `still_draft` (all ten SEEDED lookup lists) | 0 |
 
 Before you run it: take a backup **and verify it restores** — an unverified backup is not a
 backup — and apply it to a restored copy first.
@@ -47,7 +47,7 @@ layout below exists.
 
 ### `sources/` — maintained, but never run directly
 
-- `sources/membership_schema.sql` — the 20 tables
+- `sources/membership_schema.sql` — the 21 tables
 - `sources/membership_seed.sql` — the ten lookup lists
 
 These are the real source of truth for the schema. `MEMBERSHIP_LIVE_INSTALL.sql` is

@@ -132,7 +132,8 @@ describe("the live update script", () => {
       "member_titles", "member_sharafs", "member_skills", "member_place_visits",
       "member_place_visit_years", "member_ashara_attendances",
       "titles", "sharafs", "halqas", "mozes", "places", "sanads",
-      "marital_statuses", "skills", "tamreen_frequencies", "tamreen_methods"
+      "marital_statuses", "skills", "tamreen_frequencies", "tamreen_methods",
+      "aqa_moula_asharas"
     ];
     const PRE_EXISTING_TABLES = [
       "admins", "members", "miqaats", "mohallahs", "parties", "party_venue_history",
@@ -183,11 +184,11 @@ describe("the live update script", () => {
     const creates = statements.match(/CREATE TABLE IF NOT EXISTS/g) ?? [];
     const collations = statements.match(/COLLATE=utf8mb4_general_ci/g) ?? [];
 
-    expect(creates).toHaveLength(20);
-    expect(collations).toHaveLength(20);
+    expect(creates).toHaveLength(21);
+    expect(collations).toHaveLength(21);
   });
 
-  it("seeds all ten lookup lists, every value already reviewed", () => {
+  it("seeds all ten seeded lookup lists, every value already reviewed", () => {
     const seed = statementsOnly(readSource("membership_seed.sql"));
 
     // This replaces an assertion that titles, sharafs, halqas, mozes and places ship EMPTY.
@@ -281,6 +282,35 @@ describe("the live update script", () => {
     const backfill = schema.slice(backfillAt, schema.indexOf("CALL mm_backfill", backfillAt));
     // Five columns plus two indexes, each behind its own existence check.
     expect(backfill.match(/IF NOT EXISTS\s*\(SELECT 1 FROM INFORMATION_SCHEMA/gi)).toHaveLength(7);
+  });
+
+  /**
+   * The same guarantee as the photo-approval backfill, for the column added on 2026-11-05.
+   *
+   * Production already HAS member_ashara_attendances, so CREATE TABLE IF NOT EXISTS skips it
+   * entirely and the new column would never arrive. This is the only thing standing between
+   * "the script reports success" and "the database actually has the column".
+   */
+  it("backfills the Ashara aqa_moula_ashara_id column for a database that already has the table", () => {
+    const schema = read("MEMBERSHIP_LIVE_INSTALL.sql");
+
+    expect(schema).toMatch(/CREATE PROCEDURE mm_backfill_aqa_moula_ashara/);
+    expect(schema).toMatch(/CALL mm_backfill_aqa_moula_ashara\(\)/);
+    expect(schema).toMatch(/DROP PROCEDURE mm_backfill_aqa_moula_ashara/);
+
+    const at = schema.search(/CREATE PROCEDURE mm_backfill_aqa_moula_ashara/);
+    const backfill = schema.slice(at, schema.indexOf("CALL mm_backfill_aqa_moula_ashara", at));
+
+    // One column, one index, one foreign key — each behind its own existence check.
+    expect(backfill.match(/IF NOT EXISTS\s*\(SELECT 1 FROM INFORMATION_SCHEMA/gi)).toHaveLength(3);
+    expect(backfill).toContain("aqa_moula_ashara_id");
+    expect(backfill).toContain("idx_member_ashara_aqa_moula");
+    expect(backfill).toContain("fk_member_ashara_attendances_aqa_moula_ashara_id");
+
+    // It must run AFTER section 4 creates the table, or it would add a column to nothing.
+    const createAt = schema.search(/CREATE TABLE IF NOT EXISTS member_ashara_attendances/);
+    expect(createAt).toBeGreaterThan(-1);
+    expect(at).toBeGreaterThan(createAt);
   });
 
   it("documents that the rollback needs the frontend rolled back first", () => {

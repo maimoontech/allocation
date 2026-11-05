@@ -96,6 +96,7 @@ const LOOKUPS: MemberLookups = {
   sharafs: [],
   halqas: [],
   mozes: [],
+  aqa_moula_asharas: [],
   places: [],
   sanads: [{ id: 3, name: "Marhala Ula", is_draft: false }],
   marital_statuses: [],

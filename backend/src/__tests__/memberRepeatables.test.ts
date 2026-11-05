@@ -213,6 +213,7 @@ describe("Tab 9 Ashara Mubaraka — add three, edit the middle, delete the first
     hijri_year: number;
     moze_id: number | null;
     mohallah_id: number | null;
+    aqa_moula_ashara_id: number | null;
   };
 
   it("leaves exactly the expected rows", async () => {
@@ -237,6 +238,66 @@ describe("Tab 9 Ashara Mubaraka — add three, edit the middle, delete the first
     const rows = await readSection<Ashara>("ashara_attendances");
     expect(rows.map((r) => r.hijri_year)).toEqual([1441, 1442]);
     expect(rows.map((r) => r.attended_with)).toEqual(["With Aqa Moula TUS", "With Aamil"]);
+  });
+
+  /**
+   * FR-077a. Where the member attended depends on who they attended with, and each answer
+   * CLEARS the other's fields rather than rejecting them.
+   *
+   * The clearing is what these pin. A client that sends both — an older build, or a form
+   * whose state was not reset — must not leave a Moze on a record that attended with Aqa
+   * Moula. Nothing on the member's form would show that value, so nobody could correct it.
+   */
+  it("stores the Aqa Moula place and clears Moze for With Aqa Moula TUS", async () => {
+    const res = await putProfile({
+      ashara_attendances: [
+        {
+          attended_with: "With Aqa Moula TUS",
+          hijri_year: 1445,
+          aqa_moula_ashara_id: seeded.aqaMoulaAsharaId,
+          // Deliberately sent too. The server must drop both.
+          moze_id: seeded.mozeId,
+          mohallah_id: seeded.mohallahId
+        }
+      ]
+    });
+    expect(res.status).toBe(200);
+
+    const [row] = await readSection<Ashara>("ashara_attendances");
+    expect(row.aqa_moula_ashara_id).toBe(seeded.aqaMoulaAsharaId);
+    expect(row.moze_id).toBeNull();
+    expect(row.mohallah_id).toBeNull();
+  });
+
+  it("stores Moze and clears the Aqa Moula place for With Aamil", async () => {
+    const res = await putProfile({
+      ashara_attendances: [
+        {
+          attended_with: "With Aamil",
+          hijri_year: 1446,
+          moze_id: seeded.mozeId,
+          aqa_moula_ashara_id: seeded.aqaMoulaAsharaId
+        }
+      ]
+    });
+    expect(res.status).toBe(200);
+
+    const [row] = await readSection<Ashara>("ashara_attendances");
+    expect(row.moze_id).toBe(seeded.mozeId);
+    expect(row.aqa_moula_ashara_id).toBeNull();
+  });
+
+  it("refuses an Aqa Moula place that does not exist", async () => {
+    const res = await putProfile({
+      ashara_attendances: [
+        {
+          attended_with: "With Aqa Moula TUS",
+          hijri_year: 1447,
+          aqa_moula_ashara_id: 99999999
+        }
+      ]
+    });
+    expect(res.status).toBe(400);
   });
 
   it("keeps an optional Mohallah on the right record", async () => {

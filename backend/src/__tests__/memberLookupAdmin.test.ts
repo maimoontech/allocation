@@ -143,16 +143,17 @@ describe("access control", () => {
 });
 
 describe("the index", () => {
-  it("lists all ten lists with their counts", async () => {
+  it("lists all eleven lists with their counts", async () => {
     const res = await request(app)
       .get("/api/v1/member-lookups")
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toHaveLength(10);
+    expect(res.body.data).toHaveLength(11);
 
     const slugs = res.body.data.map((r: any) => r.entity).sort();
     expect(slugs).toEqual([
+      "aqa_moula_asharas",
       "halqas",
       "marital_statuses",
       "mozes",

@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/Button";
 import { useGetMemberLookupIndexQuery } from "../../features/member/memberLookupAdminApi";
 
 /**
- * Index of the membership module's ten dropdown lists.
+ * Index of the membership module's eleven dropdown lists.
  *
  * Five of these — Titles, Sharaf, Halqas, Mozes, Places Visited — were created **empty**,
  * because filling them would have meant inventing religious and organisational terms or place

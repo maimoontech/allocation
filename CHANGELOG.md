@@ -1,5 +1,37 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Added: "Ashara with Aqa Moula" master dropdown
+
+An eleventh lookup list, maintained in Admin → Member Dropdown Lists alongside the other ten.
+It names where Aqa Moula TUS held Ashara Mubaraka in a given year.
+
+**It is deliberately separate from Mozes.** A Moze is where the member's own Jamaat is, which
+answers "where did you attend with your Aamil". Where Aqa Moula held Ashara that year is a
+different question with a much shorter list of answers. One list could not serve both without
+offering every member's city as somewhere Aqa Moula had been.
+
+- **Tab 9 now swaps its location fields to match the answer** (FR-077a). "With Aqa Moula TUS"
+  shows the new dropdown and hides Moze and Mohallah; "With Aamil" shows Moze and the optional
+  Mohallah and hides the new one. Changing the answer clears the fields the other answer owns —
+  on the client *and* again on the server, so a value cannot survive in a field the form no
+  longer shows and nobody could then correct.
+- The empty-list warning follows the list a record on screen actually needs, rather than
+  warning about both.
+- `aqa_moula_asharas` ships **empty**, like the other five domain lists. Filling it would mean
+  stating a religious calendar the organisation has not confirmed. The Dropdown Lists page
+  already flags an empty list, and Tab 9 explains itself rather than appearing broken.
+- `member_ashara_attendances.aqa_moula_ashara_id` is a new nullable column with `ON DELETE
+  RESTRICT`, matching `moze_id`: a value still in use cannot be deleted out from under a
+  member's record.
+- `MEMBERSHIP_LIVE_INSTALL.sql` regenerated — **21 tables now, not 20**. It carries a new
+  backfill (section 4b) for the same reason section 3b exists: production already has
+  `member_ashara_attendances`, so `CREATE TABLE IF NOT EXISTS` skips it entirely, column and
+  all. Without the backfill the script would report success while leaving the database missing
+  the column the application reads. Column, index and foreign key are each added only if
+  absent, so it stays safe to re-run.
+- FR-077 amended to say Moze and Mohallah are the With Aamil case only; FR-077a added.
+
+
 ## 2026-11-05 — Changed: profile tabs show only their heading
 
 The tab strip printed the position in front of each label — `1 Personal`, `3 Hizb`. The tabs

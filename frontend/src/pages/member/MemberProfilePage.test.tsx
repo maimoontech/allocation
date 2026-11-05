@@ -53,6 +53,7 @@ const LOOKUPS = {
   sharafs: [],
   halqas: [],
   mozes: [],
+  aqa_moula_asharas: [],
   places: [],
   sanads: [],
   marital_statuses: [{ id: 1, name: "Married", is_draft: true }],

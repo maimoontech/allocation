@@ -143,6 +143,25 @@ CREATE TABLE IF NOT EXISTS mozes (
   UNIQUE KEY uq_mozes_name (moze_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- The place Ashara Mubaraka was held with Aqa Moula TUS in a given year. Deliberately
+-- separate from `mozes`: a Moze is where a member's own Jamaat is, which is the right
+-- answer when they attended with their Aamil. Where Aqa Moula held Ashara that year is a
+-- different question with a different, much shorter list of answers.
+--
+-- Ships EMPTY, like the other five domain lookups. Filling it would mean inventing or
+-- mis-stating a religious calendar; an administrator enters the values.
+CREATE TABLE IF NOT EXISTS aqa_moula_asharas (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  aqa_moula_ashara_name VARCHAR(150) NOT NULL,
+  display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_draft TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE IF NOT EXISTS places (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   place_name VARCHAR(150) NOT NULL,
@@ -639,27 +658,86 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
   member_account_id INT UNSIGNED NOT NULL,
   attended_with ENUM('With Aqa Moula TUS','With Aamil') NOT NULL COMMENT 'FR-075',
   hijri_year SMALLINT UNSIGNED NOT NULL COMMENT 'FR-076: 1400 to the current Hijri year, upper bound checked in the application because it moves with the calendar',
-  moze_id INT UNSIGNED NULL,
-  mohallah_id INT UNSIGNED NULL COMMENT 'FR-077: optional',
+  moze_id INT UNSIGNED NULL COMMENT 'FR-077: the member own Moze. Only for With Aamil.',
+  mohallah_id INT UNSIGNED NULL COMMENT 'FR-077: optional. Only for With Aamil.',
+  aqa_moula_ashara_id INT UNSIGNED NULL COMMENT 'FR-077a: where Aqa Moula TUS held Ashara that year. Only for With Aqa Moula TUS.',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_member_ashara (member_account_id, hijri_year),
   KEY idx_member_ashara_moze (moze_id),
   KEY idx_member_ashara_mohallah (mohallah_id),
+  KEY idx_member_ashara_aqa_moula (aqa_moula_ashara_id),
   CONSTRAINT fk_member_ashara_attendances_member_account_id
     FOREIGN KEY (member_account_id) REFERENCES member_accounts(id) ON DELETE CASCADE,
   CONSTRAINT fk_member_ashara_attendances_moze_id
     FOREIGN KEY (moze_id) REFERENCES mozes(id) ON DELETE RESTRICT,
   CONSTRAINT fk_member_ashara_attendances_mohallah_id
-    FOREIGN KEY (mohallah_id) REFERENCES mohallahs(id) ON DELETE SET NULL
+    FOREIGN KEY (mohallah_id) REFERENCES mohallahs(id) ON DELETE SET NULL,
+  -- RESTRICT, matching moze_id: an attendance record naming a place that was deleted
+  -- out from under it is worse than refusing the delete.
+  CONSTRAINT fk_member_ashara_attendances_aqa_moula_ashara_id
+    FOREIGN KEY (aqa_moula_ashara_id) REFERENCES aqa_moula_asharas(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- ----------------------------------------------------------------------------
+-- 4b. Backfill: member_ashara_attendances.aqa_moula_ashara_id
+--
+--     Same reason as section 3b, and the same failure it guards against. Production
+--     already HAS member_ashara_attendances, from the run on 2026-11-04. CREATE TABLE
+--     IF NOT EXISTS therefore skips it entirely — column, index and foreign key — and
+--     without this the script would report success while leaving the database missing
+--     the column the application now reads and writes.
+--
+--     The foreign key is added last and only once the column exists, because adding a
+--     constraint to a column that is not there fails the whole script.
+--
+--     Additive only, and against a table this module owns: no pre-existing table is
+--     touched, so FR-106 holds.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_backfill_aqa_moula_ashara;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_aqa_moula_ashara()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'member_ashara_attendances'
+                   AND COLUMN_NAME = 'aqa_moula_ashara_id') THEN
+    ALTER TABLE member_ashara_attendances
+      ADD COLUMN aqa_moula_ashara_id INT UNSIGNED NULL
+        COMMENT 'FR-077a: where Aqa Moula TUS held Ashara that year. Only for With Aqa Moula TUS.';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'member_ashara_attendances'
+                   AND INDEX_NAME = 'idx_member_ashara_aqa_moula') THEN
+    ALTER TABLE member_ashara_attendances
+      ADD INDEX idx_member_ashara_aqa_moula (aqa_moula_ashara_id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'member_ashara_attendances'
+                   AND CONSTRAINT_NAME = 'fk_member_ashara_attendances_aqa_moula_ashara_id') THEN
+    ALTER TABLE member_ashara_attendances
+      ADD CONSTRAINT fk_member_ashara_attendances_aqa_moula_ashara_id
+        FOREIGN KEY (aqa_moula_ashara_id) REFERENCES aqa_moula_asharas(id) ON DELETE RESTRICT;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_aqa_moula_ashara();
+DROP PROCEDURE mm_backfill_aqa_moula_ashara;
 
 
 -- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 20 new tables, and every existing count unchanged.
+--    Expect 21 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -670,9 +748,10 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_titles','member_sharafs','member_skills','member_place_visits',
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
-    'marital_statuses','skills','tamreen_frequencies','tamreen_methods'
+    'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
+    'aqa_moula_asharas'
   );
--- Expected: 20
+-- Expected: 21
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION

@@ -25,6 +25,7 @@ export type SeededLookups = {
   sharafId: number;
   halqaId: number;
   mozeId: number;
+  aqaMoulaAsharaId: number;
   placeA: number;
   placeB: number;
   maritalId: number;
@@ -50,7 +51,8 @@ const LOOKUP_TABLES = [
   ["skills", "skill_name"],
   ["tamreen_frequencies", "tamreen_frequency_name"],
   ["tamreen_methods", "tamreen_method_name"],
-  ["sanads", "sanad_name"]
+  ["sanads", "sanad_name"],
+  ["aqa_moula_asharas", "aqa_moula_ashara_name"]
 ] as const;
 
 export async function seedLookup(
@@ -102,6 +104,11 @@ export async function seedAllLookups(): Promise<SeededLookups> {
     sharafId: await seedLookup("sharafs", "sharaf_name", `${LOOKUP_MARKER} Sharaf`),
     halqaId: await seedLookup("halqas", "halqa_name", `${LOOKUP_MARKER} Halqa`),
     mozeId: await seedLookup("mozes", "moze_name", `${LOOKUP_MARKER} Moze`),
+    aqaMoulaAsharaId: await seedLookup(
+      "aqa_moula_asharas",
+      "aqa_moula_ashara_name",
+      `${LOOKUP_MARKER} Aqa Moula Ashara`
+    ),
     placeA: await seedLookup("places", "place_name", `${LOOKUP_MARKER} Place A`),
     placeB: await seedLookup("places", "place_name", `${LOOKUP_MARKER} Place B`),
     maritalId: await seedLookup(

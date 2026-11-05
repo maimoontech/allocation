@@ -101,7 +101,7 @@ Admin-only, same base path:
 ### Member Dropdown Lists
 `/api/v1/member-lookups`
 
-Admin-only maintenance of the ten lookup lists the member profile draws its dropdowns from:
+Admin-only maintenance of the eleven lookup lists the member profile draws its dropdowns from:
 `titles`, `sharafs`, `halqas`, `mozes`, `places`, `sanads`, `marital_statuses`,
 `tamreen_frequencies`, `tamreen_methods`, `skills`.
 
@@ -115,7 +115,7 @@ The delete refusal is the part worth knowing. Five of the ten foreign keys are
 `ON DELETE RESTRICT`, but the other five are `ON DELETE SET NULL` — for those the database
 would allow the delete and silently blank that answer on every member who had chosen it. The
 API therefore counts references itself, across *every* referencing column (`tamreen_frequencies`
-is referenced twice), and refuses for all ten lists. Deactivating (`is_active = 0`) is the safe
+is referenced twice), and refuses for all eleven lists. Deactivating (`is_active = 0`) is the safe
 alternative: `GET /members/lookups` filters on `is_active`, so the value stops being offered
 while existing answers are kept.
 
