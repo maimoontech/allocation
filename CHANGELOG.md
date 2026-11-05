@@ -1,5 +1,25 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Changed: Tab 9 is a year grid, and the Aqa Moula place follows the year
+
+Tab 9 (Ashara Mubaraka) no longer asks the member to add records one at a time. Every Hijri
+year from the current one down to 1405 AH is listed, newest first, and each is answered Not
+attended, With Aqa Moula TUS or With Aamil with a single click.
+
+- **With Aqa Moula TUS asks nothing more.** Aqa Moula TUS holds Ashara in one place a year, so
+  each "Ashara with Aqa Moula" entry in Admin now has a **Hijri Year** (one place per year,
+  enforced by a unique key). The grid shows that year's place; the server looks it up again on
+  save and overrides whatever the client sent. A year with no place entered yet still saves and
+  says so.
+- **With Aamil** shows Moze and the optional Mohallah inline on that row. Changing the answer
+  still clears the other answer's fields, on the client and on the server (FR-077a).
+- **Saved data keeps its shape**: Not attended is simply no record, so existing records load
+  into the grid unchanged. The server still accepts 1400 to 1404 AH; a record saved for one of
+  those years appears as an extra row rather than vanishing.
+- **Schema**: `aqa_moula_asharas.hijri_year` (nullable) and `uq_aqa_moula_asharas_year`, added by
+  the backfill in `MEMBERSHIP_LIVE_INSTALL.sql` and at boot by `ensureSchema`. Additive only.
+- FR-076b and FR-077b added.
+
 ## 2026-11-05 — Changed: Tab 3 offers inactive Hizbs, marked
 
 The Party dropdown on the member profile returned only `is_active = 1` parties. It now returns

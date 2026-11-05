@@ -604,6 +604,11 @@ export async function saveMemberProfile(
     await checkVisitCounts(visits, add);
   }
 
+  // FR-077b, before the referential checks so the id they verify is the one that is saved.
+  if (ashara?.length) {
+    await resolveAqaMoulaPlaces(ashara);
+  }
+
   // -------------------------------------------------------------------------
   // Referential checks. Batched, so a profile with many selections costs a handful of
   // queries rather than one per field.
@@ -997,6 +1002,35 @@ function parseAshara(value: unknown, add: Add): AsharaEntry[] | undefined {
   });
 
   return out;
+}
+
+/**
+ * FR-077b. Where Aqa Moula TUS held Ashara is fixed by the year, so for a "With Aqa Moula TUS"
+ * record the place is looked up from the year and replaces whatever the client sent. The form
+ * no longer asks for it; trusting a client value here would let a stale build save a place
+ * that contradicts the year.
+ *
+ * A year with no place entered yet keeps the client's value (normally null), so records saved
+ * before an administrator filled the list are not blanked by the next save.
+ */
+async function resolveAqaMoulaPlaces(ashara: AsharaEntry[]) {
+  const years = [
+    ...new Set(ashara.filter((a) => a.attended_with === "With Aqa Moula TUS").map((a) => a.hijri_year))
+  ];
+  if (years.length === 0) return;
+
+  const [rows] = await pool.query<any[]>(
+    `SELECT id, hijri_year FROM aqa_moula_asharas
+     WHERE is_active = 1 AND hijri_year IN (${years.map(() => "?").join(",")})`,
+    years
+  );
+  const placeByYear = new Map(rows.map((r) => [Number(r.hijri_year), Number(r.id)]));
+
+  for (const a of ashara) {
+    if (a.attended_with !== "With Aqa Moula TUS") continue;
+    const placeId = placeByYear.get(a.hijri_year);
+    if (placeId !== undefined) a.aqa_moula_ashara_id = placeId;
+  }
 }
 
 // ---------------------------------------------------------------------------

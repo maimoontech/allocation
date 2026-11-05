@@ -40,6 +40,11 @@ export type LookupValue = { id: number; name: string; is_draft: boolean };
  */
 export type PartyOption = { id: number; name: string; zone_id: number; is_active: boolean };
 export type MohallahOption = { id: number; name: string; zone_id: number; is_draft: boolean };
+/**
+ * FR-077b. Aqa Moula TUS holds Ashara in one place a year, so each place carries its year and
+ * Tab 9 shows it for that year rather than asking. `null` until an administrator sets one.
+ */
+export type AqaMoulaPlace = LookupValue & { hijri_year: number | null };
 
 /** Everything the twelve-tab form needs to render its dropdowns, in one response. */
 export type MemberLookups = {
@@ -48,7 +53,7 @@ export type MemberLookups = {
   halqas: LookupValue[];
   mozes: LookupValue[];
   /** Where Aqa Moula TUS held Ashara Mubaraka. Separate from `mozes` — see Tab 9. */
-  aqa_moula_asharas: LookupValue[];
+  aqa_moula_asharas: AqaMoulaPlace[];
   places: LookupValue[];
   sanads: LookupValue[];
   marital_statuses: LookupValue[];

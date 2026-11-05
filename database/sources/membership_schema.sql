@@ -150,16 +150,24 @@ CREATE TABLE IF NOT EXISTS mozes (
 --
 -- Ships EMPTY, like the other five domain lookups. Filling it would mean inventing or
 -- mis-stating a religious calendar; an administrator enters the values.
+--
+-- `hijri_year` ties each entry to the one year it answers (FR-077b). Aqa Moula TUS holds
+-- Ashara in one place a year, so the year alone determines the place and Tab 9 shows it
+-- rather than asking for it. UNIQUE, because two places for one year would leave the form
+-- unable to say which. NULL is allowed so an entry made before the column existed stays
+-- valid until an administrator gives it a year; MySQL lets several NULLs share a unique key.
 CREATE TABLE IF NOT EXISTS aqa_moula_asharas (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   aqa_moula_ashara_name VARCHAR(150) NOT NULL,
+  hijri_year SMALLINT UNSIGNED NULL COMMENT 'FR-077b: the Hijri year Aqa Moula TUS held Ashara here. One place per year.',
   display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   is_draft TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name)
+  UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name),
+  UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE IF NOT EXISTS places (
@@ -726,6 +734,26 @@ BEGIN
     ALTER TABLE member_ashara_attendances
       ADD CONSTRAINT fk_member_ashara_attendances_aqa_moula_ashara_id
         FOREIGN KEY (aqa_moula_ashara_id) REFERENCES aqa_moula_asharas(id) ON DELETE RESTRICT;
+  END IF;
+
+  -- FR-077b. aqa_moula_asharas itself predates its year column on production, so the
+  -- CREATE above skipped it for the same reason. Column first, then its unique key.
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'aqa_moula_asharas'
+                   AND COLUMN_NAME = 'hijri_year') THEN
+    ALTER TABLE aqa_moula_asharas
+      ADD COLUMN hijri_year SMALLINT UNSIGNED NULL
+        COMMENT 'FR-077b: the Hijri year Aqa Moula TUS held Ashara here. One place per year.'
+        AFTER aqa_moula_ashara_name;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'aqa_moula_asharas'
+                   AND INDEX_NAME = 'uq_aqa_moula_asharas_year') THEN
+    ALTER TABLE aqa_moula_asharas
+      ADD UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year);
   END IF;
 END$$
 DELIMITER ;

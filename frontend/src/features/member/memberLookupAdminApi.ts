@@ -20,12 +20,16 @@ export type LookupRow = {
   is_draft: 0 | 1;
   /** How many member records point at this value. Non-zero means it cannot be deleted. */
   in_use: number;
+  /** Only on a list with `has_year` — "Ashara with Aqa Moula" (FR-077b). */
+  hijri_year?: number | null;
 };
 
 export type LookupDetail = {
   entity: string;
   label: string;
   used_for: string;
+  /** True when every value in this list belongs to one Hijri year. */
+  has_year?: boolean;
   rows: LookupRow[];
 };
 
@@ -34,6 +38,7 @@ export type LookupWrite = {
   display_order?: number;
   is_active?: 0 | 1;
   is_draft?: 0 | 1;
+  hijri_year?: number | null;
 };
 
 export const memberLookupAdminApi = api.injectEndpoints({

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db/pool";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { currentHijriYear } from "../utils/hijriDate";
 import { fail, ok } from "../utils/response";
 
 /**
@@ -34,6 +35,12 @@ type LookupEntity = {
    * admin delete a row that was still in use.
    */
   references: Reference[];
+  /**
+   * FR-077b. Set only on a list whose every value belongs to one Hijri year — today only
+   * "Ashara with Aqa Moula", where the year alone tells Tab 9 the place. The column is
+   * UNIQUE, so the API answers a clash in words rather than as a bare duplicate error.
+   */
+  yearColumn?: "hijri_year";
 };
 
 const ENTITIES: Record<string, LookupEntity> = {
@@ -76,7 +83,8 @@ const ENTITIES: Record<string, LookupEntity> = {
     nameColumn: "aqa_moula_ashara_name",
     label: "Ashara with Aqa Moula",
     usedFor:
-      "Member profile, Tab 9 — Ashara Mubaraka. Shown only when the member attended with Aqa Moula TUS, in place of Moze.",
+      "Member profile, Tab 9 — Ashara Mubaraka. Give each place the Hijri year it was held; a member who attended with Aqa Moula TUS that year then sees it filled in for them.",
+    yearColumn: "hijri_year",
     references: [
       {
         table: "member_ashara_attendances",
@@ -136,6 +144,8 @@ const ENTITIES: Record<string, LookupEntity> = {
 
 const MAX_NAME_LENGTH = 150;
 const MAX_DISPLAY_ORDER = 65535;
+/** The earliest year Tab 9 has ever accepted (FR-076). */
+const MIN_HIJRI_YEAR = 1400;
 
 export const memberLookupAdminRoutes = Router();
 memberLookupAdminRoutes.use(requireAuth, requireRole(["admin"]));
@@ -190,11 +200,14 @@ type LookupFields = {
   display_order?: number;
   is_active?: number;
   is_draft?: number;
+  /** FR-077b. Only read for a list with a `yearColumn`; `null` clears it. */
+  hijri_year?: number | null;
 };
 
-/** Reads name/display_order/is_active/is_draft from a body, validating each. */
+/** Reads name/display_order/is_active/is_draft (and hijri_year, where the list has one). */
 function readFields(
   body: any,
+  entity: LookupEntity,
   { requireName }: { requireName: boolean }
 ): { values: LookupFields; error?: string } {
   const values: LookupFields = {};
@@ -234,6 +247,21 @@ function readFields(
     return { values, error: `${flag} must be true or false.` };
   }
 
+  // Ignored, not refused, on a list without a year: the other ten have no such column.
+  if (entity.yearColumn && Object.prototype.hasOwnProperty.call(body ?? {}, "hijri_year")) {
+    const raw = body.hijri_year;
+    if (raw === null || raw === "") {
+      values.hijri_year = null;
+    } else {
+      const year = Number(raw);
+      const max = currentHijriYear();
+      if (!Number.isInteger(year) || year < MIN_HIJRI_YEAR || year > max) {
+        return { values, error: `Hijri year must be between ${MIN_HIJRI_YEAR} and ${max} AH.` };
+      }
+      values.hijri_year = year;
+    }
+  }
+
   return { values };
 }
 
@@ -266,15 +294,30 @@ memberLookupAdminRoutes.get("/", async (_req, res) => {
   }
 });
 
+/**
+ * A clash on the unique year key, told apart from one on the name so the admin is told
+ * which field to change. mysql2 names the key in `sqlMessage`.
+ */
+function duplicateMessage(err: any): string {
+  return String(err?.sqlMessage ?? "").includes("uq_aqa_moula_asharas_year")
+    ? "Another place already has that Hijri year. Each year has one place."
+    : "That name is already in this list.";
+}
+
 memberLookupAdminRoutes.get("/:entity", async (req, res) => {
   const entity = entityOr404(String(req.params.entity ?? ""));
   if (!entity) return fail(res, "Unknown lookup list", 404);
 
   try {
+    // A year list sorts newest year first, with any value still missing a year at the top,
+    // because those are the ones an admin has to act on.
+    const year = entity.yearColumn;
     const [rows] = await pool.query<any[]>(
       `SELECT id, \`${entity.nameColumn}\` AS name, display_order, is_active, is_draft
+              ${year ? `, \`${year}\` AS hijri_year` : ""}
        FROM \`${entity.table}\`
-       ORDER BY display_order, \`${entity.nameColumn}\``
+       ORDER BY ${year ? `(\`${year}\` IS NULL) DESC, \`${year}\` DESC, ` : ""}display_order,
+                \`${entity.nameColumn}\``
     );
     const usage = await usageByRow(entity);
 
@@ -284,12 +327,16 @@ memberLookupAdminRoutes.get("/:entity", async (req, res) => {
         entity: req.params.entity,
         label: entity.label,
         used_for: entity.usedFor,
+        has_year: Boolean(entity.yearColumn),
         rows: rows.map((r) => ({
           id: Number(r.id),
           name: String(r.name),
           display_order: Number(r.display_order),
           is_active: Number(r.is_active) as 0 | 1,
           is_draft: Number(r.is_draft) as 0 | 1,
+          ...(entity.yearColumn
+            ? { hijri_year: r.hijri_year == null ? null : Number(r.hijri_year) }
+            : {}),
           // Drives the UI's "in use" badge and whether Delete is offered at all.
           in_use: usage.get(Number(r.id)) ?? 0
         }))
@@ -305,27 +352,29 @@ memberLookupAdminRoutes.post("/:entity", async (req, res) => {
   const entity = entityOr404(String(req.params.entity ?? ""));
   if (!entity) return fail(res, "Unknown lookup list", 404);
 
-  const { values, error } = readFields(req.body, { requireName: true });
+  const { values, error } = readFields(req.body, entity, { requireName: true });
   if (error) return fail(res, error, 400);
 
   try {
     // A new value entered by an admin is authoritative by definition, so is_draft defaults to
     // 0 here — unlike the seeded rows, which default to 1 because nobody had reviewed them.
+    const year = entity.yearColumn;
     const [result] = await pool.query<any>(
       `INSERT INTO \`${entity.table}\`
-         (\`${entity.nameColumn}\`, display_order, is_active, is_draft)
-       VALUES (:name, :display_order, :is_active, :is_draft)`,
+         (\`${entity.nameColumn}\`, display_order, is_active, is_draft${year ? `, \`${year}\`` : ""})
+       VALUES (:name, :display_order, :is_active, :is_draft${year ? ", :hijri_year" : ""})`,
       {
         name: values.name,
         display_order: values.display_order ?? 0,
         is_active: values.is_active ?? 1,
-        is_draft: values.is_draft ?? 0
+        is_draft: values.is_draft ?? 0,
+        hijri_year: values.hijri_year ?? null
       }
     );
     return ok(res, { id: Number(result.insertId) }, "Created");
   } catch (err: any) {
     if (err?.code === "ER_DUP_ENTRY") {
-      return fail(res, "That name is already in this list.", 409);
+      return fail(res, duplicateMessage(err), 409);
     }
     return fail(res, "Failed to create that value", 500);
   }
@@ -338,7 +387,7 @@ memberLookupAdminRoutes.patch("/:entity/:id", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return fail(res, "Invalid id", 400);
 
-  const { values, error } = readFields(req.body, { requireName: false });
+  const { values, error } = readFields(req.body, entity, { requireName: false });
   if (error) return fail(res, error, 400);
   if (Object.keys(values).length === 0) return fail(res, "Nothing to update", 400);
 
@@ -349,13 +398,13 @@ memberLookupAdminRoutes.patch("/:entity/:id", async (req, res) => {
   try {
     const [result] = await pool.query<any>(
       `UPDATE \`${entity.table}\` SET ${assignments.join(", ")} WHERE id = :id`,
-      { ...values, id } as Record<string, string | number>
+      { ...values, id } as Record<string, string | number | null>
     );
     if (result.affectedRows === 0) return fail(res, "That value no longer exists", 404);
     return ok(res, { success: true }, "Updated");
   } catch (err: any) {
     if (err?.code === "ER_DUP_ENTRY") {
-      return fail(res, "That name is already in this list.", 409);
+      return fail(res, duplicateMessage(err), 409);
     }
     return fail(res, "Failed to update that value", 500);
   }

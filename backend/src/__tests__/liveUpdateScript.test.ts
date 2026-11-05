@@ -301,8 +301,9 @@ describe("the live update script", () => {
     const at = schema.search(/CREATE PROCEDURE mm_backfill_aqa_moula_ashara/);
     const backfill = schema.slice(at, schema.indexOf("CALL mm_backfill_aqa_moula_ashara", at));
 
-    // One column, one index, one foreign key — each behind its own existence check.
-    expect(backfill.match(/IF NOT EXISTS\s*\(SELECT 1 FROM INFORMATION_SCHEMA/gi)).toHaveLength(3);
+    // One column, one index, one foreign key — plus FR-077b's year column and its unique
+    // key on aqa_moula_asharas — each behind its own existence check.
+    expect(backfill.match(/IF NOT EXISTS\s*\(SELECT 1 FROM INFORMATION_SCHEMA/gi)).toHaveLength(5);
     expect(backfill).toContain("aqa_moula_ashara_id");
     expect(backfill).toContain("idx_member_ashara_aqa_moula");
     expect(backfill).toContain("fk_member_ashara_attendances_aqa_moula_ashara_id");
@@ -311,6 +312,29 @@ describe("the live update script", () => {
     const createAt = schema.search(/CREATE TABLE IF NOT EXISTS member_ashara_attendances/);
     expect(createAt).toBeGreaterThan(-1);
     expect(at).toBeGreaterThan(createAt);
+  });
+
+  /**
+   * FR-077b. aqa_moula_asharas already exists on production without `hijri_year`, so the
+   * CREATE skips it and only the backfill can add the column — and the column must come
+   * before the unique key that indexes it.
+   */
+  it("backfills the Aqa Moula year column and its unique key, column first", () => {
+    const schema = read("MEMBERSHIP_LIVE_INSTALL.sql");
+
+    const create = schema.slice(
+      schema.search(/CREATE TABLE IF NOT EXISTS aqa_moula_asharas/),
+      schema.indexOf(";", schema.search(/CREATE TABLE IF NOT EXISTS aqa_moula_asharas/))
+    );
+    expect(create).toContain("hijri_year SMALLINT UNSIGNED NULL");
+    expect(create).toContain("UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)");
+
+    const at = schema.search(/CREATE PROCEDURE mm_backfill_aqa_moula_ashara/);
+    const backfill = schema.slice(at, schema.indexOf("CALL mm_backfill_aqa_moula_ashara", at));
+    const columnAt = backfill.indexOf("ADD COLUMN hijri_year");
+    const keyAt = backfill.indexOf("ADD UNIQUE KEY uq_aqa_moula_asharas_year");
+    expect(columnAt).toBeGreaterThan(-1);
+    expect(keyAt).toBeGreaterThan(columnAt);
   });
 
   it("documents that the rollback needs the frontend rolled back first", () => {

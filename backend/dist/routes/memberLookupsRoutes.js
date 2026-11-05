@@ -57,6 +57,15 @@ exports.memberLookupsRoutes.get("/", async (_req, res) => {
                 is_draft: Boolean(r.is_draft)
             }));
         }
+        // FR-077b. Each Aqa Moula place carries the year it answers, so Tab 9 can show the place
+        // for a year instead of asking for it. A second small query rather than widening the
+        // loop above, which serves ten lists that have no such column.
+        const [aqaMoulaYears] = await pool_1.pool.query("SELECT id, hijri_year FROM aqa_moula_asharas WHERE is_active = 1");
+        const yearById = new Map(aqaMoulaYears.map((r) => [Number(r.id), r.hijri_year == null ? null : Number(r.hijri_year)]));
+        data.aqa_moula_asharas = data.aqa_moula_asharas.map((r) => ({
+            ...r,
+            hijri_year: yearById.get(r.id) ?? null
+        }));
         // Existing master data, used as-is. No copy of it is kept (FR-092).
         const [zones] = await pool_1.pool.query("SELECT id, zone_name AS name FROM zones ORDER BY zone_name");
         // ALL parties, active and inactive. A member's own Hizb may have been deactivated, and

@@ -98,7 +98,7 @@ const LOOKUPS: MemberLookups = {
   sharafs: [{ id: 21, name: "Khidmat Sharaf", is_draft: true }],
   halqas: [],
   mozes: [{ id: 31, name: "Karachi", is_draft: true }],
-  aqa_moula_asharas: [{ id: 61, name: "Colombo", is_draft: true }],
+  aqa_moula_asharas: [{ id: 61, name: "Colombo", is_draft: true, hijri_year: 1446 }],
   places: [
     { id: 41, name: "Nairobi", is_draft: true },
     { id: 42, name: "Colombo", is_draft: true }
@@ -276,47 +276,61 @@ describe("Tab 8 — places visited (FR-071, FR-073)", () => {
   });
 });
 
-describe("Tab 9 — Ashara Mubaraka (FR-075, FR-076)", () => {
-  it("offers no year beyond the current Hijri year from the server", () => {
-    renderTab(Tab09Ashara, {
-      ashara_attendances: [{ attended_with: "With Aamil", hijri_year: 0, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }]
-    });
+/**
+ * Tab 9 is one row per Hijri year, current year down to 1405 AH (FR-076b). "Not attended" is
+ * the absence of a record, so the saved array keeps its old shape: one entry per attended year.
+ */
+describe("Tab 9 — Ashara Mubaraka year grid (FR-075, FR-076, FR-076b)", () => {
+  const yearRow = (year: number) => screen.getByRole("group", { name: `Ashara ${year} AH` });
 
-    const years = screen.getByLabelText(/^Hijri Year/);
-    expect(within(years).getByRole("option", { name: "1448" })).toBeInTheDocument();
-    expect(within(years).queryByRole("option", { name: "1449" })).not.toBeInTheDocument();
-    expect(within(years).getByRole("option", { name: "1400" })).toBeInTheDocument();
-    expect(within(years).queryByRole("option", { name: "1399" })).not.toBeInTheDocument();
+  it("lists every year from the server's current Hijri year down to 1405, newest first", () => {
+    renderTab(Tab09Ashara, {});
+
+    const rows = screen.getAllByRole("group", { name: /^Ashara \d+ AH$/ });
+    expect(rows).toHaveLength(1448 - 1405 + 1);
+    expect(rows[0]).toHaveAccessibleName("Ashara 1448 AH");
+    expect(rows[rows.length - 1]).toHaveAccessibleName("Ashara 1405 AH");
+    expect(screen.queryByRole("group", { name: "Ashara 1449 AH" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Ashara 1404 AH" })).not.toBeInTheDocument();
   });
 
-  it("keeps each record's Attended With separate", () => {
-    // One radio group per record. Sharing a name would make the browser treat all the records
-    // as one set, so choosing on the second row would clear the first.
-    const state = renderTab(Tab09Ashara, {
+  it("still shows a record saved for a year before 1405, so it can be seen and changed", () => {
+    renderTab(Tab09Ashara, {
       ashara_attendances: [
-        { attended_with: "With Aamil", hijri_year: 1440, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null },
-        { attended_with: "", hijri_year: 1441, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }
+        { attended_with: "With Aamil", hijri_year: 1402, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }
       ]
     });
 
-    const groups = screen.getAllByRole("group", { name: /Attended With/ });
-    fireEvent.click(within(groups[1]).getByLabelText("With Aqa Moula TUS"));
-
-    expect(state.value.ashara_attendances[0].attended_with).toBe("With Aamil");
-    expect(state.value.ashara_attendances[1].attended_with).toBe("With Aqa Moula TUS");
+    expect(within(yearRow(1402)).getByLabelText("With Aamil")).toBeChecked();
   });
 
-  it("does not offer a Hijri year another record already holds", () => {
-    renderTab(Tab09Ashara, {
-      ashara_attendances: [
-        { attended_with: "With Aamil", hijri_year: 1440, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null },
-        { attended_with: "With Aamil", hijri_year: 0, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }
-      ]
+  it("adds one record when a year is marked attended, and removes it on Not attended", () => {
+    const state = renderTab(Tab09Ashara, {});
+
+    fireEvent.click(within(yearRow(1440)).getByLabelText("With Aamil"));
+    expect(state.value.ashara_attendances).toHaveLength(1);
+    expect(state.value.ashara_attendances[0]).toMatchObject({
+      attended_with: "With Aamil",
+      hijri_year: 1440
     });
 
-    const selects = screen.getAllByLabelText(/^Hijri Year/);
-    expect(within(selects[1]).queryByRole("option", { name: "1440" })).not.toBeInTheDocument();
-    expect(within(selects[1]).getByRole("option", { name: "1441" })).toBeInTheDocument();
+    fireEvent.click(within(yearRow(1440)).getByLabelText("Not attended"));
+    expect(state.value.ashara_attendances).toEqual([]);
+  });
+
+  it("keeps each year's answer separate", () => {
+    // One radio group per year. Sharing a name would make the browser treat every year as one
+    // set, so answering 1441 would clear 1440.
+    const state = renderTab(Tab09Ashara, {});
+
+    fireEvent.click(within(yearRow(1440)).getByLabelText("With Aamil"));
+    fireEvent.click(within(yearRow(1441)).getByLabelText("With Aqa Moula TUS"));
+
+    const byYear = Object.fromEntries(
+      state.value.ashara_attendances.map((r) => [r.hijri_year, r.attended_with])
+    );
+    expect(byYear).toEqual({ 1440: "With Aamil", 1441: "With Aqa Moula TUS" });
+    expect(within(yearRow(1440)).getByLabelText("With Aamil")).toBeChecked();
   });
 });
 
@@ -414,51 +428,52 @@ describe("the Hijri year dropdowns", () => {
 });
 
 /**
- * FR-077a — the location field follows the Attended With answer.
+ * FR-077a / FR-077b — where the member attended follows who they attended with.
  *
- * "With Aqa Moula TUS" asks where Aqa Moula held Ashara that year: one short list, the same
- * for everybody. "With Aamil" asks about the member's own Jamaat — their Moze, optionally
- * their Mohallah. One list cannot serve both, so the fields swap.
+ * "With Aqa Moula TUS" needs nothing more: Aqa Moula holds Ashara in one place a year, so the
+ * place is the one an administrator gave that year, shown rather than chosen. "With Aamil"
+ * asks for the member's own Moze and optional Mohallah.
  *
  * The clearing tests are the ones that matter. A value left behind by a changed answer would
  * be saved against a record whose form never showed it, and nobody looking at the form could
  * tell it was there.
  */
-describe("Tab 9 — where the member attended (FR-077a)", () => {
+describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
+  const yearRow = (year: number) => screen.getByRole("group", { name: `Ashara ${year} AH` });
   const AAMIL = (over = {}) => ({
     attended_with: "With Aamil",
-    hijri_year: 1440,
+    hijri_year: 1446,
     moze_id: null,
     mohallah_id: null,
     aqa_moula_ashara_id: null,
     ...over
   });
 
-  it("shows Moze and Mohallah for With Aamil, and not the Aqa Moula list", () => {
+  it("shows Moze and Mohallah for With Aamil, and no Aqa Moula place", () => {
     renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
 
-    expect(screen.getByLabelText("Moze")).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Mohallah/)).toBeInTheDocument();
-    expect(screen.queryByLabelText("Ashara with Aqa Moula")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Moze for 1446 AH")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mohallah for 1446 AH (optional)")).toBeInTheDocument();
+    expect(screen.queryByTestId("aqa-moula-place-1446")).not.toBeInTheDocument();
   });
 
-  it("shows the Aqa Moula list for With Aqa Moula TUS, and not Moze or Mohallah", () => {
-    renderTab(Tab09Ashara, {
-      ashara_attendances: [AAMIL({ attended_with: "With Aqa Moula TUS" })]
-    });
+  it("fills in that year's Aqa Moula place, marked draft until reviewed, with no Moze", () => {
+    const state = renderTab(Tab09Ashara, {});
 
-    expect(screen.getByLabelText("Ashara with Aqa Moula")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Moze")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText(/^Mohallah/)).not.toBeInTheDocument();
+    fireEvent.click(within(yearRow(1446)).getByLabelText("With Aqa Moula TUS"));
+
+    expect(screen.getByTestId("aqa-moula-place-1446")).toHaveTextContent(/Colombo.*DRAFT/);
+    expect(screen.queryByLabelText("Moze for 1446 AH")).not.toBeInTheDocument();
+    expect(state.value.ashara_attendances[0].aqa_moula_ashara_id).toBe(61);
   });
 
-  it("offers the values an administrator entered, marked draft until reviewed", () => {
-    renderTab(Tab09Ashara, {
-      ashara_attendances: [AAMIL({ attended_with: "With Aqa Moula TUS" })]
-    });
+  it("says so when a year has no Aqa Moula place yet, and saves it without one", () => {
+    const state = renderTab(Tab09Ashara, {});
 
-    const select = screen.getByLabelText("Ashara with Aqa Moula");
-    expect(within(select).getByRole("option", { name: /Colombo.*DRAFT/ })).toBeInTheDocument();
+    fireEvent.click(within(yearRow(1440)).getByLabelText("With Aqa Moula TUS"));
+
+    expect(within(yearRow(1440)).getByText(/place for 1440 AH has not been added/)).toBeInTheDocument();
+    expect(state.value.ashara_attendances[0].aqa_moula_ashara_id).toBeNull();
   });
 
   it("clears Moze and Mohallah when the answer changes to With Aqa Moula TUS", () => {
@@ -466,7 +481,7 @@ describe("Tab 9 — where the member attended (FR-077a)", () => {
       ashara_attendances: [AAMIL({ moze_id: 31, mohallah_id: 51 })]
     });
 
-    fireEvent.click(screen.getByLabelText("With Aqa Moula TUS"));
+    fireEvent.click(within(yearRow(1446)).getByLabelText("With Aqa Moula TUS"));
 
     const row = state.value.ashara_attendances[0];
     expect(row.attended_with).toBe("With Aqa Moula TUS");
@@ -481,22 +496,21 @@ describe("Tab 9 — where the member attended (FR-077a)", () => {
       ]
     });
 
-    fireEvent.click(screen.getByLabelText("With Aamil"));
+    fireEvent.click(within(yearRow(1446)).getByLabelText("With Aamil"));
 
     const row = state.value.ashara_attendances[0];
     expect(row.attended_with).toBe("With Aamil");
     expect(row.aqa_moula_ashara_id).toBeNull();
   });
 
-  it("records the chosen Aqa Moula place", () => {
-    const state = renderTab(Tab09Ashara, {
-      ashara_attendances: [AAMIL({ attended_with: "With Aqa Moula TUS" })]
+  it("records the chosen Moze and Mohallah for that year", () => {
+    const state = renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
+
+    fireEvent.change(screen.getByLabelText("Moze for 1446 AH"), { target: { value: "31" } });
+    fireEvent.change(screen.getByLabelText("Mohallah for 1446 AH (optional)"), {
+      target: { value: "51" }
     });
 
-    fireEvent.change(screen.getByLabelText("Ashara with Aqa Moula"), {
-      target: { value: "61" }
-    });
-
-    expect(state.value.ashara_attendances[0].aqa_moula_ashara_id).toBe(61);
+    expect(state.value.ashara_attendances[0]).toMatchObject({ moze_id: 31, mohallah_id: 51 });
   });
 });

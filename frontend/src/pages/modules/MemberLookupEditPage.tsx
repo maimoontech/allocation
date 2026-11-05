@@ -52,6 +52,8 @@ export function MemberLookupEditPage() {
   const [name, setName] = useState("");
   const [displayOrder, setDisplayOrder] = useState("0");
   const [isActive, setIsActive] = useState("1");
+  /** FR-077b. Only used on a list with `has_year`; blank means "no year yet". */
+  const [hijriYear, setHijriYear] = useState("");
   const [banner, setBanner] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [showInactive, setShowInactive] = useState(true);
 
@@ -67,6 +69,7 @@ export function MemberLookupEditPage() {
     setName("");
     setDisplayOrder("0");
     setIsActive("1");
+    setHijriYear("");
   }
 
   function startEdit(row: LookupRow) {
@@ -75,7 +78,10 @@ export function MemberLookupEditPage() {
     setName(row.name);
     setDisplayOrder(String(row.display_order));
     setIsActive(String(row.is_active));
+    setHijriYear(row.hijri_year == null ? "" : String(row.hijri_year));
   }
+
+  const hasYear = listQuery.data?.has_year === true;
 
   async function onSubmit() {
     setBanner(null);
@@ -91,11 +97,19 @@ export function MemberLookupEditPage() {
       return;
     }
 
+    // The range itself is checked by the server, which knows the current Hijri year.
+    const year = hijriYear.trim() === "" ? null : Number(hijriYear);
+    if (hasYear && year !== null && !Number.isInteger(year)) {
+      setBanner({ kind: "error", text: "Hijri year must be a whole number, for example 1446." });
+      return;
+    }
+
     const payload = {
       entity,
       name: trimmed,
       display_order: order,
-      is_active: (isActive === "1" ? 1 : 0) as 0 | 1
+      is_active: (isActive === "1" ? 1 : 0) as 0 | 1,
+      ...(hasYear ? { hijri_year: year } : {})
     };
 
     try {
@@ -206,7 +220,12 @@ export function MemberLookupEditPage() {
           ) : null}
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div
+          className={[
+            "grid grid-cols-1 gap-3",
+            hasYear ? "md:grid-cols-4" : "md:grid-cols-3"
+          ].join(" ")}
+        >
           <Input
             label="Name"
             value={name}
@@ -214,6 +233,16 @@ export function MemberLookupEditPage() {
             maxLength={150}
             helperText="Exactly as members should see it."
           />
+          {hasYear ? (
+            <Input
+              label="Hijri Year"
+              type="number"
+              min={1400}
+              value={hijriYear}
+              onChange={(e) => setHijriYear(e.target.value)}
+              helperText="The year Ashara was held here. One place per year."
+            />
+          ) : null}
           <Input
             label="Display Order"
             type="number"
@@ -278,6 +307,7 @@ export function MemberLookupEditPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left">
+                  {hasYear ? <th className="py-2 pr-3 font-semibold">Year (AH)</th> : null}
                   <th className="py-2 pr-3 font-semibold">Name</th>
                   <th className="py-2 pr-3 text-right font-semibold">Order</th>
                   <th className="py-2 pr-3 font-semibold">Status</th>
@@ -289,6 +319,13 @@ export function MemberLookupEditPage() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id} className="border-b border-border/60">
+                    {hasYear ? (
+                      <td className="py-2 pr-3">
+                        {row.hijri_year ?? (
+                          <span className="text-xs font-semibold text-warning">No year</span>
+                        )}
+                      </td>
+                    ) : null}
                     <td className="py-2 pr-3">
                       {row.name}
                       {row.is_draft === 1 ? (

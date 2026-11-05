@@ -63,15 +63,48 @@ async function ensureAqaMoulaAsharaLookup() {
     `CREATE TABLE IF NOT EXISTS aqa_moula_asharas (
        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
        aqa_moula_ashara_name VARCHAR(150) NOT NULL,
+       hijri_year SMALLINT UNSIGNED NULL,
        display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
        is_active TINYINT(1) NOT NULL DEFAULT 1,
        is_draft TINYINT(1) NOT NULL DEFAULT 1,
        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
        PRIMARY KEY (id),
-       UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name)
+       UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name),
+       UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)
      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
   );
+
+  // FR-077b. A table created before the year column existed is skipped by the CREATE above,
+  // so the column and its unique key are added here if missing — before the early return
+  // below, because the lookup routes read this column whether or not Tab 9's table exists.
+  const [yearColumnRows] = await pool.query<any[]>(
+    `SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'aqa_moula_asharas'
+       AND COLUMN_NAME = 'hijri_year'`
+  );
+  if (Number(yearColumnRows[0]?.cnt ?? 0) === 0) {
+    await pool.query(
+      `ALTER TABLE aqa_moula_asharas
+       ADD COLUMN hijri_year SMALLINT UNSIGNED NULL AFTER aqa_moula_ashara_name`
+    );
+  }
+
+  const [yearIndexRows] = await pool.query<any[]>(
+    `SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'aqa_moula_asharas'
+       AND INDEX_NAME = 'uq_aqa_moula_asharas_year'`
+  );
+  if (Number(yearIndexRows[0]?.cnt ?? 0) === 0) {
+    await pool.query(
+      `ALTER TABLE aqa_moula_asharas
+       ADD UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)`
+    );
+  }
 
   // Only meaningful once the membership module itself has been installed. On a database
   // without it there is no table to add a column to, and nothing that would read one.

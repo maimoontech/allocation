@@ -287,6 +287,31 @@ describe("Tab 9 Ashara Mubaraka — add three, edit the middle, delete the first
     expect(row.aqa_moula_ashara_id).toBeNull();
   });
 
+  /**
+   * FR-077b. Once a place has a year, the year alone decides it: the form no longer sends
+   * one, and a stale client that sends a different one is overridden rather than trusted.
+   */
+  it("fills in the Aqa Moula place from the year, overriding what the client sent", async () => {
+    await pool.query("UPDATE aqa_moula_asharas SET hijri_year = 1439 WHERE id = ?", [
+      seeded.aqaMoulaAsharaId
+    ]);
+    try {
+      const res = await putProfile({
+        ashara_attendances: [
+          { attended_with: "With Aqa Moula TUS", hijri_year: 1439, aqa_moula_ashara_id: null }
+        ]
+      });
+      expect(res.status).toBe(200);
+
+      const [row] = await readSection<Ashara>("ashara_attendances");
+      expect(row.aqa_moula_ashara_id).toBe(seeded.aqaMoulaAsharaId);
+    } finally {
+      await pool.query("UPDATE aqa_moula_asharas SET hijri_year = NULL WHERE id = ?", [
+        seeded.aqaMoulaAsharaId
+      ]);
+    }
+  });
+
   it("refuses an Aqa Moula place that does not exist", async () => {
     const res = await putProfile({
       ashara_attendances: [
