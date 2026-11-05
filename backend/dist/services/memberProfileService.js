@@ -130,9 +130,29 @@ const COLUMN_TAB = {
     khidmat_type: 12, sansta_name: 12, umoor_name: 12, khidmat_designation: 12,
     khidmat_since_year: 12
 };
-const TITLE_YEAR_MIN = 1950;
-const TITLE_YEAR_MAX = 2026;
+/**
+ * The Hijri window for the five profile years the member picks from a dropdown: Prefix Year,
+ * Title Year, Sharaf Year, Place Visited Year and the Other Sansta "Since" year.
+ *
+ * These were Gregorian 1950-2026. A Hijri year fell inside that range as readily as a
+ * Gregorian one, so the wrong calendar was stored without a word of complaint.
+ *
+ * The ceiling is NOT a constant. `currentHijriYear()` is evaluated per request, so the window
+ * rolls over on its own at each Hijri new year and the server never trails the dropdown.
+ *
+ * Tab 9's Ashara year keeps its own floor of 1400 AH, which FR-076 names explicitly.
+ */
+const PROFILE_HIJRI_YEAR_MIN = 1401;
 const HIJRI_YEAR_MIN = 1400;
+/** The one message these five fields share, so they cannot drift apart. */
+function hijriYearError(value) {
+    const max = (0, hijriDate_1.currentHijriYear)();
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < PROFILE_HIJRI_YEAR_MIN || n > max) {
+        return `Year must be between ${PROFILE_HIJRI_YEAR_MIN} and ${max} AH.`;
+    }
+    return null;
+}
 const EARLIEST_BIRTH_YEAR = 1900;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Permissive on purpose: Pakistani national and international forms, digits dominant. */
@@ -164,7 +184,7 @@ async function readMemberProfile(memberAccountId) {
      WHERE v.member_account_id = :id
      GROUP BY v.id, v.place_id, v.times_count
      ORDER BY v.place_id`, { id: memberAccountId });
-    const [ashara] = await pool_1.pool.query(`SELECT attended_with, hijri_year, moze_id, mohallah_id
+    const [ashara] = await pool_1.pool.query(`SELECT attended_with, hijri_year, moze_id, mohallah_id, aqa_moula_ashara_id
      FROM member_ashara_attendances
      WHERE member_account_id = :id ORDER BY hijri_year`, { id: memberAccountId });
     // A member with no profile row yet still gets a complete, empty shape rather than nulls,
@@ -228,7 +248,8 @@ async function readMemberProfile(memberAccountId) {
         attended_with: a.attended_with,
         hijri_year: Number(a.hijri_year),
         moze_id: a.moze_id === null ? null : Number(a.moze_id),
-        mohallah_id: a.mohallah_id === null ? null : Number(a.mohallah_id)
+        mohallah_id: a.mohallah_id === null ? null : Number(a.mohallah_id),
+        aqa_moula_ashara_id: a.aqa_moula_ashara_id === null ? null : Number(a.aqa_moula_ashara_id)
     }));
     return profile;
 }
@@ -426,22 +447,23 @@ async function saveMemberProfile(memberAccountId, payload) {
     const birthYear = values.dob_gregorian
         ? Number(String(values.dob_gregorian).slice(0, 4))
         : null;
-    for (const yearField of ["occupation_since_year", "khidmat_since_year"]) {
-        const year = values[yearField];
-        if (year == null)
-            continue;
-        const n = Number(year);
+    // Only occupation_since_year is Gregorian now. khidmat_since_year became Hijri and MUST
+    // NOT be compared against a Gregorian birth year here: 1447 AH is less than a 2006 CE
+    // birth year, so this check would reject every valid value.
+    if (values.occupation_since_year != null) {
+        const n = Number(values.occupation_since_year);
         if (n > thisYear)
-            add(yearField, "Year cannot be in the future.");
+            add("occupation_since_year", "Year cannot be in the future.");
         if (birthYear !== null && n < birthYear) {
-            add(yearField, "Year cannot be before your year of birth.");
+            add("occupation_since_year", "Year cannot be before your year of birth.");
         }
     }
-    if (values.prefix_year != null) {
-        const n = Number(values.prefix_year);
-        if (n < TITLE_YEAR_MIN || n > TITLE_YEAR_MAX) {
-            add("prefix_year", `Year must be between ${TITLE_YEAR_MIN} and ${TITLE_YEAR_MAX}.`);
-        }
+    for (const field of ["prefix_year", "khidmat_since_year"]) {
+        if (values[field] == null)
+            continue;
+        const message = hijriYearError(values[field]);
+        if (message)
+            add(field, message);
     }
     // -------------------------------------------------------------------------
     // Conditional rules. Each clears the fields its answer makes meaningless, so a hidden
@@ -581,7 +603,8 @@ async function saveMemberProfile(memberAccountId, payload) {
                 attended_with: a.attended_with,
                 hijri_year: a.hijri_year,
                 moze_id: a.moze_id ?? null,
-                mohallah_id: a.mohallah_id ?? null
+                mohallah_id: a.mohallah_id ?? null,
+                aqa_moula_ashara_id: a.aqa_moula_ashara_id ?? null
             }));
         }
         if (visits !== undefined) {
@@ -646,8 +669,9 @@ function parseTitles(value, add) {
             add(`titles[${index}].title_id`, "Select a title.", 2);
             return;
         }
-        if (!Number.isInteger(title_year) || title_year < TITLE_YEAR_MIN || title_year > TITLE_YEAR_MAX) {
-            add(`titles[${index}].title_year`, `Year must be between ${TITLE_YEAR_MIN} and ${TITLE_YEAR_MAX}.`, 2);
+        const yearMessage = hijriYearError(title_year);
+        if (yearMessage) {
+            add(`titles[${index}].title_year`, yearMessage, 2);
             return;
         }
         // The same title in different years is legitimate; the same title in the same year is
@@ -675,8 +699,9 @@ function parseSharafs(value, add) {
             add(`sharafs[${index}].sharaf_id`, "Select a Sharaf.", 7);
             return;
         }
-        if (!Number.isInteger(sharaf_year) || sharaf_year < 1900 || sharaf_year > 2100) {
-            add(`sharafs[${index}].sharaf_year`, "Enter a valid year.", 7);
+        const yearMessage = hijriYearError(sharaf_year);
+        if (yearMessage) {
+            add(`sharafs[${index}].sharaf_year`, yearMessage, 7);
             return;
         }
         const key = `${sharaf_id}:${sharaf_year}`;
@@ -732,8 +757,9 @@ function parseVisits(value, add) {
         const years = [];
         for (const y of yearsRaw) {
             const year = Number(y);
-            if (!Number.isInteger(year) || year < 1900 || year > 2100) {
-                add(`places_visited[${index}].years`, "Enter valid years.", 8);
+            const yearMessage = hijriYearError(year);
+            if (yearMessage) {
+                add(`places_visited[${index}].years`, yearMessage, 8);
                 return;
             }
             if (years.includes(year)) {
@@ -784,7 +810,26 @@ function parseAshara(value, add) {
             add(`ashara_attendances[${index}].mohallah_id`, "Invalid Mohallah.", 9);
             return;
         }
-        out.push({ attended_with: with_, hijri_year, moze_id, mohallah_id });
+        const aqa_moula_ashara_id = entry?.aqa_moula_ashara_id == null || entry.aqa_moula_ashara_id === ""
+            ? null
+            : Number(entry.aqa_moula_ashara_id);
+        if (aqa_moula_ashara_id !== null &&
+            (!Number.isInteger(aqa_moula_ashara_id) || aqa_moula_ashara_id <= 0)) {
+            add(`ashara_attendances[${index}].aqa_moula_ashara_id`, "Invalid place.", 9);
+            return;
+        }
+        // FR-077a. The two answers ask different questions, so each CLEARS the other's
+        // fields rather than rejecting them. Same treatment as the conditional rules on
+        // Tabs 4, 11 and 12: a member who picks one answer, fills it in, then changes their
+        // mind must not leave a contradictory value behind in a field nobody can see.
+        const withAqaMoula = with_ === "With Aqa Moula TUS";
+        out.push({
+            attended_with: with_,
+            hijri_year,
+            moze_id: withAqaMoula ? null : moze_id,
+            mohallah_id: withAqaMoula ? null : mohallah_id,
+            aqa_moula_ashara_id: withAqaMoula ? aqa_moula_ashara_id : null
+        });
     });
     return out;
 }
@@ -887,14 +932,21 @@ async function checkReferences(input, add) {
     }
     if (ashara?.length) {
         const mozeIds = ashara.map((a) => a.moze_id).filter((id) => id != null);
+        const aqaMoulaIds = ashara
+            .map((a) => a.aqa_moula_ashara_id)
+            .filter((id) => id != null);
         const mohallahIds = ashara
             .map((a) => a.mohallah_id)
             .filter((id) => id != null);
         const foundMoze = await existingIds("mozes", mozeIds);
         const foundMohallah = await existingIds("mohallahs", mohallahIds);
+        const foundAqaMoula = await existingIds("aqa_moula_asharas", aqaMoulaIds);
         ashara.forEach((a, i) => {
             if (a.moze_id != null && !foundMoze.has(a.moze_id)) {
                 add(`ashara_attendances[${i}].moze_id`, "Selection is no longer available.", 9);
+            }
+            if (a.aqa_moula_ashara_id != null && !foundAqaMoula.has(a.aqa_moula_ashara_id)) {
+                add(`ashara_attendances[${i}].aqa_moula_ashara_id`, "Selection is no longer available.", 9);
             }
             if (a.mohallah_id != null && !foundMohallah.has(a.mohallah_id)) {
                 add(`ashara_attendances[${i}].mohallah_id`, "Selection is no longer available.", 9);

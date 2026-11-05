@@ -10,7 +10,7 @@ const response_1 = require("../utils/response");
 /**
  * Every selectable value the twelve-tab form needs, in ONE response.
  *
- * Thirteen lists plus a derived year. Served together because a form that needed them
+ * Fourteen lists plus a derived year. Served together because a form that needed them
  * separately would fire thirteen requests on open, and because several of them are tiny.
  *
  * Two details carry requirements:
@@ -38,7 +38,8 @@ const LOOKUP_TABLES = {
     marital_statuses: "marital_status_name",
     skills: "skill_name",
     tamreen_frequencies: "tamreen_frequency_name",
-    tamreen_methods: "tamreen_method_name"
+    tamreen_methods: "tamreen_method_name",
+    aqa_moula_asharas: "aqa_moula_ashara_name"
 };
 exports.memberLookupsRoutes.get("/", async (_req, res) => {
     try {

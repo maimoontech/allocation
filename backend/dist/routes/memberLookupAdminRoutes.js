@@ -31,9 +31,26 @@ const ENTITIES = {
         table: "mozes",
         nameColumn: "moze_name",
         label: "Mozes",
-        usedFor: "Member profile, Tab 9 — Ashara Mubaraka.",
+        usedFor: "Member profile, Tab 9 — Ashara Mubaraka, for a member who attended with their Aamil.",
         references: [
             { table: "member_ashara_attendances", column: "moze_id", label: "Ashara Mubaraka records" }
+        ]
+    },
+    // Deliberately separate from `mozes`. A Moze is where the member's own Jamaat is, which
+    // answers "where did you attend with your Aamil". Where Aqa Moula TUS held Ashara that
+    // year is a different question with a much shorter list of answers, and one list cannot
+    // serve both without offering every member's city as somewhere Aqa Moula had been.
+    aqa_moula_asharas: {
+        table: "aqa_moula_asharas",
+        nameColumn: "aqa_moula_ashara_name",
+        label: "Ashara with Aqa Moula",
+        usedFor: "Member profile, Tab 9 — Ashara Mubaraka. Shown only when the member attended with Aqa Moula TUS, in place of Moze.",
+        references: [
+            {
+                table: "member_ashara_attendances",
+                column: "aqa_moula_ashara_id",
+                label: "Ashara Mubaraka records"
+            }
         ]
     },
     places: {
@@ -280,7 +297,7 @@ exports.memberLookupAdminRoutes.delete("/:entity/:id", async (req, res) => {
     try {
         const inUse = await usageCount(entity, id);
         if (inUse > 0) {
-            // Refused for ALL ten lists, not only the RESTRICT ones. See usageCount.
+            // Refused for ALL eleven lists, not only the RESTRICT ones. See usageCount.
             return (0, response_1.fail)(res, `This value is used by ${inUse} member ${inUse === 1 ? "record" : "records"}. ` +
                 `Deleting it would change their answers. Set it to Inactive instead — it then ` +
                 `disappears from the form for new entries while existing answers are kept.`, 409, { in_use: inUse });

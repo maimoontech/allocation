@@ -1,5 +1,35 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Fixed: the backend now creates the Aqa Moula lookup at boot
+
+"Could not load the lists" on Admin → Member Dropdown Lists, and — less visibly but more
+seriously — "Could not load your profile" for every member.
+
+The backend was released with `aqa_moula_asharas` in both lookup registries before the
+migration had been run against live, so two endpoints queried a table that did not exist:
+
+- `GET /api/v1/member-lookups` (admin index) loops every entity and counts its rows, so ONE
+  missing table took down all eleven lists.
+- `GET /api/v1/members/lookups` (the member form) loops the same way, so the twelve-tab profile
+  could not load at all.
+
+Neither was a bug in the new feature. The code was simply ahead of its own schema.
+
+- `ensureSchema()` now creates `aqa_moula_asharas` and adds
+  `member_ashara_attendances.aqa_moula_ashara_id` with its index and foreign key, each only if
+  absent. It already ran at boot for three other columns; this is the same mechanism. The code
+  can no longer be ahead of its schema, whichever order the deploy happens in.
+- It does the same work as section 4b of `MEMBERSHIP_LIVE_INSTALL.sql` and is idempotent in the
+  same way, so whichever runs first makes the other a no-op. Running the install script is
+  still the right thing to do — it is what keeps a fresh database correct — but it is no longer
+  the only thing standing between a deploy and a broken admin page.
+- `COLLATE=utf8mb4_general_ci` is stated explicitly. The live database defaults to
+  `utf8mb3_general_ci`, so a table created without it would inherit the wrong collation and
+  fail every join.
+- The column is added only when `member_ashara_attendances` already exists, so a database
+  without the membership module is left alone.
+
+
 ## 2026-11-05 — Fixed: the build broke on the new Ashara field
 
 `npm run build` failed with five TS2741 errors: Tab 9's older test fixtures still built
