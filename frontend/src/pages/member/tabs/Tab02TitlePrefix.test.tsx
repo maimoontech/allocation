@@ -279,7 +279,7 @@ describe("Tab 8 — places visited (FR-071, FR-073)", () => {
 describe("Tab 9 — Ashara Mubaraka (FR-075, FR-076)", () => {
   it("offers no year beyond the current Hijri year from the server", () => {
     renderTab(Tab09Ashara, {
-      ashara_attendances: [{ attended_with: "With Aamil", hijri_year: 0, moze_id: null, mohallah_id: null }]
+      ashara_attendances: [{ attended_with: "With Aamil", hijri_year: 0, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }]
     });
 
     const years = screen.getByLabelText(/^Hijri Year/);
@@ -294,8 +294,8 @@ describe("Tab 9 — Ashara Mubaraka (FR-075, FR-076)", () => {
     // as one set, so choosing on the second row would clear the first.
     const state = renderTab(Tab09Ashara, {
       ashara_attendances: [
-        { attended_with: "With Aamil", hijri_year: 1440, moze_id: null, mohallah_id: null },
-        { attended_with: "", hijri_year: 1441, moze_id: null, mohallah_id: null }
+        { attended_with: "With Aamil", hijri_year: 1440, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null },
+        { attended_with: "", hijri_year: 1441, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }
       ]
     });
 
@@ -309,8 +309,8 @@ describe("Tab 9 — Ashara Mubaraka (FR-075, FR-076)", () => {
   it("does not offer a Hijri year another record already holds", () => {
     renderTab(Tab09Ashara, {
       ashara_attendances: [
-        { attended_with: "With Aamil", hijri_year: 1440, moze_id: null, mohallah_id: null },
-        { attended_with: "With Aamil", hijri_year: 0, moze_id: null, mohallah_id: null }
+        { attended_with: "With Aamil", hijri_year: 1440, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null },
+        { attended_with: "With Aamil", hijri_year: 0, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }
       ]
     });
 

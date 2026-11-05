@@ -1,5 +1,25 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Fixed: the build broke on the new Ashara field
+
+`npm run build` failed with five TS2741 errors: Tab 9's older test fixtures still built
+`ashara_attendances` literals without `aqa_moula_ashara_id`, which the previous change made
+required.
+
+The reason it was not caught before the push is worth recording. `frontend/tsconfig.json` is a
+solution-style config — `"files": []` plus two project references — so **`tsc --noEmit` against
+it checks nothing and exits 0**. The real check is `tsc -b`, which is what `npm run build` runs.
+Every "typecheck clean" claimed for the frontend before this entry was vacuous.
+
+- The five fixtures now carry `aqa_moula_ashara_id: null`.
+- Added `npm run typecheck` (`tsc -b`) so the honest check has a name and nobody has to
+  remember that `--noEmit` is the wrong one here.
+- `backend/tsconfig.json` has the same shape of blind spot for a different reason: it
+  `exclude`s `src/__tests__`, so `tsc` there has never covered the test files. Vitest
+  transpiles without typechecking them. Left as it is — it is pre-existing and no test file is
+  currently broken by it — but it is now written down rather than assumed.
+
+
 ## 2026-11-05 — Added: "Ashara with Aqa Moula" master dropdown
 
 An eleventh lookup list, maintained in Admin → Member Dropdown Lists alongside the other ten.
