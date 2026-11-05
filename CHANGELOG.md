@@ -1,5 +1,24 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Applied to live: the Aqa Moula lookup migration
+
+`MEMBERSHIP_LIVE_INSTALL.sql` run against production. The admin Dropdown Lists page and the
+member profile form both work again.
+
+- 34 tables now, up from 33. `aqa_moula_asharas` created with `utf8mb4_general_ci`, and
+  `INFORMATION_SCHEMA` reports **0 collation deviations** across the whole database — the
+  utf8mb3 default did not leak in.
+- `member_ashara_attendances.aqa_moula_ashara_id` present and nullable, with its index and its
+  `ON DELETE RESTRICT` foreign key.
+- **All 13 pre-existing tables byte-for-byte unchanged** — the BEFORE and AFTER blocks diff
+  clean, so FR-106 holds. Full backup taken first and verified complete.
+- Re-run end to end against the already-migrated database: no errors, counts unchanged. The
+  "safe to re-run" claim is now demonstrated rather than asserted.
+- Fixed a stale verification query: `module_tables_present` still listed 20 table names and so
+  reported 20 against a correct database. It was in `build_live_update.mjs`, not the SQL
+  sources, which is why updating the schema's own count missed it. Both checks now read 21.
+
+
 ## 2026-11-05 — Fixed: the backend now creates the Aqa Moula lookup at boot
 
 "Could not load the lists" on Admin → Member Dropdown Lists, and — less visibly but more

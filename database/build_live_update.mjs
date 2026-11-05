@@ -128,7 +128,7 @@ WHERE TABLE_SCHEMA = DATABASE()
 const VERIFY = `
 ${banner("AFTER — compare these numbers with the BEFORE block above")}
 
--- All 20 module tables present.
+-- All 21 module tables present.
 SELECT COUNT(*) AS module_tables_present
 FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA = DATABASE()
@@ -137,9 +137,10 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_titles','member_sharafs','member_skills','member_place_visits',
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
-    'marital_statuses','skills','tamreen_frequencies','tamreen_methods'
+    'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
+    'aqa_moula_asharas'
   );
--- Expected: 20
+-- Expected: 21
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will
