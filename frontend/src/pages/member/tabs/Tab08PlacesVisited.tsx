@@ -86,7 +86,8 @@ function YearChips({
 }
 
 /**
- * Tab 8 — Places Visited.
+ * Tab 8 — Maqamaat Muqaddasah (shown to members under that name since 2026-11-05; the code
+ * and data still call it places / places_visited).
  *
  * Named Places Visited, never Miqaat: the system already has a `miqaats` table meaning the
  * scheduling calendar of majlis sessions, and reusing the word here caused real confusion
@@ -124,7 +125,7 @@ export function Tab08PlacesVisited({ value, lookups, errorFor, onChange, disable
       </div>
 
       <RepeatableRows<PlaceVisitEntry>
-        legend="Places Visited"
+        legend="Maqamaat Muqaddasah"
         itemNoun="place"
         rows={visits}
         onChange={(rows) => onChange("places_visited", rows)}

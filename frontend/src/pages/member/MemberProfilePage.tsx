@@ -74,7 +74,7 @@ const ALL_TABS: Array<{ id: string; label: string }> = [
   { id: TAB_IDS.education, label: "Education / Hifz" },
   { id: TAB_IDS.health, label: "Health & Fitness" },
   { id: TAB_IDS.sharaf, label: "Sharaf" },
-  { id: TAB_IDS.places, label: "Places Visited" },
+  { id: TAB_IDS.places, label: "Maqamaat Muqaddasah" },
   { id: TAB_IDS.ashara, label: "Ashara Mubaraka" },
   { id: TAB_IDS.asbaq, label: "Asbaq" },
   { id: TAB_IDS.tamreen, label: "Tamreen" },

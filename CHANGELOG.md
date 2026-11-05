@@ -1,5 +1,22 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Changed: an Aqa Moula place can be entered for more than one year
+
+Admin → Dropdown Lists → "Ashara with Aqa Moula" now accepts the same place name again, so a
+place that hosted Ashara in several years gets one entry per year. The **year** stays unique:
+two places for one year are still refused.
+
+- `uq_aqa_moula_asharas_name` removed from the CREATE, and dropped where it exists by the
+  backfill in `MEMBERSHIP_LIVE_INSTALL.sql` and at boot by `ensureSchema`. Dropping an index
+  deletes no data.
+- The other ten lists keep their unique names. FR-077c added.
+
+## 2026-11-05 — Renamed: "Places Visited" is now "Maqamaat Muqaddasah"
+
+Tab 8's name on the member profile, its section heading, and the matching list in Admin →
+Dropdown Lists. Display text only: the tab id, API fields (`places`, `places_visited`) and
+tables are unchanged, so no migration and no saved data affected.
+
 ## 2026-11-05 — Changed: Tab 9 is a year grid, and the Aqa Moula place follows the year
 
 Tab 9 (Ashara Mubaraka) no longer asks the member to add records one at a time. Every Hijri

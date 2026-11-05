@@ -337,6 +337,23 @@ describe("the live update script", () => {
     expect(keyAt).toBeGreaterThan(columnAt);
   });
 
+  /**
+   * FR-077c. One place can host Ashara in several years, so the name must not be unique —
+   * neither on a fresh install nor on production, which was created with the key.
+   */
+  it("lets an Aqa Moula place name repeat, dropping the old unique key where it exists", () => {
+    const schema = read("MEMBERSHIP_LIVE_INSTALL.sql");
+
+    const createAt = schema.search(/CREATE TABLE IF NOT EXISTS aqa_moula_asharas/);
+    const create = schema.slice(createAt, schema.indexOf(";", createAt));
+    expect(create).not.toContain("UNIQUE KEY uq_aqa_moula_asharas_name");
+
+    const at = schema.search(/CREATE PROCEDURE mm_backfill_aqa_moula_ashara/);
+    const backfill = schema.slice(at, schema.indexOf("CALL mm_backfill_aqa_moula_ashara", at));
+    expect(backfill).toMatch(/IF EXISTS[\s\S]*?INDEX_NAME = 'uq_aqa_moula_asharas_name'/);
+    expect(backfill).toContain("DROP INDEX uq_aqa_moula_asharas_name");
+  });
+
   it("documents that the rollback needs the frontend rolled back first", () => {
     // The one finding from the T119 rehearsal that is not obvious from reading the SQL: with
     // the tables gone but the login page still offering Member, a member sign-in returns 500.

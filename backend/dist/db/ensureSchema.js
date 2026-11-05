@@ -58,7 +58,6 @@ async function ensureAqaMoulaAsharaLookup() {
        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
        PRIMARY KEY (id),
-       UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name),
        UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)
      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
     // FR-077b. A table created before the year column existed is skipped by the CREATE above,
@@ -81,6 +80,16 @@ async function ensureAqaMoulaAsharaLookup() {
     if (Number(yearIndexRows[0]?.cnt ?? 0) === 0) {
         await pool_1.pool.query(`ALTER TABLE aqa_moula_asharas
        ADD UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)`);
+    }
+    // FR-077c. The same place may be entered for more than one year, so the name is no longer
+    // unique. A table created before this still has the key; dropping it removes no data.
+    const [nameIndexRows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'aqa_moula_asharas'
+       AND INDEX_NAME = 'uq_aqa_moula_asharas_name'`);
+    if (Number(nameIndexRows[0]?.cnt ?? 0) > 0) {
+        await pool_1.pool.query(`ALTER TABLE aqa_moula_asharas DROP INDEX uq_aqa_moula_asharas_name`);
     }
     // Only meaningful once the membership module itself has been installed. On a database
     // without it there is no table to add a column to, and nothing that would read one.

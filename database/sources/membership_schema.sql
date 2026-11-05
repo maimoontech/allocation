@@ -156,6 +156,10 @@ CREATE TABLE IF NOT EXISTS mozes (
 -- rather than asking for it. UNIQUE, because two places for one year would leave the form
 -- unable to say which. NULL is allowed so an entry made before the column existed stays
 -- valid until an administrator gives it a year; MySQL lets several NULLs share a unique key.
+--
+-- The NAME is deliberately NOT unique (FR-077c): Aqa Moula TUS has held Ashara in the same
+-- place in more than one year, and each of those years needs its own entry. The year is what
+-- identifies an entry, not the place.
 CREATE TABLE IF NOT EXISTS aqa_moula_asharas (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   aqa_moula_ashara_name VARCHAR(150) NOT NULL,
@@ -166,7 +170,6 @@ CREATE TABLE IF NOT EXISTS aqa_moula_asharas (
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uq_aqa_moula_asharas_name (aqa_moula_ashara_name),
   UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -754,6 +757,15 @@ BEGIN
                    AND INDEX_NAME = 'uq_aqa_moula_asharas_year') THEN
     ALTER TABLE aqa_moula_asharas
       ADD UNIQUE KEY uq_aqa_moula_asharas_year (hijri_year);
+  END IF;
+
+  -- FR-077c. Production was created with the name UNIQUE; the same place may now be entered
+  -- for more than one year. Dropping an index removes no data.
+  IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = 'aqa_moula_asharas'
+               AND INDEX_NAME = 'uq_aqa_moula_asharas_name') THEN
+    ALTER TABLE aqa_moula_asharas DROP INDEX uq_aqa_moula_asharas_name;
   END IF;
 END$$
 DELIMITER ;

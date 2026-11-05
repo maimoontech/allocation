@@ -78,6 +78,9 @@ const ENTITIES: Record<string, LookupEntity> = {
   // answers "where did you attend with your Aamil". Where Aqa Moula TUS held Ashara that
   // year is a different question with a much shorter list of answers, and one list cannot
   // serve both without offering every member's city as somewhere Aqa Moula had been.
+  //
+  // The only list whose names may repeat (FR-077c): one place can host Ashara in several
+  // years, one entry each. The year is unique instead.
   aqa_moula_asharas: {
     table: "aqa_moula_asharas",
     nameColumn: "aqa_moula_ashara_name",
@@ -96,9 +99,9 @@ const ENTITIES: Record<string, LookupEntity> = {
   places: {
     table: "places",
     nameColumn: "place_name",
-    label: "Places Visited",
+    label: "Maqamaat Muqaddasah",
     usedFor:
-      "Member profile, Tab 8 — Places Visited. Separate from the Miqaat scheduling calendar, which is a different thing entirely.",
+      "Member profile, Tab 8 — Maqamaat Muqaddasah. Separate from the Miqaat scheduling calendar, which is a different thing entirely.",
     references: [{ table: "member_place_visits", column: "place_id", label: "member place visits" }]
   },
   sanads: {
