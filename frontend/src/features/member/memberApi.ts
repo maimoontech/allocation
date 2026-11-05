@@ -34,7 +34,11 @@ export type MemberChangePasswordResponse = {
 };
 
 export type LookupValue = { id: number; name: string; is_draft: boolean };
-export type PartyOption = { id: number; name: string; zone_id: number };
+/**
+ * Tab 3 offers inactive Hizbs as well as active ones (FR-048a), so `is_active` has to travel
+ * with each row — a member whose own Hizb was deactivated must still see it selected.
+ */
+export type PartyOption = { id: number; name: string; zone_id: number; is_active: boolean };
 export type MohallahOption = { id: number; name: string; zone_id: number; is_draft: boolean };
 
 /** Everything the twelve-tab form needs to render its dropdowns, in one response. */

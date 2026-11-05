@@ -23,6 +23,13 @@ const ROLE_OPTIONS = [
  *     would be refused by the server's cross-zone check with no obvious cause.
  *   - The Party select is disabled until a Zone is chosen, because an unfiltered list of
  *     every party in the organisation is not a useful thing to scroll.
+ *
+ * FR-048a: the list holds INACTIVE Hizbs as well as active ones, marked rather than hidden.
+ * Two reasons. A member whose own Hizb was deactivated would otherwise find their saved
+ * value missing from the list — the select renders blank and the save is refused with
+ * nothing on screen to explain why. And a member who genuinely belongs to one that has been
+ * retired has no way to say so if it is not offered. Marking is the other half: an unmarked
+ * inactive Hizb reads as an ordinary choice.
  */
 export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const zoneOptions = useMemo(() => lookupOptions(lookups.zones), [lookups.zones]);
@@ -46,7 +53,20 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
               ? "Select..."
               : "No parties in this Zone"
       },
-      ...partiesInZone.map((p) => ({ value: String(p.id), label: p.name }))
+      // Active first, then inactive, each group alphabetical — so the ordinary choice is
+      // what a member meets first and the retired ones are not salted through the list.
+      ...[...partiesInZone]
+        .sort((a, b) =>
+          a.is_active === b.is_active
+            ? a.name.localeCompare(b.name)
+            : Number(b.is_active) - Number(a.is_active)
+        )
+        .map((p) => ({
+          value: String(p.id),
+          // Marked, not hidden. An unmarked inactive Hizb reads as an ordinary choice, and a
+          // member would have no way to tell it is no longer running.
+          label: p.is_active ? p.name : `${p.name} — INACTIVE`
+        }))
     ],
     [partiesInZone, value.zone_id]
   );

@@ -65,8 +65,10 @@ const LOOKUPS = {
     { id: 2, name: "Zone Two", is_draft: false }
   ],
   parties: [
-    { id: 10, name: "Hizb In One", zone_id: 1 },
-    { id: 20, name: "Hizb In Two", zone_id: 2 }
+    { id: 10, name: "Hizb In One", zone_id: 1, is_active: true },
+    { id: 20, name: "Hizb In Two", zone_id: 2, is_active: true },
+    // Deactivated, and in Zone One. Tab 3 must still offer it (FR-048a).
+    { id: 11, name: "Hizb Retired", zone_id: 1, is_active: false }
   ],
   mohallahs: [],
   current_hijri_year: 1448
@@ -351,6 +353,73 @@ describe("MemberProfilePage", () => {
       await waitFor(() =>
         expect((screen.getByLabelText("Party") as HTMLSelectElement).value).toBe("")
       );
+    });
+
+    /**
+     * FR-048a — inactive Hizbs are offered, marked rather than hidden.
+     *
+     * Hiding them has a failure mode worth naming: a member whose own Hizb was deactivated
+     * would find their saved value absent from the list. The select renders blank, the save
+     * is refused, and nothing on screen says why — the same shape as the bug fixed on
+     * 2026-11-04. It also leaves a member who genuinely belongs to a retired Hizb no way to
+     * say so.
+     */
+    it("offers inactive Hizbs as well as active ones", async () => {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const values = Array.from(party.options).map((o) => o.value);
+      expect(values).toContain("11");
+    });
+
+    it("marks an inactive Hizb, so it does not read as an ordinary choice", async () => {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const byValue = (v: string) =>
+        Array.from(party.options).find((o) => o.value === v)?.textContent ?? "";
+
+      expect(byValue("11")).toMatch(/INACTIVE/);
+      // The active one must NOT be marked, or the mark means nothing.
+      expect(byValue("10")).toBe("Hizb In One");
+    });
+
+    it("keeps the active Hizbs ahead of the retired ones", async () => {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      // [0] is the placeholder.
+      const values = Array.from(party.options).map((o) => o.value).slice(1);
+      expect(values).toEqual(["10", "11"]);
+    });
+
+    it("still keeps a Zone's Hizbs out of another Zone's list", async () => {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "2" } });
+
+      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const values = Array.from(party.options).map((o) => o.value);
+      expect(values).toContain("20");
+      expect(values).not.toContain("11");
     });
   });
 });

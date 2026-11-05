@@ -259,6 +259,7 @@ expected values.
 
 - **FR-047**: Tab 3 MUST offer Zone from the Zones already held by the system.
 - **FR-048**: Tab 3 MUST offer Party from the Parties already held by the system, restricted to those belonging to the selected Zone, and MUST clear a selected Party that no longer belongs to a newly chosen Zone.
+- **FR-048a** *(authorised 2026-11-05)*: The Party list MUST offer **inactive** Hizbs as well as active ones, and MUST mark the inactive ones rather than hiding them. Hiding them has two failure modes: a member whose own Hizb was deactivated would find their saved value absent from the list, so the control renders empty and the save is refused with nothing on screen to explain it; and a member who genuinely belongs to a retired Hizb has no way to record it. Marking is the other half of the requirement — an unmarked inactive Hizb reads as an ordinary choice. Active values MUST be ordered ahead of inactive ones. Zone filtering (FR-048) is unchanged: an inactive Hizb is still confined to its own Zone.
 - **FR-049**: Tab 3 MUST offer Role as a choice of Leader, Side Lead or Member.
 
 #### Tab 4 — Occupation

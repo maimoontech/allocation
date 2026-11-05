@@ -1,5 +1,25 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Changed: Tab 3 offers inactive Hizbs, marked
+
+The Party dropdown on the member profile returned only `is_active = 1` parties. It now returns
+all of them, with inactive ones labelled `— INACTIVE` and sorted after the active ones.
+
+On the live database that is **23 of 80 Hizbs** — 21 in City Saddar and 2 in Hyderi — which
+were simply not offered to members.
+
+- Hiding them had a failure mode beyond the obvious one. A member whose own Hizb had been
+  deactivated would find their saved value missing from the list: the select renders blank and
+  the save is refused with nothing on screen to explain it. That is the same silent shape as
+  the save bug fixed on 2026-11-04.
+- `GET /api/v1/members/lookups` now returns `is_active` on every party, so the form can mark
+  them. Marking is half the requirement — an unmarked inactive Hizb reads as an ordinary
+  choice and a member cannot tell it is no longer running.
+- Zone filtering is unchanged: an inactive Hizb is still confined to its own Zone, and a test
+  pins that it does not leak into another Zone's list.
+- FR-048a added.
+
+
 ## 2026-11-05 — Applied to live: the Aqa Moula lookup migration
 
 `MEMBERSHIP_LIVE_INSTALL.sql` run against production. The admin Dropdown Lists page and the

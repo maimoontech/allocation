@@ -120,6 +120,39 @@ describe("member profile", () => {
       }
     });
 
+    /**
+     * FR-048a. Inactive Hizbs are returned, carrying the flag so Tab 3 can mark them.
+     *
+     * Filtering them out server-side is the failure this guards: a member whose own Hizb was
+     * deactivated would find their saved value missing from the list, the select renders
+     * blank, and the save is refused with nothing on screen to explain it.
+     *
+     * The seeded party is deactivated and restored inside the test, so it touches only a row
+     * the fixtures own.
+     */
+    it("returns inactive parties too, each carrying is_active", async () => {
+      await pool.query("UPDATE parties SET is_active = 0 WHERE id = :id", {
+        id: seeded.partyId
+      });
+      try {
+        const res = await request(app)
+          .get("/api/v1/members/lookups")
+          .set("Authorization", `Bearer ${token}`);
+
+        const found = res.body.data.parties.find((p: any) => p.id === seeded.partyId);
+        expect(found, "a deactivated party must still be offered").toBeDefined();
+        expect(found.is_active).toBe(false);
+
+        // And an active one is still reported as active, or the flag says nothing.
+        const active = res.body.data.parties.find((p: any) => p.id === seeded.otherPartyId);
+        expect(active?.is_active).toBe(true);
+      } finally {
+        await pool.query("UPDATE parties SET is_active = 1 WHERE id = :id", {
+          id: seeded.partyId
+        });
+      }
+    });
+
     // FR-076: the upper bound must come from the server, not the client's clock.
     it("returns the current Hijri year, computed server-side", async () => {
       const res = await request(app)

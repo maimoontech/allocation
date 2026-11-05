@@ -14,7 +14,8 @@ import { fail, ok } from "../utils/response";
  * Two details carry requirements:
  *
  *   - Parties include `zone_id`, so Tab 3's dependent dropdown filters client-side with no
- *     second request (FR-048).
+ *     second request (FR-048), and `is_active`, because Tab 3 offers inactive Hizbs too and
+ *     marks them (FR-048a).
  *   - `current_hijri_year` is computed on the server, so a client cannot widen the Tab 9
  *     range by changing its own clock (FR-076).
  *
@@ -66,10 +67,14 @@ memberLookupsRoutes.get("/", async (_req, res) => {
     const [zones] = await pool.query<any[]>(
       "SELECT id, zone_name AS name FROM zones ORDER BY zone_name"
     );
+    // ALL parties, active and inactive. A member's own Hizb may have been deactivated, and
+    // filtering it out here would drop their saved value from the list: the Party select
+    // would render blank and the save would be refused with nothing on screen to explain it.
+    // `is_active` travels with each row so the form can mark the inactive ones rather than
+    // presenting them as ordinary choices.
     const [parties] = await pool.query<any[]>(
-      `SELECT id, party_name AS name, zone_id
+      `SELECT id, party_name AS name, zone_id, is_active
        FROM parties
-       WHERE is_active = 1
        ORDER BY party_name`
     );
     const [mohallahs] = await pool.query<any[]>(
@@ -80,7 +85,8 @@ memberLookupsRoutes.get("/", async (_req, res) => {
     data.parties = parties.map((p) => ({
       id: Number(p.id),
       name: p.name,
-      zone_id: Number(p.zone_id)
+      zone_id: Number(p.zone_id),
+      is_active: Boolean(p.is_active)
     }));
     data.mohallahs = mohallahs.map((m) => ({
       id: Number(m.id),
