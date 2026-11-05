@@ -1,5 +1,21 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-05 — Changed: profile tabs show only their heading
+
+The tab strip printed the position in front of each label — `1 Personal`, `3 Hizb`. The tabs
+now show the heading alone.
+
+- The number was decoration that also leaked into the accessible name, so a screen reader
+  announced "1 Personal" and an exact-string `getByRole("tab", { name: "Personal" })` could
+  not match. The Tabs test now asserts the number's absence rather than its presence.
+- The Members page told administrators that contact numbers are on "Tab 1 Personal" and Zone
+  and Party on "Tab 3 Hizb". Those numbers are no longer on screen for the member to find, so
+  that sentence now names the tabs — the **Personal** tab and the **Hizb** tab.
+- Nothing else depended on the number. The server still reports a tab number with each
+  validation error and the page still opens the right tab from it; that mapping is internal
+  and was never shown.
+
+
 ## 2026-11-04 — Changed: five profile year fields are now Hijri, not Gregorian
 
 Prefix Year, Title Year, Sharaf Year, Place Visited Year and the Other Sansta "Since" year

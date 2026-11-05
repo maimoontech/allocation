@@ -56,7 +56,7 @@ export function Tabs({ tabs, activeId, onChange, children }: TabsProps) {
         onKeyDown={onKeyDown}
         className="-mx-4 mb-4 flex overflow-x-auto border-b border-border px-4 sm:mx-0 sm:px-0"
       >
-        {tabs.map((tab, index) => {
+        {tabs.map((tab) => {
           const isActive = tab.id === activeId;
           return (
             <button
@@ -80,7 +80,6 @@ export function Tabs({ tabs, activeId, onChange, children }: TabsProps) {
                   : "text-textMuted hover:text-textPrimary hover:after:bg-border"
               ].join(" ")}
             >
-              <span className="mr-1.5 text-xs text-textMuted">{index + 1}</span>
               {tab.label}
               {tab.hasError ? (
                 <span

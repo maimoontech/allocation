@@ -345,8 +345,8 @@ export function MembersPage() {
               from is more use than another dash. */}
           <div className="rounded-input border border-border bg-surface p-2 text-xs text-textMuted">
             Zone, Party, WhatsApp and Mobile numbers are entered by the member in their own
-            profile — contact numbers on <strong>Tab 1 Personal</strong>, Zone and Party on{" "}
-            <strong>Tab 3 Hizb</strong>. Each shows a dash until the member saves it, and it
+            profile — contact numbers on the <strong>Personal</strong> tab, Zone and Party on
+            the <strong>Hizb</strong> tab. Each shows a dash until the member saves it, and it
             cannot be filled in from here.
           </div>
 

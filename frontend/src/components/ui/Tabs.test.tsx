@@ -10,7 +10,15 @@ const TABS = [
 ];
 
 describe("Tabs", () => {
-  it("renders one tab per definition, numbered", () => {
+  /**
+   * One tab per definition, showing the heading and nothing else.
+   *
+   * The position used to be printed in front of the label. Asserting its ABSENCE is the
+   * point: the number was decoration that also leaked into every tab's accessible name, so
+   * a screen reader announced "1 Alpha" and a `getByRole("tab", { name: "Alpha" })` with an
+   * exact string would not match.
+   */
+  it("renders one tab per definition, showing only the heading", () => {
     renderWithProviders(
       <Tabs tabs={TABS} activeId="a" onChange={() => {}}>
         <div>panel</div>
@@ -19,8 +27,9 @@ describe("Tabs", () => {
 
     const tabs = screen.getAllByRole("tab");
     expect(tabs).toHaveLength(3);
-    expect(tabs[0]).toHaveTextContent("1");
     expect(tabs[0]).toHaveTextContent("Alpha");
+    expect(tabs[0].textContent).toBe("Alpha");
+    expect(screen.getByRole("tab", { name: "Alpha" })).toBe(tabs[0]);
   });
 
   it("marks only the active tab as selected", () => {
