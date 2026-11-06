@@ -79,6 +79,7 @@ function envelope(data: unknown, status = 200, message = "OK"): Response {
 let saveBodies: unknown[] = [];
 let canEdit = true;
 let profileStatus = 200;
+let lookupsStatus = 200;
 
 function stub() {
   vi.stubGlobal(
@@ -88,7 +89,10 @@ function stub() {
       const url = isRequest ? input.url : String(input);
       const method = (isRequest ? input.method : init?.method) ?? "GET";
 
-      if (url.includes("/members/lookups")) return envelope(LOOKUPS);
+      if (url.includes("/members/lookups")) {
+        if (lookupsStatus !== 200) return envelope(null, lookupsStatus, "Forbidden");
+        return envelope(LOOKUPS);
+      }
 
       if (url.includes("/members/7/profile")) {
         if (method.toUpperCase() === "PUT") {
@@ -118,6 +122,7 @@ beforeEach(() => {
   saveBodies = [];
   canEdit = true;
   profileStatus = 200;
+  lookupsStatus = 200;
   stub();
 });
 
@@ -196,6 +201,21 @@ describe("MemberProfileViewPage", () => {
 
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Edited" } });
     expect(screen.getByRole("button", { name: /Save Changes/i })).toBeEnabled();
+  });
+
+  /**
+   * The lookups are a SEPARATE request. When only they failed the page used to blame the
+   * profile, which is the one thing that had worked — and that is exactly how the
+   * member-only guard on `/members/lookups` stayed hidden until an administrator clicked
+   * View profile in production.
+   */
+  it("says so when the dropdown lists are what failed, not the profile", async () => {
+    lookupsStatus = 403;
+    renderPage();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Could not load the dropdown lists/i)).toBeInTheDocument()
+    );
   });
 
   /**

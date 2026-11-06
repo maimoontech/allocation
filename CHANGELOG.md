@@ -1,5 +1,26 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-06 — Fixed: "Could not load this profile" when an admin opened a member
+
+The profile itself loaded fine. `GET /api/v1/members/lookups` did not: it was guarded by
+`requireMember()`, which **403s every non-member role**, so the dropdown lists behind the
+twelve tabs were refused and the page fell into its error state.
+
+Reference data, refused to the role that most needs it to render the same form.
+
+- The lookups now accept member, administrator and Zonal Head. The two paths stay apart: a
+  member still goes through `requireMember()`, which reads their account row to enforce
+  FR-007, FR-018 and FR-022, while the other roles skip it — that query is for a
+  `member_accounts` row they do not have, and FR-103 keeps it off their routes by design.
+- **The error message was part of the problem.** "Could not load this profile" sent the
+  reader to the profile endpoint, the one thing that had worked. The page now says when it
+  was the dropdown lists that failed, with a test holding that distinction.
+- Fixed a stale test of my own from 2026-11-04: `memberRouteMounting` still expected a Zonal
+  Head to get 403 from the admin member list, which FR-006 stopped being true when it was
+  amended to admit them. It would have failed on the first local run. Four tests added for
+  the lookups guard across all three roles plus the anonymous case.
+
+
 ## 2026-11-06 — Added: Admin and Zonal Head can open a member's profile
 
 **View profile** on the Members list opens all twelve tabs for one member. Both roles read;

@@ -129,6 +129,10 @@ export function MemberProfileViewPage() {
     // 403 is the interesting case and deserves its own words: a Zonal Head reaching a member
     // outside their zone has not hit an outage, and "try again" would be a lie.
     const status = (profileQuery.error as { status?: number } | undefined)?.status;
+    // Name WHICH half failed. The profile and the dropdown lists are two requests, and when
+    // only the lists were refused the page still said "could not load this profile" — which
+    // sent the reader looking at the profile endpoint, the one thing that had worked.
+    const lookupsFailed = lookupsQuery.isError || !lookups;
     return (
       <div className="space-y-4 p-4 sm:p-6">
         <MessageBar intent="error" role="alert">
@@ -136,7 +140,9 @@ export function MemberProfileViewPage() {
             ? "This member is not in your zone."
             : status === 404
               ? "That member does not exist."
-              : "Could not load this profile. Please reload the page."}
+              : lookupsFailed
+                ? "Could not load the dropdown lists this profile needs. Please reload the page."
+                : "Could not load this profile. Please reload the page."}
         </MessageBar>
         <Link to="/members" className="text-sm underline">
           Back to Members

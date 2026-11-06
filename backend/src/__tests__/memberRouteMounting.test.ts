@@ -91,12 +91,55 @@ describe("routers sharing /api/v1/members", () => {
     expect(res.body.data.its_no).toBe(TEST_CREDENTIALS.memberSettled.itsNo);
   });
 
-  it("refuses the admin list to a zonal head", async () => {
+  /**
+   * Was a 403 until 2026-11-04, when FR-006 was amended to admit Zonal Heads. They are not
+   * unrestricted: the router scopes every row to their own zone, which
+   * `memberAdminCreate.test.ts` covers. What this pins is only that the door is open.
+   */
+  it("lets a zonal head reach the member list, scoped by the router", async () => {
     const res = await request(app)
       .get("/api/v1/members")
       .set("Authorization", `Bearer ${zoneToken}`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data.items)).toBe(true);
+  });
+
+  /**
+   * FR-047a. The lookups are reference data, and an administrator rendering a member's
+   * twelve tabs needs the same lists the member does.
+   *
+   * This was member-only, and the symptom was confusing: the profile itself loaded and the
+   * page still failed, because the dropdowns behind it had been refused.
+   */
+  it("serves the lookups to an administrator", async () => {
+    const res = await request(app)
+      .get("/api/v1/members/lookups")
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data.zones)).toBe(true);
+  });
+
+  it("serves the lookups to a zonal head", async () => {
+    const res = await request(app)
+      .get("/api/v1/members/lookups")
+      .set("Authorization", `Bearer ${zoneToken}`);
+
+    expect(res.status).toBe(200);
+  });
+
+  it("still serves the lookups to a member", async () => {
+    const res = await request(app)
+      .get("/api/v1/members/lookups")
+      .set("Authorization", `Bearer ${memberToken}`);
+
+    expect(res.status).toBe(200);
+  });
+
+  it("still requires a token for the lookups", async () => {
+    const res = await request(app).get("/api/v1/members/lookups");
+    expect(res.status).toBe(401);
   });
 
   it("requires authentication for the admin list", async () => {

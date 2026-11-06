@@ -27,7 +27,27 @@ const response_1 = require("../utils/response");
  * omitted, so the form can explain itself instead of breaking (FR-095).
  */
 exports.memberLookupsRoutes = (0, express_1.Router)();
-exports.memberLookupsRoutes.use(auth_1.requireAuth, (0, requireMember_1.requireMember)());
+/**
+ * Member, administrator or Zonal Head.
+ *
+ * These are reference lists — zones, parties, titles, venues — and an administrator reading
+ * a member's twelve tabs (FR-047a) needs exactly the same lists to render exactly the same
+ * form. Leaving this member-only was the defect behind "Could not load this profile": the
+ * profile itself returned fine and the dropdowns behind it did not.
+ *
+ * The two paths are kept apart deliberately. A member goes through `requireMember()`, which
+ * reads their account row to enforce FR-007, FR-018 and FR-022. An administrator must NOT
+ * take that path: it queries `member_accounts` for an id they do not have, and FR-103 keeps
+ * that query off the existing roles' routes by construction. So the role is checked first
+ * and only a member reaches the member guard.
+ */
+const memberGuard = (0, requireMember_1.requireMember)();
+exports.memberLookupsRoutes.use(auth_1.requireAuth, (req, res, next) => {
+    const role = req.user?.role;
+    if (role === "admin" || role === "zonal_head")
+        return next();
+    return memberGuard(req, res, next);
+});
 /** table -> the column holding its display name. */
 const LOOKUP_TABLES = {
     titles: "title_name",

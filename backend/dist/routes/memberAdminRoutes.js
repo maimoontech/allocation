@@ -15,8 +15,13 @@ const response_1 = require("../utils/response");
  * Administrator and Zonal Head view of member ACCOUNTS (FR-006, FR-007).
  *
  * Shows account state plus the identifying details needed to recognise a person: name parts,
- * photograph, zone and party posting, and WhatsApp and mobile numbers. Health values and
- * every other answer from the member's twelve-tab profile stay private (FR-065, FR-101).
+ * photograph, zone and party posting, and WhatsApp and mobile numbers. The LIST stays at
+ * that: the twelve-tab answers are not in it, so a page of fifty members is not a page of
+ * fifty medical records (FR-101).
+ *
+ * The full profile is a separate, deliberate request — `GET /:id/profile`, one member at a
+ * time, which both roles may make and which does include the Tab 6 health values under
+ * FR-065 as amended on 2026-11-06.
  *
  * Two roles reach this router and they see different things:
  *   - admin       every account, including those with no profile row yet
