@@ -21,7 +21,7 @@ const CHOICES = [
  * record saved for one of those years is shown as an extra row rather than hidden: a value
  * the member cannot see is a value they cannot correct.
  */
-export const ASHARA_GRID_YEAR_MIN = 1405;
+export const ASHARA_GRID_YEAR_MIN = 1404;
 
 /**
  * Tab 9 — Ashara Mubaraka, as one row per Hijri year.
