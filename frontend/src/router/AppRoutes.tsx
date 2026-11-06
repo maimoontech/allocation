@@ -21,6 +21,7 @@ import { MemberChangePasswordPage } from "../pages/member/MemberChangePasswordPa
 import { MemberProfilePage } from "../pages/member/MemberProfilePage";
 import { MembersPage } from "../pages/modules/MembersPage";
 import { MemberPhotoApprovalPage } from "../pages/modules/MemberPhotoApprovalPage";
+import { MemberProfileViewPage } from "../pages/modules/MemberProfileViewPage";
 import { MemberLookupsPage } from "../pages/modules/MemberLookupsPage";
 import { MemberLookupEditPage } from "../pages/modules/MemberLookupEditPage";
 
@@ -54,6 +55,10 @@ export function AppRoutes() {
           {/* Both roles create accounts and set account status here. A Zonal Head sees only
               their own zone, which the server enforces — this guard just opens the door. */}
           <Route path="/members" element={<MembersPage />} />
+          {/* FR-047a. Both roles read all twelve tabs; only an administrator may save, and
+              the server decides that — this guard just opens the door. A Zonal Head reaching
+              a member outside their zone gets a 403 the page explains. */}
+          <Route path="/members/:id/profile" element={<MemberProfileViewPage />} />
         </Route>
 
         <Route element={<ProtectedRoute roles={["party"]} />}>

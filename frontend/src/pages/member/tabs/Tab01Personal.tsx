@@ -11,11 +11,18 @@ import { lookupOptions } from "./shared";
 import type { TabProps } from "./shared";
 
 export type Tab01Props = TabProps & {
-  onPhotoSelect: (photo: ImageUploadValue) => void;
-  onPhotoRemove: () => void;
+  /**
+   * Absent on the administrator's read of someone else's profile (FR-047a). Changing a
+   * member's photograph is the approval flow's job, not this form's, so without these the
+   * photograph renders as a preview and nothing else.
+   */
+  onPhotoSelect?: (photo: ImageUploadValue) => void;
+  onPhotoRemove?: () => void;
   photoBusy?: boolean;
   /** Changes when the photo does, so the preview reloads instead of showing a cached image. */
-  photoVersion: number;
+  photoVersion?: number;
+  /** Where to fetch the photograph from. Defaults to the signed-in member's own. */
+  photoPath?: string;
 };
 
 const PREFIX_OPTIONS = [
@@ -32,7 +39,7 @@ const PREFIX_OPTIONS = [
  * token and turned into a blob URL, which is also revoked on cleanup so the blob does not
  * leak.
  */
-function usePhotoObjectUrl(hasPhoto: boolean, version: number) {
+function usePhotoObjectUrl(hasPhoto: boolean, version: number, path: string) {
   // Stored WITH the version it was fetched for. The alternative — clearing the state at the
   // top of the effect — is a synchronous setState in an effect body, which triggers a second
   // render pass every time. Keying the value instead lets a stale URL simply not match.
@@ -47,7 +54,7 @@ function usePhotoObjectUrl(hasPhoto: boolean, version: number) {
     (async () => {
       try {
         const token = authStorage.getToken();
-        const response = await fetch(resolveApiUrl("members/me/photo"), {
+        const response = await fetch(resolveApiUrl(path), {
           headers: token ? { authorization: `Bearer ${token}` } : undefined
         });
         if (!response.ok) return;
@@ -65,7 +72,7 @@ function usePhotoObjectUrl(hasPhoto: boolean, version: number) {
       // Revoked so the blob is not retained for the life of the document.
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [hasPhoto, version]);
+  }, [hasPhoto, version, path]);
 
   // Derived rather than cleared: a URL fetched for an older version has been revoked, so
   // returning it would render a broken image.
@@ -81,9 +88,17 @@ export function Tab01Personal({
   onPhotoSelect,
   onPhotoRemove,
   photoBusy,
-  photoVersion
+  photoVersion,
+  photoPath
 }: Tab01Props) {
-  const photoUrl = usePhotoObjectUrl(value.has_photo, photoVersion);
+  // "me" for the member's own page; `members/<id>/photo` when an administrator or Zonal Head
+  // is reading someone else's profile. Hardcoding "me" here would have shown the ADMIN's own
+  // photograph on every member they opened.
+  const photoUrl = usePhotoObjectUrl(
+    value.has_photo,
+    photoVersion ?? 0,
+    photoPath ?? "members/me/photo"
+  );
 
   // FR-094: a value awaiting review says so, rather than looking authoritative.
   const maritalOptions = lookupOptions(lookups.marital_statuses);
@@ -139,14 +154,29 @@ export function Tab01Personal({
         />
       </div>
 
-      <ImageUpload
-        label="Photo"
-        previewUrl={photoUrl}
-        onSelect={onPhotoSelect}
-        onRemove={onPhotoRemove}
-        busy={photoBusy}
-        disabled={disabled}
-      />
+      {onPhotoSelect && onPhotoRemove ? (
+        <ImageUpload
+          label="Photo"
+          previewUrl={photoUrl}
+          onSelect={onPhotoSelect}
+          onRemove={onPhotoRemove}
+          busy={photoBusy}
+          disabled={disabled}
+        />
+      ) : (
+        <div>
+          <div className="mb-1 text-sm font-semibold">Photo</div>
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt="Member photograph"
+              className="h-32 w-32 rounded-input border border-border object-cover"
+            />
+          ) : (
+            <div className="text-sm text-textMuted">No photograph set.</div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <DatePicker

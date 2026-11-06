@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Card } from "../../components/ui/Card";
 import { Tabs, type TabDefinition } from "../../components/ui/Tabs";
+import {
+  ALL_TABS,
+  ProfileTabPanel,
+  TAB_BY_NUMBER,
+  TAB_IDS
+} from "./tabs/profileTabs";
 import type { ImageUploadValue } from "../../components/ui/ImageUpload";
 import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
 import { useMemberAvatarUrl } from "../../features/member/useMemberAvatarUrl";
@@ -22,18 +28,6 @@ import {
   updateDraftField,
   updateDraftFields
 } from "../../features/member/memberProfileSlice";
-import { Tab01Personal } from "./tabs/Tab01Personal";
-import { Tab02TitlePrefix } from "./tabs/Tab02TitlePrefix";
-import { Tab03Hizb } from "./tabs/Tab03Hizb";
-import { Tab04Occupation } from "./tabs/Tab04Occupation";
-import { Tab05EducationHifz } from "./tabs/Tab05EducationHifz";
-import { Tab06Health } from "./tabs/Tab06Health";
-import { Tab07Sharaf } from "./tabs/Tab07Sharaf";
-import { Tab08PlacesVisited } from "./tabs/Tab08PlacesVisited";
-import { Tab09Ashara } from "./tabs/Tab09Ashara";
-import { Tab10Asbaq } from "./tabs/Tab10Asbaq";
-import { Tab11Tamreen } from "./tabs/Tab11Tamreen";
-import { Tab12Khidmat } from "./tabs/Tab12Khidmat";
 
 /**
  * The member profile: one page, twelve tabs, one save.
@@ -49,53 +43,6 @@ import { Tab12Khidmat } from "./tabs/Tab12Khidmat";
  * the cross-tab rules — Tab 2's prefix comes from Tab 1, Tab 8's counts must agree — would
  * then have no single point at which they are true.
  */
-
-const TAB_IDS = {
-  personal: "personal",
-  title: "title",
-  hizb: "hizb",
-  occupation: "occupation",
-  education: "education",
-  health: "health",
-  sharaf: "sharaf",
-  places: "places",
-  ashara: "ashara",
-  asbaq: "asbaq",
-  tamreen: "tamreen",
-  khidmat: "khidmat"
-} as const;
-
-/** The full twelve, in the order the requirement lists them. */
-const ALL_TABS: Array<{ id: string; label: string }> = [
-  { id: TAB_IDS.personal, label: "Personal" },
-  { id: TAB_IDS.title, label: "Title & Prefix" },
-  { id: TAB_IDS.hizb, label: "Hizb" },
-  { id: TAB_IDS.occupation, label: "Occupation" },
-  { id: TAB_IDS.education, label: "Education / Hifz" },
-  { id: TAB_IDS.health, label: "Health & Fitness" },
-  { id: TAB_IDS.sharaf, label: "Sharaf" },
-  { id: TAB_IDS.places, label: "Maqamaat Muqaddasah" },
-  { id: TAB_IDS.ashara, label: "Ashara Mubaraka" },
-  { id: TAB_IDS.asbaq, label: "Asbaq" },
-  { id: TAB_IDS.tamreen, label: "Tamreen" },
-  { id: TAB_IDS.khidmat, label: "Other Sansta Khidmat" }
-];
-
-/** Maps a server error's tab number onto the tab id, so the right one can be opened. */
-const TAB_BY_NUMBER: Record<number, string> = {
-  1: TAB_IDS.personal,
-  2: TAB_IDS.title,
-  3: TAB_IDS.hizb,
-  4: TAB_IDS.occupation,
-  5: TAB_IDS.education,
-  6: TAB_IDS.health,
-  7: TAB_IDS.sharaf,
-  8: TAB_IDS.places,
-  9: TAB_IDS.ashara,
-  10: TAB_IDS.asbaq,
-  11: TAB_IDS.tamreen,
-  12: TAB_IDS.khidmat
-};
 
 export function MemberProfilePage() {
   const dispatch = useAppDispatch();
@@ -332,37 +279,16 @@ export function MemberProfilePage() {
 
         <Tabs tabs={tabs} activeId={activeTab} onChange={setActiveTab}>
           <Card>
-            {activeTab === TAB_IDS.personal ? (
-              <Tab01Personal
-                {...tabProps}
-                onPhotoSelect={onPhotoSelect}
-                onPhotoRemove={onPhotoRemove}
-                photoBusy={photoState.isLoading || removePhotoState.isLoading}
-                photoVersion={photoVersion}
-              />
-            ) : activeTab === TAB_IDS.hizb ? (
-              <Tab03Hizb {...tabProps} />
-            ) : activeTab === TAB_IDS.occupation ? (
-              <Tab04Occupation {...tabProps} />
-            ) : activeTab === TAB_IDS.education ? (
-              <Tab05EducationHifz {...tabProps} />
-            ) : activeTab === TAB_IDS.health ? (
-              <Tab06Health {...tabProps} />
-            ) : activeTab === TAB_IDS.asbaq ? (
-              <Tab10Asbaq {...tabProps} />
-            ) : activeTab === TAB_IDS.tamreen ? (
-              <Tab11Tamreen {...tabProps} />
-            ) : activeTab === TAB_IDS.khidmat ? (
-              <Tab12Khidmat {...tabProps} />
-            ) : activeTab === TAB_IDS.title ? (
-              <Tab02TitlePrefix {...tabProps} />
-            ) : activeTab === TAB_IDS.sharaf ? (
-              <Tab07Sharaf {...tabProps} />
-            ) : activeTab === TAB_IDS.places ? (
-              <Tab08PlacesVisited {...tabProps} />
-            ) : (
-              <Tab09Ashara {...tabProps} />
-            )}
+            <ProfileTabPanel
+              activeTab={activeTab}
+              tabProps={tabProps}
+              photo={{
+                onPhotoSelect,
+                onPhotoRemove,
+                photoBusy: photoState.isLoading || removePhotoState.isLoading,
+                photoVersion
+              }}
+            />
           </Card>
         </Tabs>
       </div>

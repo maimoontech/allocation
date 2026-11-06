@@ -3,14 +3,20 @@ import bcrypt from "bcryptjs";
 import { pool } from "../db/pool";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { validateMemberPassword } from "../services/authService";
+import { readMemberProfile, saveMemberProfile } from "../services/memberProfileService";
 import { fail, ok } from "../utils/response";
 
 /**
  * Administrator and Zonal Head view of member ACCOUNTS (FR-006, FR-007).
  *
  * Shows account state plus the identifying details needed to recognise a person: name parts,
- * photograph, zone and party posting, and WhatsApp and mobile numbers. Health values and
- * every other answer from the member's twelve-tab profile stay private (FR-065, FR-101).
+ * photograph, zone and party posting, and WhatsApp and mobile numbers. The LIST stays at
+ * that: the twelve-tab answers are not in it, so a page of fifty members is not a page of
+ * fifty medical records (FR-101).
+ *
+ * The full profile is a separate, deliberate request — `GET /:id/profile`, one member at a
+ * time, which both roles may make and which does include the Tab 6 health values under
+ * FR-065 as amended on 2026-11-06.
  *
  * Two roles reach this router and they see different things:
  *   - admin       every account, including those with no profile row yet
@@ -292,6 +298,121 @@ memberAdminRoutes.get("/:id/photo", async (req, res) => {
     return res.status(200).end(photo.image_data);
   } catch {
     return fail(res, "Failed to load photo", 500);
+  }
+});
+
+/**
+ * Confirms the caller may act on this member, and returns their zone.
+ *
+ * One helper for both profile routes so the check cannot be written two slightly different
+ * ways. It reads the zone BEFORE anything else happens, which is what stops a refusal from
+ * following a completed read or write.
+ */
+async function assertMemberInScope(
+  id: number,
+  scope: number | null
+): Promise<"ok" | "not_found" | "forbidden"> {
+  const [rows] = await pool.query<any[]>(
+    `SELECT ma.id, mp.zone_id
+     FROM member_accounts ma
+     LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
+     WHERE ma.id = :id
+     LIMIT 1`,
+    { id }
+  );
+  const row = rows[0];
+  if (!row) return "not_found";
+  if (scope !== null && Number(row.zone_id) !== scope) return "forbidden";
+  return "ok";
+}
+
+/**
+ * One member's full twelve-tab profile, for an administrator or a Zonal Head.
+ *
+ * FR-047a, authorised 2026-11-06. This DOES include the Tab 6 health values. FR-065 already
+ * allowed "explicitly authorised administrators" to read them; extending that to Zonal Heads
+ * for their own zone is the new part, and it was authorised explicitly rather than inferred.
+ *
+ * A Zonal Head is confined to their own zone, derived from `member_profiles.zone_id` exactly
+ * as the list and the photo endpoint derive it. A member with no profile row is therefore in
+ * no zone and is invisible to every Zonal Head — the same consequence stated for FR-006a.
+ */
+memberAdminRoutes.get("/:id/profile", async (req, res) => {
+  const scope = requestZoneScope(req.user!);
+  if (scope === false) return fail(res, "Forbidden", 403);
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return fail(res, "Invalid request", 400);
+
+  try {
+    const verdict = await assertMemberInScope(id, scope);
+    if (verdict === "not_found") return fail(res, "Member not found", 404);
+    if (verdict === "forbidden") return fail(res, "Forbidden", 403);
+
+    const profile = await readMemberProfile(id);
+    if (!profile) return fail(res, "Member not found", 404);
+
+    // Stated in the payload rather than re-derived in the browser, so the client cannot
+    // enable editing for a Zonal Head by lying to itself. The server refuses regardless.
+    return ok(res, { ...profile, can_edit: req.user!.role === "admin" }, "OK");
+  } catch {
+    return fail(res, "Failed to load profile", 500);
+  }
+});
+
+/**
+ * An administrator corrects one member's profile. ADMIN ONLY — a Zonal Head reads.
+ *
+ * Every edit writes a row to `member_profile_edits` naming the fields that changed, because
+ * a value an administrator can change without trace is a value nobody can later defend. The
+ * row holds field NAMES only: Tab 6 is medical data and FR-066 says health values appear in
+ * no log, so copying them into an audit table would simply move the problem.
+ */
+memberAdminRoutes.put("/:id/profile", requireRole(["admin"]), async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return fail(res, "Invalid request", 400);
+
+  const payload = req.body;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return fail(res, "Invalid request", 400);
+  }
+
+  try {
+    const verdict = await assertMemberInScope(id, null);
+    if (verdict === "not_found") return fail(res, "Member not found", 404);
+
+    const result = await saveMemberProfile(id, payload as Record<string, unknown>);
+
+    if (!result.ok && result.kind === "conflict") {
+      return fail(
+        res,
+        "This profile was changed in another session. Reload it and apply your edits again.",
+        409
+      );
+    }
+    if (!result.ok) {
+      return fail(res, "Please correct the highlighted fields.", 400, { errors: result.errors });
+    }
+
+    // After the save, and only on success: an audit row for a write that did not happen
+    // would be worse than none. `if_unmodified_since` is the concurrency stamp, not a
+    // profile field, so it is not reported as a change.
+    const changed = Object.keys(payload).filter((k) => k !== "if_unmodified_since");
+    await pool.query(
+      `INSERT INTO member_profile_edits
+         (member_account_id, edited_by_admin_id, edited_by_role, changed_fields)
+       VALUES (:member_account_id, :admin_id, 'admin', :changed_fields)`,
+      {
+        member_account_id: id,
+        admin_id: req.user!.id,
+        changed_fields: JSON.stringify(changed)
+      }
+    );
+
+    const profile = await readMemberProfile(id);
+    return ok(res, { ...profile, can_edit: true }, "Profile saved");
+  } catch {
+    return fail(res, "Failed to save profile", 500);
   }
 });
 

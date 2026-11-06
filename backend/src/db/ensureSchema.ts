@@ -42,6 +42,30 @@ export async function ensureSchema() {
   await ensureAqaMoulaAsharaLookup();
   await ensureZikrEHussainColumn();
   await ensureAsharaVenueColumn();
+  await ensureProfileEditAudit();
+}
+
+/**
+ * FR-047a. Who changed a member's profile, when, and which fields.
+ *
+ * Field NAMES only — never the values. Tab 6 holds medical data and FR-066 says health
+ * values must appear in no log line, so an audit row records that `blood_group` changed
+ * without copying the blood group into a second table that would then need protecting just
+ * as carefully.
+ */
+async function ensureProfileEditAudit() {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS member_profile_edits (
+       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+       member_account_id INT UNSIGNED NOT NULL,
+       edited_by_admin_id INT UNSIGNED NOT NULL,
+       edited_by_role ENUM('admin') NOT NULL,
+       changed_fields TEXT NOT NULL,
+       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       PRIMARY KEY (id),
+       KEY idx_member_profile_edits_member (member_account_id, created_at)
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+  );
 }
 
 /**

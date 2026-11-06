@@ -389,4 +389,172 @@ describe("zonal head scoping of member administration", () => {
 
     expect(res.status).toBe(200);
   });
+
+  /**
+   * READING AND EDITING ONE MEMBER'S TWELVE-TAB PROFILE (FR-047a)
+   *
+   * Authorised 2026-11-06. Two separate permissions that are easy to conflate:
+   *
+   *   READ  — administrator and Zonal Head, INCLUDING the Tab 6 health values. FR-065 already
+   *           allowed "explicitly authorised administrators"; widening it to Zonal Heads for
+   *           their own zone is the new part.
+   *   WRITE — administrator only. A Zonal Head reads.
+   *
+   * The write tests restore what they change, because these fixture rows are shared with the
+   * scoping tests above.
+   */
+  describe("reading and editing a member profile", () => {
+    beforeEach(async () => {
+      await pool.query(
+        "UPDATE member_profiles SET blood_group = NULL, asbaq_ustad = NULL WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      await pool.query("DELETE FROM member_profile_edits WHERE member_account_id = :id", {
+        id: inZoneId
+      });
+    });
+
+    it("gives an administrator the whole profile, and says they may edit", async () => {
+      const res = await request(app)
+        .get(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.its_no).toBe(IN_ZONE_ITS);
+      expect(res.body.data.can_edit).toBe(true);
+      // All twelve tabs, not just the identifying fields the list shows.
+      expect(res.body.data).toHaveProperty("blood_group");
+      expect(res.body.data).toHaveProperty("ashara_attendances");
+    });
+
+    /** The widening of FR-065 that was authorised, stated so it cannot be narrowed by accident. */
+    it("gives a Zonal Head a member in their zone, health values included, read-only", async () => {
+      await pool.query(
+        "UPDATE member_profiles SET blood_group = 'AB-' WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+
+      const res = await request(app)
+        .get(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${zonalToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.blood_group).toBe("AB-");
+      expect(res.body.data.can_edit).toBe(false);
+    });
+
+    it("refuses a Zonal Head a member outside their zone", async () => {
+      const res = await request(app)
+        .get(`/api/v1/members/${noZoneId}/profile`)
+        .set("Authorization", `Bearer ${zonalToken}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it("lets an administrator read a member with no zone", async () => {
+      const res = await request(app)
+        .get(`/api/v1/members/${noZoneId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    it("404s for a member that does not exist", async () => {
+      const res = await request(app)
+        .get("/api/v1/members/99999999/profile")
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(404);
+    });
+
+    it("saves an administrator's correction and records which fields changed", async () => {
+      const res = await request(app)
+        .put(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ asbaq_ustad: "Corrected By Admin" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.asbaq_ustad).toBe("Corrected By Admin");
+
+      const [edits] = await pool.query<any[]>(
+        "SELECT edited_by_admin_id, edited_by_role, changed_fields FROM member_profile_edits WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(edits).toHaveLength(1);
+      expect(edits[0].edited_by_role).toBe("admin");
+      expect(Number(edits[0].edited_by_admin_id)).toBeGreaterThan(0);
+      expect(JSON.parse(edits[0].changed_fields)).toEqual(["asbaq_ustad"]);
+    });
+
+    /**
+     * FR-066: health values must appear in no log line. The audit row is a log, so it holds
+     * field NAMES only. Asserting the VALUE is absent is the point — recording the name is
+     * what gives a disputed value its provenance without copying medical data somewhere new.
+     */
+    it("records that a health field changed, never the health value itself", async () => {
+      const res = await request(app)
+        .put(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ blood_group: "AB-" });
+
+      expect(res.status).toBe(200);
+
+      const [edits] = await pool.query<any[]>(
+        "SELECT changed_fields FROM member_profile_edits WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(JSON.parse(edits[0].changed_fields)).toEqual(["blood_group"]);
+      expect(edits[0].changed_fields).not.toContain("AB-");
+    });
+
+    it("refuses a Zonal Head's edit, and writes nothing", async () => {
+      const res = await request(app)
+        .put(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${zonalToken}`)
+        .send({ asbaq_ustad: "Should Not Save" });
+
+      expect(res.status).toBe(403);
+
+      const [rows] = await pool.query<any[]>(
+        "SELECT asbaq_ustad FROM member_profiles WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(rows[0].asbaq_ustad).toBeNull();
+
+      // And no audit row for a refusal, or the log would claim an edit that never happened.
+      const [edits] = await pool.query<any[]>(
+        "SELECT id FROM member_profile_edits WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(edits).toHaveLength(0);
+    });
+
+    it("writes no audit row when the save is rejected for a bad value", async () => {
+      const res = await request(app)
+        .put(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ blood_group: "NOT-A-GROUP" });
+
+      expect(res.status).toBe(400);
+
+      const [edits] = await pool.query<any[]>(
+        "SELECT id FROM member_profile_edits WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(edits).toHaveLength(0);
+    });
+
+    it("does not report the concurrency stamp as a changed field", async () => {
+      await request(app)
+        .put(`/api/v1/members/${inZoneId}/profile`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ asbaq_ustad: "With Stamp", if_unmodified_since: null });
+
+      const [edits] = await pool.query<any[]>(
+        "SELECT changed_fields FROM member_profile_edits WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(JSON.parse(edits[0].changed_fields)).toEqual(["asbaq_ustad"]);
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { pool } from "../db/pool";
+import { ensureSchema } from "../db/ensureSchema";
 import { destroyFixtures } from "./helpers/fixtures";
 
 /**
@@ -73,11 +74,18 @@ function assertLocalDatabase() {
  *
  * Teardown also runs defensively at startup, to clear anything an interrupted previous run
  * left behind.
+ *
+ * `ensureSchema()` runs first, for the same reason the server runs it at boot: a developer's
+ * local database is whatever the last migration left, and a test for a column added this week
+ * would otherwise fail with "unknown column" rather than telling them anything useful. It is
+ * idempotent and additive, and the host check above has already refused anything non-local,
+ * so this cannot reach a live database.
  */
 export default async function setup() {
   // First, before any connection is used: a refusal must not itself write anything.
   assertLocalDatabase();
 
+  await ensureSchema();
   await destroyFixtures();
 
   return async () => {

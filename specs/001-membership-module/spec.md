@@ -258,6 +258,7 @@ expected values.
 #### Tab 3 — Hizb
 
 - **FR-047**: Tab 3 MUST offer Zone from the Zones already held by the system.
+- **FR-047a** *(authorised 2026-11-06)*: Administrators and Zonal Heads MUST be able to read one member's complete twelve-tab profile, including the Tab 6 health values (FR-065 as amended). A Zonal Head MUST be confined to members in their own zone, derived from `member_profiles.zone_id` exactly as FR-006a derives it, so a member with no profile is in no zone and is invisible to every Zonal Head. **Only administrators may write.** Whether the caller may edit MUST be decided by the server and carried in the response, not inferred by the client from the signed-in role. Every administrator edit MUST record who made it, when, and **which fields changed — field names only, never their values**, because FR-066 forbids health values appearing in any log. A member editing their own profile MUST NOT write an audit row: the record exists to answer "who else touched this".
 - **FR-048**: Tab 3 MUST offer Party from the Parties already held by the system, restricted to those belonging to the selected Zone, and MUST clear a selected Party that no longer belongs to a newly chosen Zone.
 - **FR-048a** *(authorised 2026-11-05)*: The Party list MUST offer **inactive** Hizbs as well as active ones, and MUST mark the inactive ones rather than hiding them. Hiding them has two failure modes: a member whose own Hizb was deactivated would find their saved value absent from the list, so the control renders empty and the save is refused with nothing on screen to explain it; and a member who genuinely belongs to a retired Hizb has no way to record it. Marking is the other half of the requirement — an unmarked inactive Hizb reads as an ordinary choice. Active values MUST be ordered ahead of inactive ones. Zone filtering (FR-048) is unchanged: an inactive Hizb is still confined to its own Zone.
 - **FR-049**: Tab 3 MUST offer Role as a choice of Leader, Side Lead or Member.
@@ -286,7 +287,7 @@ expected values.
 - **FR-062**: Tab 6 MUST capture Regular Donor as a Yes or No answer and a Last Donation Date, and MUST reject a donation date in the future.
 - **FR-063**: Tab 6 MUST capture Height and Weight as numbers, each labelled with its unit of measurement.
 - **FR-064**: Tab 6 MUST derive and display BMI from Height and Weight as a read-only value, and MUST show no BMI when either is absent or not a positive number.
-- **FR-065**: Health values MUST be readable and writable only by the member they belong to and by explicitly authorised administrators.
+- **FR-065** *(amended 2026-11-06; previously "only by the member they belong to and by explicitly authorised administrators")*: Health values MUST be readable by the member they belong to, by administrators, and by a Zonal Head for members in their own zone. They MUST be writable only by the member and by administrators. The extension to Zonal Heads is the authorised widening; it was granted explicitly and is recorded here rather than inferred from "authorised administrators", which a Zonal Head is not.
 - **FR-066**: Health values MUST NOT appear in application logs, error messages or any general-purpose export.
 
 #### Tab 7 — Sharaf

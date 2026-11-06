@@ -9,6 +9,7 @@ const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const pool_1 = require("../db/pool");
 const auth_1 = require("../middleware/auth");
 const authService_1 = require("../services/authService");
+const memberProfileService_1 = require("../services/memberProfileService");
 const response_1 = require("../utils/response");
 /**
  * Administrator and Zonal Head view of member ACCOUNTS (FR-006, FR-007).
@@ -251,6 +252,106 @@ exports.memberAdminRoutes.get("/:id/photo", async (req, res) => {
     }
     catch {
         return (0, response_1.fail)(res, "Failed to load photo", 500);
+    }
+});
+/**
+ * Confirms the caller may act on this member, and returns their zone.
+ *
+ * One helper for both profile routes so the check cannot be written two slightly different
+ * ways. It reads the zone BEFORE anything else happens, which is what stops a refusal from
+ * following a completed read or write.
+ */
+async function assertMemberInScope(id, scope) {
+    const [rows] = await pool_1.pool.query(`SELECT ma.id, mp.zone_id
+     FROM member_accounts ma
+     LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
+     WHERE ma.id = :id
+     LIMIT 1`, { id });
+    const row = rows[0];
+    if (!row)
+        return "not_found";
+    if (scope !== null && Number(row.zone_id) !== scope)
+        return "forbidden";
+    return "ok";
+}
+/**
+ * One member's full twelve-tab profile, for an administrator or a Zonal Head.
+ *
+ * FR-047a, authorised 2026-11-06. This DOES include the Tab 6 health values. FR-065 already
+ * allowed "explicitly authorised administrators" to read them; extending that to Zonal Heads
+ * for their own zone is the new part, and it was authorised explicitly rather than inferred.
+ *
+ * A Zonal Head is confined to their own zone, derived from `member_profiles.zone_id` exactly
+ * as the list and the photo endpoint derive it. A member with no profile row is therefore in
+ * no zone and is invisible to every Zonal Head — the same consequence stated for FR-006a.
+ */
+exports.memberAdminRoutes.get("/:id/profile", async (req, res) => {
+    const scope = requestZoneScope(req.user);
+    if (scope === false)
+        return (0, response_1.fail)(res, "Forbidden", 403);
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0)
+        return (0, response_1.fail)(res, "Invalid request", 400);
+    try {
+        const verdict = await assertMemberInScope(id, scope);
+        if (verdict === "not_found")
+            return (0, response_1.fail)(res, "Member not found", 404);
+        if (verdict === "forbidden")
+            return (0, response_1.fail)(res, "Forbidden", 403);
+        const profile = await (0, memberProfileService_1.readMemberProfile)(id);
+        if (!profile)
+            return (0, response_1.fail)(res, "Member not found", 404);
+        // Stated in the payload rather than re-derived in the browser, so the client cannot
+        // enable editing for a Zonal Head by lying to itself. The server refuses regardless.
+        return (0, response_1.ok)(res, { ...profile, can_edit: req.user.role === "admin" }, "OK");
+    }
+    catch {
+        return (0, response_1.fail)(res, "Failed to load profile", 500);
+    }
+});
+/**
+ * An administrator corrects one member's profile. ADMIN ONLY — a Zonal Head reads.
+ *
+ * Every edit writes a row to `member_profile_edits` naming the fields that changed, because
+ * a value an administrator can change without trace is a value nobody can later defend. The
+ * row holds field NAMES only: Tab 6 is medical data and FR-066 says health values appear in
+ * no log, so copying them into an audit table would simply move the problem.
+ */
+exports.memberAdminRoutes.put("/:id/profile", (0, auth_1.requireRole)(["admin"]), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0)
+        return (0, response_1.fail)(res, "Invalid request", 400);
+    const payload = req.body;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return (0, response_1.fail)(res, "Invalid request", 400);
+    }
+    try {
+        const verdict = await assertMemberInScope(id, null);
+        if (verdict === "not_found")
+            return (0, response_1.fail)(res, "Member not found", 404);
+        const result = await (0, memberProfileService_1.saveMemberProfile)(id, payload);
+        if (!result.ok && result.kind === "conflict") {
+            return (0, response_1.fail)(res, "This profile was changed in another session. Reload it and apply your edits again.", 409);
+        }
+        if (!result.ok) {
+            return (0, response_1.fail)(res, "Please correct the highlighted fields.", 400, { errors: result.errors });
+        }
+        // After the save, and only on success: an audit row for a write that did not happen
+        // would be worse than none. `if_unmodified_since` is the concurrency stamp, not a
+        // profile field, so it is not reported as a change.
+        const changed = Object.keys(payload).filter((k) => k !== "if_unmodified_since");
+        await pool_1.pool.query(`INSERT INTO member_profile_edits
+         (member_account_id, edited_by_admin_id, edited_by_role, changed_fields)
+       VALUES (:member_account_id, :admin_id, 'admin', :changed_fields)`, {
+            member_account_id: id,
+            admin_id: req.user.id,
+            changed_fields: JSON.stringify(changed)
+        });
+        const profile = await (0, memberProfileService_1.readMemberProfile)(id);
+        return (0, response_1.ok)(res, { ...profile, can_edit: true }, "Profile saved");
+    }
+    catch {
+        return (0, response_1.fail)(res, "Failed to save profile", 500);
     }
 });
 /**

@@ -1,5 +1,41 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-06 — Added: Admin and Zonal Head can open a member's profile
+
+**View profile** on the Members list opens all twelve tabs for one member. Both roles read;
+only an administrator can change anything.
+
+Two permissions that are easy to conflate, so they are separate throughout:
+
+- **Read** — administrator and Zonal Head, **including Tab 6's health values**. FR-065 already
+  allowed "explicitly authorised administrators"; a Zonal Head is not an administrator, so
+  extending it to them for their own zone was authorised explicitly and FR-065 is amended with
+  its previous wording recorded.
+- **Write** — administrator only. The Zonal Head's view is read-only, every field disabled.
+
+- **The server decides who may edit.** `can_edit` is sent in the payload and the page obeys it;
+  the browser never works it out from the signed-in role. A client that guessed wrong would
+  show a Save button the server then refuses, which is worse than not offering one. The `PUT`
+  is guarded independently, so the flag is a courtesy and not the control.
+- **Every administrator edit is recorded** in a new `member_profile_edits` table: who, when,
+  and **which fields changed — names only, never values**. Tab 6 is medical data and FR-066
+  says health values appear in no log, so an audit row saying `blood_group` changed gives a
+  disputed value its provenance without copying the value somewhere new that would then need
+  protecting just as carefully. A member editing their own profile writes no row.
+- A Zonal Head is confined to their own zone exactly as the list and photo endpoints confine
+  them. A 403 is explained as a zone boundary, not as an error to retry.
+- The twelve-branch tab switch moved to `profileTabs.tsx` and is shared by both pages. Two
+  copies would have meant the admin view silently missing a tab added later.
+- `Tab01Personal`'s photo props are now optional and its fetch path is a parameter. It
+  hardcoded `members/me/photo`, which on an admin view would have shown the **administrator's**
+  own photograph on every member they opened.
+- The member list itself is unchanged and still carries no profile answers: a page of fifty
+  members should not be a page of fifty medical records (FR-101).
+- `globalSetup` now runs `ensureSchema()` before the suite, so a developer's local database
+  gains new columns instead of failing with "unknown column".
+- FR-047a added; FR-065 amended.
+
+
 ## 2026-11-06 — Added: Zikr e Hussain year on Tab 3; Venue replaces Mohallah on Tab 9
 
 **Tab 3** gains "Since when have you been doing Zikr e Hussain AS?", a Hijri year from

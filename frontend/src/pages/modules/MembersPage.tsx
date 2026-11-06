@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
@@ -432,13 +433,23 @@ export function MembersPage() {
                       {contactNumber(member.mobile_no_1, member.mobile_no_2)}
                     </td>
                     <td className="px-2 py-2 text-right">
-                      <Button
-                        variant={member.is_active ? "danger" : "primary"}
-                        disabled={setActiveState.isLoading}
-                        onClick={() => onToggle(member)}
-                      >
-                        {member.is_active ? "Deactivate" : "Activate"}
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        {/* FR-047a. Both roles read the twelve tabs; only an administrator
+                            can save, which the profile page learns from the server. */}
+                        <Link
+                          to={`/members/${member.id}/profile`}
+                          className="whitespace-nowrap text-sm underline"
+                        >
+                          View profile
+                        </Link>
+                        <Button
+                          variant={member.is_active ? "danger" : "primary"}
+                          disabled={setActiveState.isLoading}
+                          onClick={() => onToggle(member)}
+                        >
+                          {member.is_active ? "Deactivate" : "Activate"}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

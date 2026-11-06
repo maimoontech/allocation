@@ -1,11 +1,13 @@
 import { api } from "../api/api";
+import type { MemberProfile, MemberProfileInput } from "./memberApi";
 
 type ApiEnvelope<T> = { success: boolean; data: T; message?: string };
 
 /**
- * The identifying details the administrator's member list shows. Health values and the rest
- * of the twelve-tab profile stay private (FR-065, FR-101), and no password material is ever
- * returned (FR-015). Photo bytes are fetched separately, per member.
+ * The identifying details the administrator's member list shows. The twelve-tab answers are
+ * NOT here — a list of fifty members should not be a list of fifty medical records (FR-101).
+ * They are fetched one member at a time by `getAdminMemberProfile` instead. No password
+ * material is ever returned (FR-015). Photo bytes are fetched separately, per member.
  */
 export type MemberAccount = {
   id: number;
@@ -53,6 +55,15 @@ export type CreatedMemberAccount = {
   must_change_password: boolean;
 };
 
+/**
+ * One member's full twelve-tab profile, as an administrator or Zonal Head sees it (FR-047a).
+ *
+ * `can_edit` is decided by the SERVER and sent with the payload. The browser does not work it
+ * out from the signed-in role: a client that got it wrong would show a Zonal Head a Save
+ * button that the server then refuses, which is a worse experience than not offering it.
+ */
+export type AdminMemberProfile = MemberProfile & { can_edit: boolean };
+
 export type ListMembersRequest = {
   q?: string;
   is_active?: boolean;
@@ -99,6 +110,33 @@ export const memberAdminApi = api.injectEndpoints({
       invalidatesTags: [{ type: "Members", id: "LIST" }]
     }),
 
+    // NOT `getMemberProfile`: `memberApi` already injects an endpoint by that name for the
+    // member's own profile. Two injectEndpoints calls sharing a name silently keep the first,
+    // so this one would have quietly fetched /members/me/profile instead.
+    getAdminMemberProfile: builder.query<AdminMemberProfile, number>({
+      query: (id) => `/members/${id}/profile`,
+      transformResponse: (res: ApiEnvelope<AdminMemberProfile>) => res.data,
+      providesTags: (_r, _e, id) => [{ type: "MemberProfileAdmin" as const, id }]
+    }),
+
+    /**
+     * An administrator corrects a member's answers. The server refuses a Zonal Head, and
+     * records which fields changed in `member_profile_edits` (names only, never values —
+     * Tab 6 is medical data and FR-066 keeps it out of logs).
+     */
+    saveMemberProfileAsAdmin: builder.mutation<
+      AdminMemberProfile,
+      { id: number; body: MemberProfileInput }
+    >({
+      query: ({ id, body }) => ({ url: `/members/${id}/profile`, method: "PUT", body }),
+      transformResponse: (res: ApiEnvelope<AdminMemberProfile>) => res.data,
+      invalidatesTags: (_r, _e, arg) => [
+        { type: "MemberProfileAdmin", id: arg.id },
+        { type: "Members", id: arg.id },
+        { type: "Members", id: "LIST" }
+      ]
+    }),
+
     /** `is_active` is the only field the server accepts here. */    setMemberActive: builder.mutation<
       { id: number; is_active: boolean },
       { id: number; is_active: boolean }
@@ -128,6 +166,8 @@ export const memberAdminApi = api.injectEndpoints({
 
 export const {
   useGetMemberAccountsQuery,
+  useGetAdminMemberProfileQuery,
+  useSaveMemberProfileAsAdminMutation,
   useCreateMemberAccountMutation,
   useSetMemberActiveMutation,
   useGetMemberPhotoQuery

@@ -3,13 +3,13 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 2e086a58fbe6e9a4)
+--   Sources : membership_schema.sql (sha256 a9cd4a5ec1bc8d55)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
 --
 -- WHAT THIS DOES
---   Creates 21 new tables and seeds 10 of the 11 lookup lists with reviewed values.
+--   Creates 22 new tables and seeds 10 of the 11 lookup lists with reviewed values.
 --   The eleventh, aqa_moula_asharas, ships EMPTY on purpose — an administrator enters
 --   its values through the Dropdown Lists panel.
 --
@@ -835,6 +835,31 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+-- FR-047a. Who changed a member's profile, when, and WHICH fields.
+--
+-- Field NAMES only. The old and new VALUES are deliberately not stored: Tab 6 holds
+-- medical data and FR-066 says health values must appear in no log line. An audit
+-- row saying "an administrator changed blood_group on this date" gives the
+-- provenance a disputed value needs without copying the value into a second place
+-- that then has to be protected just as carefully.
+--
+-- A member editing their own profile writes NO row here. This table exists to answer
+-- "who else touched this", so filling it with the member's own saves would bury the
+-- rare event under the common one.
+CREATE TABLE IF NOT EXISTS member_profile_edits (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  member_account_id INT UNSIGNED NOT NULL,
+  edited_by_admin_id INT UNSIGNED NOT NULL,
+  edited_by_role ENUM('admin') NOT NULL COMMENT 'Only administrators may edit; a Zonal Head is read-only (FR-047a).',
+  changed_fields TEXT NOT NULL COMMENT 'JSON array of column names. NEVER the values.',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_member_profile_edits_member (member_account_id, created_at),
+  CONSTRAINT fk_member_profile_edits_member_account_id
+    FOREIGN KEY (member_account_id) REFERENCES member_accounts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 -- ----------------------------------------------------------------------------
 -- 4b. Backfill: member_ashara_attendances.aqa_moula_ashara_id
 --
@@ -987,7 +1012,7 @@ DROP PROCEDURE mm_backfill_ashara_venue;
 -- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 21 new tables, and every existing count unchanged.
+--    Expect 22 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -999,9 +1024,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
-    'aqa_moula_asharas'
+    'aqa_moula_asharas','member_profile_edits'
   );
--- Expected: 21
+-- Expected: 22
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION
@@ -1465,9 +1490,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
-    'aqa_moula_asharas'
+    'aqa_moula_asharas','member_profile_edits'
   );
--- Expected: 21
+-- Expected: 22
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will
