@@ -17,18 +17,37 @@ const CHOICES = [
 ] as const;
 
 /**
- * FR-076b. The grid starts at 1405 AH. The server still accepts 1400 to 1404 (FR-076), so a
- * record saved for one of those years is shown as an extra row rather than hidden: a value
- * the member cannot see is a value they cannot correct.
+ * The earliest year the grid will ever show, however the member answered Tab 3.
+ *
+ * FR-076c: the grid actually starts at the Zikr e Hussain year from Tab 3, because a member
+ * cannot have attended before they began — listing those years asks a question with only one
+ * possible answer. This constant is the FLOOR under that: a Zikr year earlier than 1404, or
+ * none at all, falls back here rather than producing a grid of forty-odd empty rows.
+ *
+ * The server still accepts 1400 to 1404 (FR-076), and a record saved for a year below
+ * whatever the grid starts at is shown as an extra row rather than hidden: a value the
+ * member cannot see is a value they cannot correct.
  */
 export const ASHARA_GRID_YEAR_MIN = 1404;
 
 /**
+ * Where this member's grid starts: their Zikr e Hussain year, never earlier than 1404.
+ *
+ * Exported because the floor is now per-member and the tests assert it for several answers.
+ */
+export function asharaGridFloor(zikrSinceYear: number | null | undefined): number {
+  const since = Number(zikrSinceYear);
+  if (!Number.isInteger(since)) return ASHARA_GRID_YEAR_MIN;
+  return Math.max(since, ASHARA_GRID_YEAR_MIN);
+}
+
+/**
  * Tab 9 — Ashara Mubaraka, as one row per Hijri year.
  *
- * Every year from the current Hijri year down to 1405 AH is listed, newest first, and the
- * member answers each one: Not attended, With Aqa Moula TUS, or With Aamil. A year answered
- * "Not attended" has no record at all, so the saved data has the same shape as before: one
+ * Every year from the current Hijri year down to this member's grid floor is listed, newest
+ * first — the floor being their Tab 3 Zikr e Hussain year, or 1404 AH, whichever is later
+ * (FR-076c). The member answers each one: Not attended, With Aqa Moula TUS, or With Aamil.
+ * A year answered "Not attended" has no record at all, so the saved data has the same shape as before: one
  * record per attended year (the database's unique key on member and year still holds).
  *
  * The upper bound is `current_hijri_year` from the lookups response, computed on the server,
@@ -73,8 +92,15 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
     if (place.hijri_year != null) placeByYear.set(place.hijri_year, place);
   }
 
+  // FR-076c. Tab 3's answer decides where this grid starts — a cross-tab rule like Tab 2
+  // taking its prefix from Tab 1. It reads the MERGED value, so moving the Zikr year on
+  // Tab 3 and coming back here shows the new range without saving first.
+  const gridFloor = asharaGridFloor(value.zikr_e_hussain_since_year);
+
   const years: number[] = [];
-  for (let year = maxHijriYear; year >= ASHARA_GRID_YEAR_MIN; year -= 1) years.push(year);
+  for (let year = maxHijriYear; year >= gridFloor; year -= 1) years.push(year);
+  // A year the member already answered is listed even when it falls outside the range —
+  // including one they answered before shortening their own Zikr year.
   for (const r of records) if (!years.includes(r.hijri_year)) years.push(r.hijri_year);
   years.sort((a, b) => b - a);
 
@@ -142,7 +168,7 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm text-textMuted">
         <div>
           Mark each Ashara Mubaraka you attended, from {maxHijriYear} AH back to{" "}
-          {ASHARA_GRID_YEAR_MIN} AH. Leave the rest as Not attended.
+          {gridFloor} AH. Leave the rest as Not attended.
         </div>
         <div className="font-semibold text-textPrimary">
           Attended {attendedCount} {attendedCount === 1 ? "year" : "years"}
@@ -176,7 +202,7 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
             >
               <div className="text-sm font-semibold">
                 {year}
-                {year < ASHARA_GRID_YEAR_MIN ? (
+                {year < gridFloor ? (
                   <span className="ml-1 text-xs font-normal text-textMuted">(earlier)</span>
                 ) : null}
               </div>

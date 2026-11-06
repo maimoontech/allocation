@@ -543,3 +543,86 @@ describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
     expect(options.slice(1).map((o) => o.value)).toEqual(["71", "72"]);
   });
 });
+
+/**
+ * FR-076c — the Ashara grid starts at the Tab 3 Zikr e Hussain year.
+ *
+ * A member cannot have attended Ashara Mubaraka before they began doing Zikr e Hussain, so
+ * listing those years asks a question with only one possible answer. 1404 AH is the floor
+ * under that: an earlier Zikr year, or none, falls back to it rather than producing a grid
+ * of forty-odd rows nobody will fill.
+ *
+ * This is a cross-tab rule, like Tab 2 taking its prefix from Tab 1, and it reads the merged
+ * draft — so changing the year on Tab 3 and returning here shows the new range before
+ * anything is saved.
+ */
+describe("Tab 9 — the grid starts at the Zikr e Hussain year (FR-076c)", () => {
+  const rows = () =>
+    screen
+      .getAllByRole("group", { name: /^Ashara \d+ AH$/ })
+      .map((r) => Number(/Ashara (\d+) AH/.exec(r.getAttribute("aria-label") ?? "")?.[1]));
+
+  it("starts at the Zikr year when it is later than 1404", () => {
+    renderTab(Tab09Ashara, { zikr_e_hussain_since_year: 1430 });
+
+    const years = rows();
+    expect(years[0]).toBe(1448);
+    expect(years[years.length - 1]).toBe(1430);
+    expect(years).toHaveLength(1448 - 1430 + 1);
+    expect(years).not.toContain(1429);
+  });
+
+  it("falls back to 1404 when the Zikr year is earlier than that", () => {
+    renderTab(Tab09Ashara, { zikr_e_hussain_since_year: 1390 });
+
+    const years = rows();
+    expect(years[years.length - 1]).toBe(1404);
+    expect(years).not.toContain(1403);
+  });
+
+  it("falls back to 1404 when no Zikr year has been given", () => {
+    renderTab(Tab09Ashara, { zikr_e_hussain_since_year: null });
+
+    expect(rows()[rows().length - 1]).toBe(1404);
+  });
+
+  it("shows exactly one year when the member began this Hijri year", () => {
+    renderTab(Tab09Ashara, { zikr_e_hussain_since_year: 1448 });
+
+    expect(rows()).toEqual([1448]);
+  });
+
+  it("names the starting year in the instruction", () => {
+    renderTab(Tab09Ashara, { zikr_e_hussain_since_year: 1435 });
+
+    expect(screen.getByText(/back to\s*1435\s*AH/)).toBeInTheDocument();
+  });
+
+  /**
+   * The member shortened their own Zikr year after answering an earlier Ashara. The record
+   * must stay visible and correctable — hiding it would leave a saved value they can see
+   * nowhere and change never.
+   */
+  it("still shows a record from before the grid starts, marked as earlier", () => {
+    renderTab(Tab09Ashara, {
+      zikr_e_hussain_since_year: 1440,
+      ashara_attendances: [
+        {
+          attended_with: "With Aamil",
+          hijri_year: 1432,
+          moze_id: null,
+          mohallah_id: null,
+          venue_id: null,
+          aqa_moula_ashara_id: null
+        }
+      ]
+    });
+
+    const years = rows();
+    expect(years).toContain(1432);
+    expect(years[years.length - 1]).toBe(1432);
+
+    const row = screen.getByRole("group", { name: "Ashara 1432 AH" });
+    expect(within(row).getByText("(earlier)")).toBeInTheDocument();
+  });
+});

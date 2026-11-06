@@ -1,5 +1,26 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-06 — Changed: the Ashara grid starts at the Zikr e Hussain year
+
+Tab 9 listed every year from the current Hijri year down to a fixed 1404 AH. It now starts at
+the member's **Zikr e Hussain year from Tab 3**, because a member cannot have attended Ashara
+Mubaraka before they began doing Zikr — listing those years asks a question with only one
+possible answer.
+
+- A Zikr year **earlier than 1404 AH, or not given at all**, falls back to 1404 as before.
+  Without that floor an answer of 1375 would produce seventy-odd rows nobody will fill.
+- It follows the **unsaved** value: change the year on Tab 3, come back, and the range has
+  already moved. A cross-tab rule like Tab 2 taking its prefix from Tab 1.
+- A record already saved below where the grid now starts is **still shown and still
+  correctable**, marked "(earlier)" — including one saved before the member shortened their
+  own Zikr year. A value they can see nowhere is a value they can change never.
+- **Presentation only.** The server still accepts 1400 AH upwards (FR-076). Tightening it
+  would reject historical records that are already valid, and would fight the rule above.
+- Fixed two stale comments and FR-076b, which still said the grid started at 1405 after the
+  constant moved to 1404 in `fedb903`.
+- FR-076c added.
+
+
 ## 2026-11-06 — Fixed: "Could not load this profile" when an admin opened a member
 
 The profile itself loaded fine. `GET /api/v1/members/lookups` did not: it was guarded by
