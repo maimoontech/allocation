@@ -31,6 +31,8 @@ export type AsharaEntry = {
   moze_id?: number | null;
   /** With Aamil only. Cleared when the member attended with Aqa Moula TUS. */
   mohallah_id?: number | null;
+  /** With Aamil only. Replaced mohallah_id on 2026-11-06 (FR-077c). */
+  venue_id?: number | null;
   /** With Aqa Moula TUS only. Cleared when the member attended with their Aamil. */
   aqa_moula_ashara_id?: number | null;
 };
@@ -78,7 +80,8 @@ const DATE_COLUMNS = ["dob_gregorian", "hifz_last_update", "last_donation_date"]
 const YEAR_COLUMNS = [
   "prefix_year",
   "occupation_since_year",
-  "khidmat_since_year"
+  "khidmat_since_year",
+  "zikr_e_hussain_since_year"
 ] as const;
 
 const BOOLEAN_COLUMNS = [
@@ -163,7 +166,7 @@ const COLUMN_TAB: Record<string, number> = {
   dob_gregorian: 1, marital_status_id: 1, residence_address: 1, phone_no: 1,
   mobile_no_1: 1, mobile_no_2: 1, whatsapp_no_1: 1, whatsapp_no_2: 1, email: 1,
   prefix_year: 2,
-  zone_id: 3, party_id: 3, hizb_role: 3,
+  zone_id: 3, party_id: 3, hizb_role: 3, zikr_e_hussain_since_year: 3,
   occupation_type: 4, organisation_name: 4, designation: 4, occupation_since_year: 4,
   work_address: 4, work_phone_no: 4,
   education_level: 5, major_subjects: 5, education_status: 5, has_hifz_sanad: 5,
@@ -192,12 +195,19 @@ const COLUMN_TAB: Record<string, number> = {
 const PROFILE_HIJRI_YEAR_MIN = 1401;
 const HIJRI_YEAR_MIN = 1400;
 
-/** The one message these five fields share, so they cannot drift apart. */
-function hijriYearError(value: unknown): string | null {
+/**
+ * Tab 3's Zikr e Hussain year reaches further back than the other profile years (FR-049a).
+ * A member may have been doing Zikr since long before they held a title or a sharaf, so this
+ * floor is 1375 AH rather than 1401. The ceiling is the same rolling current Hijri year.
+ */
+const ZIKR_HIJRI_YEAR_MIN = 1375;
+
+/** The one message these fields share, so they cannot drift apart. */
+function hijriYearError(value: unknown, min: number = PROFILE_HIJRI_YEAR_MIN): string | null {
   const max = currentHijriYear();
   const n = Number(value);
-  if (!Number.isInteger(n) || n < PROFILE_HIJRI_YEAR_MIN || n > max) {
-    return `Year must be between ${PROFILE_HIJRI_YEAR_MIN} and ${max} AH.`;
+  if (!Number.isInteger(n) || n < min || n > max) {
+    return `Year must be between ${min} and ${max} AH.`;
   }
   return null;
 }
@@ -252,7 +262,7 @@ export async function readMemberProfile(memberAccountId: number) {
     { id: memberAccountId }
   );
   const [ashara] = await pool.query<any[]>(
-    `SELECT attended_with, hijri_year, moze_id, mohallah_id, aqa_moula_ashara_id
+    `SELECT attended_with, hijri_year, moze_id, mohallah_id, venue_id, aqa_moula_ashara_id
      FROM member_ashara_attendances
      WHERE member_account_id = :id ORDER BY hijri_year`,
     { id: memberAccountId }
@@ -321,6 +331,7 @@ export async function readMemberProfile(memberAccountId: number) {
     hijri_year: Number(a.hijri_year),
     moze_id: a.moze_id === null ? null : Number(a.moze_id),
     mohallah_id: a.mohallah_id === null ? null : Number(a.mohallah_id),
+    venue_id: a.venue_id === null ? null : Number(a.venue_id),
     aqa_moula_ashara_id:
       a.aqa_moula_ashara_id === null ? null : Number(a.aqa_moula_ashara_id)
   }));
@@ -552,6 +563,13 @@ export async function saveMemberProfile(
     if (message) add(field, message);
   }
 
+  // FR-049a. Hijri like the four above, but reaching back to 1375 AH: a member may have been
+  // doing Zikr e Hussain since long before they held a title or a sharaf.
+  if (values.zikr_e_hussain_since_year != null) {
+    const message = hijriYearError(values.zikr_e_hussain_since_year, ZIKR_HIJRI_YEAR_MIN);
+    if (message) add("zikr_e_hussain_since_year", message);
+  }
+
   // -------------------------------------------------------------------------
   // Conditional rules. Each clears the fields its answer makes meaningless, so a hidden
   // field cannot keep a contradictory value (story 5 scenario 6).
@@ -712,6 +730,7 @@ export async function saveMemberProfile(
           hijri_year: a.hijri_year,
           moze_id: a.moze_id ?? null,
           mohallah_id: a.mohallah_id ?? null,
+          venue_id: a.venue_id ?? null,
           aqa_moula_ashara_id: a.aqa_moula_ashara_id ?? null
         })
       );
@@ -973,6 +992,13 @@ function parseAshara(value: unknown, add: Add): AsharaEntry[] | undefined {
       return;
     }
 
+    const venue_id =
+      entry?.venue_id == null || entry.venue_id === "" ? null : Number(entry.venue_id);
+    if (venue_id !== null && (!Number.isInteger(venue_id) || venue_id <= 0)) {
+      add(`ashara_attendances[${index}].venue_id`, "Invalid Venue.", 9);
+      return;
+    }
+
     const aqa_moula_ashara_id =
       entry?.aqa_moula_ashara_id == null || entry.aqa_moula_ashara_id === ""
         ? null
@@ -997,6 +1023,7 @@ function parseAshara(value: unknown, add: Add): AsharaEntry[] | undefined {
       hijri_year,
       moze_id: withAqaMoula ? null : moze_id,
       mohallah_id: withAqaMoula ? null : mohallah_id,
+      venue_id: withAqaMoula ? null : venue_id,
       aqa_moula_ashara_id: withAqaMoula ? aqa_moula_ashara_id : null
     });
   });
@@ -1169,10 +1196,14 @@ async function checkReferences(
     const mohallahIds = ashara
       .map((a) => a.mohallah_id)
       .filter((id): id is number => id != null);
+    const venueIds = ashara.map((a) => a.venue_id).filter((id): id is number => id != null);
 
     const foundMoze = await existingIds("mozes", mozeIds);
     const foundMohallah = await existingIds("mohallahs", mohallahIds);
     const foundAqaMoula = await existingIds("aqa_moula_asharas", aqaMoulaIds);
+    // Existence only, NOT is_active: Tab 9 offers inactive venues deliberately (FR-077c), so
+    // checking the flag here would refuse exactly the values the form invites.
+    const foundVenue = await existingIds("venues", venueIds);
 
     ashara.forEach((a, i) => {
       if (a.moze_id != null && !foundMoze.has(a.moze_id)) {
@@ -1184,6 +1215,9 @@ async function checkReferences(
           "Selection is no longer available.",
           9
         );
+      }
+      if (a.venue_id != null && !foundVenue.has(a.venue_id)) {
+        add(`ashara_attendances[${i}].venue_id`, "Selection is no longer available.", 9);
       }
       if (a.mohallah_id != null && !foundMohallah.has(a.mohallah_id)) {
         add(`ashara_attendances[${i}].mohallah_id`, "Selection is no longer available.", 9);

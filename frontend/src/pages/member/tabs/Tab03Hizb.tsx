@@ -1,7 +1,18 @@
 import { useMemo } from "react";
 import { Select } from "../../../components/ui/Select";
-import { lookupOptions, toNullableId } from "./shared";
+import { lookupOptions, toNullableId, yearOptions } from "./shared";
 import type { TabProps } from "./shared";
+
+/**
+ * FR-049a. Deliberately LOWER than `PROFILE_HIJRI_YEAR_MIN` (1401), which governs the title,
+ * sharaf, place-visit and Sansta years. A member may have been doing Zikr e Hussain since
+ * long before they held any of those, so this one reaches back to 1375 AH.
+ *
+ * The ceiling is `lookups.current_hijri_year` — the server's value, so the list extends
+ * itself each Hijri year and a wrong device clock cannot widen it past what the server
+ * accepts. Today that makes the range 1375–1448 exactly as asked.
+ */
+const ZIKR_YEAR_MIN = 1375;
 
 const ROLE_OPTIONS = [
   { value: "", label: "Select..." },
@@ -33,6 +44,11 @@ const ROLE_OPTIONS = [
  */
 export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const zoneOptions = useMemo(() => lookupOptions(lookups.zones), [lookups.zones]);
+
+  const zikrYearOptions = useMemo(
+    () => yearOptions(ZIKR_YEAR_MIN, lookups.current_hijri_year),
+    [lookups.current_hijri_year]
+  );
 
   const partiesInZone = useMemo(
     () =>
@@ -120,6 +136,21 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
           onChange={(e) => onChange("hizb_role", e.target.value === "" ? null : e.target.value)}
           options={ROLE_OPTIONS}
           error={errorFor("hizb_role")}
+          disabled={disabled}
+        />
+
+        <Select
+          label="Since when have you been doing Zikr e Hussain AS? (AH)"
+          value={
+            value.zikr_e_hussain_since_year == null
+              ? ""
+              : String(value.zikr_e_hussain_since_year)
+          }
+          onChange={(e) =>
+            onChange("zikr_e_hussain_since_year", toNullableId(e.target.value))
+          }
+          options={zikrYearOptions}
+          error={errorFor("zikr_e_hussain_since_year")}
           disabled={disabled}
         />
       </div>

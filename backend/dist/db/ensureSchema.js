@@ -30,6 +30,68 @@ async function ensureSchema() {
         await pool_1.pool.query(`ALTER TABLE venues ADD COLUMN google_map_link VARCHAR(500) NULL AFTER address`);
     }
     await ensureAqaMoulaAsharaLookup();
+    await ensureZikrEHussainColumn();
+    await ensureAsharaVenueColumn();
+}
+/**
+ * Tab 3's "Since when have you been doing Zikr e Hussain AS?" (FR-049a).
+ *
+ * Here for the same reason as the lookup below it: the backend has been released ahead of its
+ * migration once already, and a form field whose column does not exist fails on save with
+ * nothing useful to show the member.
+ */
+async function ensureZikrEHussainColumn() {
+    const [rows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND COLUMN_NAME = 'zikr_e_hussain_since_year'`);
+    if (Number(rows[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query(`ALTER TABLE member_profiles
+       ADD COLUMN zikr_e_hussain_since_year SMALLINT UNSIGNED NULL AFTER hizb_role`);
+    }
+}
+/**
+ * Tab 9's Venue (FR-077c), which replaced Mohallah.
+ *
+ * `venues` is one of the 13 pre-existing tables. This adds a foreign key FROM a module table
+ * TO it and never alters it, so FR-106 holds. The constraint goes on last and only once the
+ * column is there, because a constraint on a missing column fails the whole boot.
+ */
+async function ensureAsharaVenueColumn() {
+    const [tableRows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_ashara_attendances'`);
+    if (Number(tableRows[0]?.cnt ?? 0) === 0)
+        return;
+    const [columnRows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_ashara_attendances'
+       AND COLUMN_NAME = 'venue_id'`);
+    if (Number(columnRows[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query(`ALTER TABLE member_ashara_attendances
+       ADD COLUMN venue_id INT UNSIGNED NULL AFTER mohallah_id`);
+    }
+    const [indexRows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_ashara_attendances'
+       AND INDEX_NAME = 'idx_member_ashara_venue'`);
+    if (Number(indexRows[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query(`ALTER TABLE member_ashara_attendances ADD INDEX idx_member_ashara_venue (venue_id)`);
+    }
+    const [fkRows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_ashara_attendances'
+       AND CONSTRAINT_NAME = 'fk_member_ashara_attendances_venue_id'`);
+    if (Number(fkRows[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query(`ALTER TABLE member_ashara_attendances
+       ADD CONSTRAINT fk_member_ashara_attendances_venue_id
+         FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE RESTRICT`);
+    }
 }
 /**
  * The "Ashara with Aqa Moula" lookup and the Tab 9 column that points at it.

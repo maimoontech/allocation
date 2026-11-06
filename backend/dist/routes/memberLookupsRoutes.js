@@ -10,7 +10,7 @@ const response_1 = require("../utils/response");
 /**
  * Every selectable value the twelve-tab form needs, in ONE response.
  *
- * Fourteen lists plus a derived year. Served together because a form that needed them
+ * Fifteen lists plus a derived year. Served together because a form that needed them
  * separately would fire thirteen requests on open, and because several of them are tiny.
  *
  * Two details carry requirements:
@@ -77,6 +77,18 @@ exports.memberLookupsRoutes.get("/", async (_req, res) => {
        FROM parties
        ORDER BY party_name`);
         const [mohallahs] = await pool_1.pool.query("SELECT id, mohallah_name AS name, zone_id FROM mohallahs ORDER BY mohallah_name");
+        // FR-077c. Tab 9's Venue, which replaced Mohallah.
+        //
+        // ALL venues, active and inactive, each carrying the flag so the form can mark the
+        // inactive ones — a member recording an Ashara from years ago may well name a venue that
+        // has since been retired, and filtering it out would leave them unable to answer.
+        //
+        // The column list is explicit and MUST stay that way. `venues` holds `password_hash` and
+        // `last_login_at`: venues sign in to this system. A `SELECT *` here would publish both to
+        // every member (FR-101).
+        const [venues] = await pool_1.pool.query(`SELECT id, venue_name AS name, mohallah_id, is_active
+       FROM venues
+       ORDER BY venue_name`);
         data.zones = zones.map((z) => ({ id: Number(z.id), name: z.name, is_draft: false }));
         data.parties = parties.map((p) => ({
             id: Number(p.id),
@@ -89,6 +101,12 @@ exports.memberLookupsRoutes.get("/", async (_req, res) => {
             name: m.name,
             zone_id: Number(m.zone_id),
             is_draft: false
+        }));
+        data.venues = venues.map((v) => ({
+            id: Number(v.id),
+            name: v.name,
+            mohallah_id: Number(v.mohallah_id),
+            is_active: Boolean(v.is_active)
         }));
         data.current_hijri_year = (0, hijriDate_1.currentHijriYear)();
         return (0, response_1.ok)(res, data, "OK");

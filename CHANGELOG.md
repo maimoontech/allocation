@@ -1,5 +1,36 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-06 — Added: Zikr e Hussain year on Tab 3; Venue replaces Mohallah on Tab 9
+
+**Tab 3** gains "Since when have you been doing Zikr e Hussain AS?", a Hijri year from
+**1375 AH** to the current Hijri year — 1375–1448 today, exactly as asked, and rolling so it
+never goes stale. The floor is deliberately lower than the 1401 AH that governs the title,
+sharaf, place-visit and Sansta years: a member may have been doing Zikr since long before they
+held any of those. `hijriYearError` now takes the floor as an argument rather than being
+duplicated.
+
+**Tab 9** replaces the Mohallah dropdown with a **Venue** one, showing **all 51 venues, active
+and inactive**, with the inactive ones marked `— INACTIVE` and sorted last. A venue already
+names its Mohallah, so this is the more specific answer to the same question; and an Ashara
+recorded for a past year may have been held somewhere since closed, which a filtered list
+would make impossible to record.
+
+- The venue lookup selects **only** `id`, `venue_name`, `mohallah_id` and `is_active`.
+  `venues` holds `password_hash` and `last_login_at` — venues sign in to this system — and a
+  `SELECT *` would have published both to every member (FR-101). A test asserts the exact key
+  set, not merely the absence of one field.
+- The server checks a venue **exists** but not that it is active, because Tab 9 deliberately
+  offers inactive ones; checking the flag would refuse exactly what the form invites.
+- `mohallah_id` is kept on the table so existing rows survive, and is no longer collected.
+- Both columns are added by `ensureSchema()` at boot **and** by a new section 4c of
+  `MEMBERSHIP_LIVE_INSTALL.sql`. The script alone would not have been enough: production
+  already has both tables, so `CREATE TABLE IF NOT EXISTS` skips them entirely.
+- Fixed a test that was already failing on master: `ASHARA_GRID_YEAR_MIN` moved from 1405 to
+  1404 in `fedb903` and the year-grid test was not updated with it. The code is the intent;
+  the test now expects 1404.
+- FR-049a and FR-077c added.
+
+
 ## 2026-11-05 — Changed: an Aqa Moula place can be entered for more than one year
 
 Admin → Dropdown Lists → "Ashara with Aqa Moula" now accepts the same place name again, so a

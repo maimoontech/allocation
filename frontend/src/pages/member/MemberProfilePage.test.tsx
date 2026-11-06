@@ -40,6 +40,7 @@ const PROFILE = {
   zone_id: null,
   party_id: null,
   hizb_role: null,
+  zikr_e_hussain_since_year: null,
   bmi: null,
   titles: [],
   sharafs: [],
@@ -71,6 +72,7 @@ const LOOKUPS = {
     { id: 11, name: "Hizb Retired", zone_id: 1, is_active: false }
   ],
   mohallahs: [],
+  venues: [],
   current_hijri_year: 1448
 };
 
@@ -312,6 +314,55 @@ describe("MemberProfilePage", () => {
   });
 
   // FR-048 — the dependent dropdown, and the clearing behaviour that keeps it honest.
+  /**
+   * FR-049a — "Since when have you been doing Zikr e Hussain AS?"
+   *
+   * The floor is 1375 AH, lower than the 1401 that governs the title, sharaf, place-visit and
+   * Sansta years: a member may have been doing Zikr since long before they held any of those.
+   * The ceiling is the server's current Hijri year, so the list cannot go stale and a wrong
+   * device clock cannot widen it past what the server accepts.
+   */
+  describe("Tab 3 — Zikr e Hussain since year", () => {
+    async function openHizb() {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+      return screen.getByLabelText(/^Since when have you been doing Zikr e Hussain/) as
+        HTMLSelectElement;
+    }
+
+    it("runs from the current Hijri year down to 1375", async () => {
+      const select = await openHizb();
+      const labels = Array.from(select.options).map((o) => o.textContent);
+
+      // [0] is the placeholder; the years descend.
+      expect(labels[1]).toBe("1448");
+      expect(labels[labels.length - 1]).toBe("1375");
+      expect(labels).toHaveLength(1448 - 1375 + 2);
+    });
+
+    it("reaches further back than the other profile years, and no further", async () => {
+      const select = await openHizb();
+      const labels = Array.from(select.options).map((o) => o.textContent);
+
+      // 1375-1400 is exactly what this field adds over PROFILE_HIJRI_YEAR_MIN.
+      expect(labels).toContain("1400");
+      expect(labels).toContain("1375");
+      expect(labels).not.toContain("1374");
+      expect(labels).not.toContain("1449");
+    });
+
+    it("sends the chosen year on save", async () => {
+      const select = await openHizb();
+      fireEvent.change(select, { target: { value: "1420" } });
+      fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+      await waitFor(() => expect(saveBodies).toHaveLength(1));
+      expect(saveBodies[0]).toMatchObject({ zikr_e_hussain_since_year: 1420 });
+    });
+  });
+
   describe("Tab 3 dependent dropdown", () => {
     async function openHizb() {
       renderWithProviders(<MemberProfilePage />);

@@ -40,6 +40,17 @@ export type LookupValue = { id: number; name: string; is_draft: boolean };
  */
 export type PartyOption = { id: number; name: string; zone_id: number; is_active: boolean };
 export type MohallahOption = { id: number; name: string; zone_id: number; is_draft: boolean };
+
+/**
+ * Tab 9's Venue (FR-077c), which replaced Mohallah. Active and inactive alike, so a member
+ * recording an old Ashara can still name a venue that has since been retired.
+ */
+export type VenueOption = {
+  id: number;
+  name: string;
+  mohallah_id: number;
+  is_active: boolean;
+};
 /**
  * FR-077b. Aqa Moula TUS holds Ashara in one place a year, so each place carries its year and
  * Tab 9 shows it for that year rather than asking. `null` until an administrator sets one.
@@ -63,6 +74,7 @@ export type MemberLookups = {
   zones: LookupValue[];
   parties: PartyOption[];
   mohallahs: MohallahOption[];
+  venues: VenueOption[];
   /** Server-computed upper bound for the Tab 9 year range (FR-076). */
   current_hijri_year: number;
 };
@@ -77,6 +89,8 @@ export type AsharaEntry = {
   moze_id: number | null;
   /** With Aamil only. The server clears it when the member attended with Aqa Moula TUS. */
   mohallah_id: number | null;
+  /** With Aamil only. Replaced `mohallah_id` on 2026-11-06 (FR-077c). */
+  venue_id: number | null;
   /** With Aqa Moula TUS only. The server clears it when they attended with their Aamil. */
   aqa_moula_ashara_id: number | null;
 };
@@ -117,6 +131,8 @@ export type MemberProfile = {
   zone_id: number | null;
   party_id: number | null;
   hizb_role: string | null;
+  /** FR-049a. Hijri, 1375 AH to the current Hijri year — a lower floor than the other years. */
+  zikr_e_hussain_since_year: number | null;
 
   occupation_type: string | null;
   organisation_name: string | null;

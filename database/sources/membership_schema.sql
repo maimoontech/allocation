@@ -352,6 +352,7 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   zone_id INT UNSIGNED NULL COMMENT 'FR-047',
   party_id INT UNSIGNED NULL COMMENT 'FR-048; must belong to zone_id, checked in the application',
   hizb_role ENUM('Leader','Side Lead','Member') NULL COMMENT 'FR-049',
+  zikr_e_hussain_since_year SMALLINT UNSIGNED NULL COMMENT 'FR-049a: Hijri year, 1375 AH to the current Hijri year. Floor is lower than the other profile years on purpose - this one reaches back further than a title or a sharaf.',
 
   -- Tab 4: Occupation
   occupation_type ENUM('Job','Business') NULL,
@@ -670,7 +671,8 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
   attended_with ENUM('With Aqa Moula TUS','With Aamil') NOT NULL COMMENT 'FR-075',
   hijri_year SMALLINT UNSIGNED NOT NULL COMMENT 'FR-076: 1400 to the current Hijri year, upper bound checked in the application because it moves with the calendar',
   moze_id INT UNSIGNED NULL COMMENT 'FR-077: the member own Moze. Only for With Aamil.',
-  mohallah_id INT UNSIGNED NULL COMMENT 'FR-077: optional. Only for With Aamil.',
+  mohallah_id INT UNSIGNED NULL COMMENT 'FR-077: superseded by venue_id on 2026-11-06. Kept so existing rows are not destroyed; no longer collected by the form.',
+  venue_id INT UNSIGNED NULL COMMENT 'FR-077c: replaces Mohallah. A venue already names its Mohallah, so this is the more specific answer. Only for With Aamil.',
   aqa_moula_ashara_id INT UNSIGNED NULL COMMENT 'FR-077a: where Aqa Moula TUS held Ashara that year. Only for With Aqa Moula TUS.',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -679,6 +681,7 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
   KEY idx_member_ashara_moze (moze_id),
   KEY idx_member_ashara_mohallah (mohallah_id),
   KEY idx_member_ashara_aqa_moula (aqa_moula_ashara_id),
+  KEY idx_member_ashara_venue (venue_id),
   CONSTRAINT fk_member_ashara_attendances_member_account_id
     FOREIGN KEY (member_account_id) REFERENCES member_accounts(id) ON DELETE CASCADE,
   CONSTRAINT fk_member_ashara_attendances_moze_id
@@ -688,7 +691,11 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
   -- RESTRICT, matching moze_id: an attendance record naming a place that was deleted
   -- out from under it is worse than refusing the delete.
   CONSTRAINT fk_member_ashara_attendances_aqa_moula_ashara_id
-    FOREIGN KEY (aqa_moula_ashara_id) REFERENCES aqa_moula_asharas(id) ON DELETE RESTRICT
+    FOREIGN KEY (aqa_moula_ashara_id) REFERENCES aqa_moula_asharas(id) ON DELETE RESTRICT,
+  -- RESTRICT, matching moze_id. `venues` is one of the 13 PRE-EXISTING tables, and this is a
+  -- foreign key FROM a module table TO it: no ALTER on venues, so FR-106 holds.
+  CONSTRAINT fk_member_ashara_attendances_venue_id
+    FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
@@ -772,6 +779,73 @@ DELIMITER ;
 
 CALL mm_backfill_aqa_moula_ashara();
 DROP PROCEDURE mm_backfill_aqa_moula_ashara;
+
+
+-- ----------------------------------------------------------------------------
+-- 4c. Backfill: the two columns added on 2026-11-06
+--
+--     Same reason as 3b and 4b. Production already has member_profiles and
+--     member_ashara_attendances, so CREATE TABLE IF NOT EXISTS skips both entirely
+--     and neither new column would arrive. Without this the script reports success
+--     and the application then fails on save against a column that is not there.
+--
+--     Kept as two procedures rather than folded into 4b so each stays readable and
+--     the existing checks on 4b keep their meaning.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_backfill_zikr_e_hussain;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_zikr_e_hussain()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'zikr_e_hussain_since_year') THEN
+    ALTER TABLE member_profiles
+      ADD COLUMN zikr_e_hussain_since_year SMALLINT UNSIGNED NULL AFTER hizb_role;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_zikr_e_hussain();
+DROP PROCEDURE mm_backfill_zikr_e_hussain;
+
+
+DROP PROCEDURE IF EXISTS mm_backfill_ashara_venue;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_ashara_venue()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'member_ashara_attendances'
+                   AND COLUMN_NAME = 'venue_id') THEN
+    ALTER TABLE member_ashara_attendances
+      ADD COLUMN venue_id INT UNSIGNED NULL AFTER mohallah_id;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'member_ashara_attendances'
+                   AND INDEX_NAME = 'idx_member_ashara_venue') THEN
+    ALTER TABLE member_ashara_attendances ADD INDEX idx_member_ashara_venue (venue_id);
+  END IF;
+
+  -- A foreign key FROM a module table TO the pre-existing `venues`. No ALTER on venues
+  -- itself, so FR-106 holds. Added last, once the column is certain to exist.
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = 'member_ashara_attendances'
+                   AND CONSTRAINT_NAME = 'fk_member_ashara_attendances_venue_id') THEN
+    ALTER TABLE member_ashara_attendances
+      ADD CONSTRAINT fk_member_ashara_attendances_venue_id
+        FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE RESTRICT;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_ashara_venue();
+DROP PROCEDURE mm_backfill_ashara_venue;
 
 
 -- ----------------------------------------------------------------------------

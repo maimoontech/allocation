@@ -153,6 +153,48 @@ describe("member profile", () => {
       }
     });
 
+    /**
+     * FR-077c. Venues reach Tab 9, all of them, and WITHOUT the sensitive columns.
+     *
+     * `venues` is a pre-existing table that holds `password_hash` and `last_login_at` —
+     * venues sign in to this system. A `SELECT *` here would publish both to every member,
+     * so the absence of those keys is the assertion that matters most in this test.
+     */
+    it("returns every venue, with no credential fields", async () => {
+      const res = await request(app)
+        .get("/api/v1/members/lookups")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(Array.isArray(res.body.data.venues)).toBe(true);
+      expect(res.body.data.venues.length).toBeGreaterThan(0);
+
+      for (const venue of res.body.data.venues) {
+        expect(Object.keys(venue).sort()).toEqual(["id", "is_active", "mohallah_id", "name"]);
+        expect(venue).not.toHaveProperty("password_hash");
+        expect(venue).not.toHaveProperty("last_login_at");
+      }
+    });
+
+    it("includes inactive venues, each carrying is_active", async () => {
+      const venueId = await (async () => {
+        const [rows] = await pool.query<any[]>("SELECT id FROM venues LIMIT 1");
+        return Number(rows[0].id);
+      })();
+
+      await pool.query("UPDATE venues SET is_active = 0 WHERE id = :id", { id: venueId });
+      try {
+        const res = await request(app)
+          .get("/api/v1/members/lookups")
+          .set("Authorization", `Bearer ${token}`);
+
+        const found = res.body.data.venues.find((v: any) => v.id === venueId);
+        expect(found, "a deactivated venue must still be offered").toBeDefined();
+        expect(found.is_active).toBe(false);
+      } finally {
+        await pool.query("UPDATE venues SET is_active = 1 WHERE id = :id", { id: venueId });
+      }
+    });
+
     // FR-076: the upper bound must come from the server, not the client's clock.
     it("returns the current Hijri year, computed server-side", async () => {
       const res = await request(app)
@@ -385,6 +427,30 @@ describe("member profile", () => {
      * for real — 1950-2026 accepted 2006 CE and a Hijri year alike, so the wrong calendar
      * stored without complaint.
      */
+    /**
+     * FR-049a. The Zikr e Hussain year has its OWN floor, 1375 AH rather than 1401.
+     *
+     * 1375-1400 is the whole point of the field being separate, so both ends are asserted:
+     * 1375 must be accepted and 1374 refused. A test that only checked the ceiling would
+     * pass against the shared 1401 floor and miss the entire difference.
+     */
+    it("accepts a Zikr e Hussain year from 1375 AH, below the other years' floor", async () => {
+      const current = currentHijriYear();
+
+      expect((await putProfile(token, { zikr_e_hussain_since_year: 1375 })).status).toBe(200);
+      expect((await putProfile(token, { zikr_e_hussain_since_year: 1400 })).status).toBe(200);
+      expect((await putProfile(token, { zikr_e_hussain_since_year: current })).status).toBe(200);
+
+      expect((await putProfile(token, { zikr_e_hussain_since_year: 1374 })).status).toBe(400);
+      expect((await putProfile(token, { zikr_e_hussain_since_year: current + 1 })).status).toBe(400);
+      expect((await putProfile(token, { zikr_e_hussain_since_year: 2006 })).status).toBe(400);
+    });
+
+    it("stores and returns the Zikr e Hussain year", async () => {
+      await putProfile(token, { zikr_e_hussain_since_year: 1390 });
+      expect((await getProfile(token)).body.data.zikr_e_hussain_since_year).toBe(1390);
+    });
+
     it("rejects a prefix year outside 1401 AH to the current Hijri year", async () => {
       const current = currentHijriYear();
 

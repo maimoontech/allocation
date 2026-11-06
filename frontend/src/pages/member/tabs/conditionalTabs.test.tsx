@@ -49,6 +49,7 @@ const BASE: MemberProfile = {
   zone_id: null,
   party_id: null,
   hizb_role: null,
+  zikr_e_hussain_since_year: null,
   occupation_type: null,
   organisation_name: null,
   designation: null,
@@ -106,6 +107,7 @@ const LOOKUPS: MemberLookups = {
   zones: [],
   parties: [],
   mohallahs: [],
+  venues: [],
   current_hijri_year: 1448
 };
 

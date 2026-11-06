@@ -48,6 +48,26 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
   const records = (value.ashara_attendances ?? []).filter((r) => r.hijri_year > 0);
   const maxHijriYear = lookups.current_hijri_year;
 
+  // FR-077c. Active venues first, then the retired ones, each group alphabetical.
+  //
+  // Inactive venues are OFFERED, because an Ashara recorded for 1430 AH may well have been
+  // held somewhere that has since closed — filtering them out would leave the member unable
+  // to answer truthfully. They are MARKED for the same reason the Hizb list marks them: an
+  // unmarked retired venue reads as an ordinary choice.
+  const venueOptions = [
+    { value: "", label: "Venue (optional)" },
+    ...[...lookups.venues]
+      .sort((a, b) =>
+        a.is_active === b.is_active
+          ? a.name.localeCompare(b.name)
+          : Number(b.is_active) - Number(a.is_active)
+      )
+      .map((v) => ({
+        value: String(v.id),
+        label: v.is_active ? v.name : `${v.name} — INACTIVE`
+      }))
+  ];
+
   const placeByYear = new Map<number, AqaMoulaPlace>();
   for (const place of lookups.aqa_moula_asharas) {
     if (place.hijri_year != null) placeByYear.set(place.hijri_year, place);
@@ -82,6 +102,7 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
             hijri_year: year,
             moze_id: null,
             mohallah_id: null,
+            venue_id: null,
             aqa_moula_ashara_id: placeByYear.get(year)?.id ?? null
           }
         : {
@@ -89,6 +110,7 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
             hijri_year: year,
             moze_id: current?.attended_with === WITH_AAMIL ? current.moze_id : null,
             mohallah_id: current?.attended_with === WITH_AAMIL ? current.mohallah_id : null,
+            venue_id: current?.attended_with === WITH_AAMIL ? current.venue_id : null,
             aqa_moula_ashara_id: null
           };
     save([...others, entry]);
@@ -206,15 +228,14 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
                       error={errorFor(errorPath(record, "moze_id"))}
                       disabled={disabled || lookups.mozes.length === 0}
                     />
-                    {/* FR-077: optional, from the Mohallahs the system already holds. */}
+                    {/* FR-077c: Venue, which replaced Mohallah. A venue already names its
+                        Mohallah, so this is the more specific answer to the same question. */}
                     <Select
-                      aria-label={`Mohallah for ${year} AH (optional)`}
-                      value={record.mohallah_id == null ? "" : String(record.mohallah_id)}
-                      onChange={(e) =>
-                        update(year, { mohallah_id: toNullableId(e.target.value) })
-                      }
-                      options={lookupOptions(lookups.mohallahs, "Mohallah (optional)")}
-                      error={errorFor(errorPath(record, "mohallah_id"))}
+                      aria-label={`Venue for ${year} AH (optional)`}
+                      value={record.venue_id == null ? "" : String(record.venue_id)}
+                      onChange={(e) => update(year, { venue_id: toNullableId(e.target.value) })}
+                      options={venueOptions}
+                      error={errorFor(errorPath(record, "venue_id"))}
                       disabled={disabled}
                     />
                   </div>

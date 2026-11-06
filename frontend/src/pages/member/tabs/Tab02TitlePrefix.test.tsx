@@ -48,6 +48,7 @@ const BASE = {
   zone_id: null,
   party_id: null,
   hizb_role: null,
+  zikr_e_hussain_since_year: null,
   occupation_type: null,
   organisation_name: null,
   designation: null,
@@ -111,6 +112,10 @@ const LOOKUPS: MemberLookups = {
   zones: [],
   parties: [],
   mohallahs: [{ id: 51, name: "A Mohallah", zone_id: 1, is_draft: false }],
+  venues: [
+    { id: 71, name: "Active Venue", mohallah_id: 51, is_active: true },
+    { id: 72, name: "Closed Venue", mohallah_id: 51, is_active: false }
+  ],
   current_hijri_year: 1448
 };
 
@@ -283,21 +288,21 @@ describe("Tab 8 — places visited (FR-071, FR-073)", () => {
 describe("Tab 9 — Ashara Mubaraka year grid (FR-075, FR-076, FR-076b)", () => {
   const yearRow = (year: number) => screen.getByRole("group", { name: `Ashara ${year} AH` });
 
-  it("lists every year from the server's current Hijri year down to 1405, newest first", () => {
+  it("lists every year from the server's current Hijri year down to 1404, newest first", () => {
     renderTab(Tab09Ashara, {});
 
     const rows = screen.getAllByRole("group", { name: /^Ashara \d+ AH$/ });
-    expect(rows).toHaveLength(1448 - 1405 + 1);
+    expect(rows).toHaveLength(1448 - 1404 + 1);
     expect(rows[0]).toHaveAccessibleName("Ashara 1448 AH");
-    expect(rows[rows.length - 1]).toHaveAccessibleName("Ashara 1405 AH");
+    expect(rows[rows.length - 1]).toHaveAccessibleName("Ashara 1404 AH");
     expect(screen.queryByRole("group", { name: "Ashara 1449 AH" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "Ashara 1404 AH" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Ashara 1403 AH" })).not.toBeInTheDocument();
   });
 
   it("still shows a record saved for a year before 1405, so it can be seen and changed", () => {
     renderTab(Tab09Ashara, {
       ashara_attendances: [
-        { attended_with: "With Aamil", hijri_year: 1402, moze_id: null, mohallah_id: null, aqa_moula_ashara_id: null }
+        { attended_with: "With Aamil", hijri_year: 1402, moze_id: null, mohallah_id: null, venue_id: null, aqa_moula_ashara_id: null }
       ]
     });
 
@@ -432,7 +437,7 @@ describe("the Hijri year dropdowns", () => {
  *
  * "With Aqa Moula TUS" needs nothing more: Aqa Moula holds Ashara in one place a year, so the
  * place is the one an administrator gave that year, shown rather than chosen. "With Aamil"
- * asks for the member's own Moze and optional Mohallah.
+ * asks for the member's own Moze and optional Venue.
  *
  * The clearing tests are the ones that matter. A value left behind by a changed answer would
  * be saved against a record whose form never showed it, and nobody looking at the form could
@@ -445,15 +450,18 @@ describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
     hijri_year: 1446,
     moze_id: null,
     mohallah_id: null,
+    venue_id: null,
     aqa_moula_ashara_id: null,
     ...over
   });
 
-  it("shows Moze and Mohallah for With Aamil, and no Aqa Moula place", () => {
+  it("shows Moze and Venue for With Aamil, and no Aqa Moula place", () => {
     renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
 
     expect(screen.getByLabelText("Moze for 1446 AH")).toBeInTheDocument();
-    expect(screen.getByLabelText("Mohallah for 1446 AH (optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Venue for 1446 AH (optional)")).toBeInTheDocument();
+    // Mohallah was replaced by Venue, not hidden alongside it (FR-077c).
+    expect(screen.queryByLabelText(/^Mohallah for/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("aqa-moula-place-1446")).not.toBeInTheDocument();
   });
 
@@ -476,9 +484,9 @@ describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
     expect(state.value.ashara_attendances[0].aqa_moula_ashara_id).toBeNull();
   });
 
-  it("clears Moze and Mohallah when the answer changes to With Aqa Moula TUS", () => {
+  it("clears Moze and Venue when the answer changes to With Aqa Moula TUS", () => {
     const state = renderTab(Tab09Ashara, {
-      ashara_attendances: [AAMIL({ moze_id: 31, mohallah_id: 51 })]
+      ashara_attendances: [AAMIL({ moze_id: 31, venue_id: 71 })]
     });
 
     fireEvent.click(within(yearRow(1446)).getByLabelText("With Aqa Moula TUS"));
@@ -486,7 +494,7 @@ describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
     const row = state.value.ashara_attendances[0];
     expect(row.attended_with).toBe("With Aqa Moula TUS");
     expect(row.moze_id).toBeNull();
-    expect(row.mohallah_id).toBeNull();
+    expect(row.venue_id).toBeNull();
   });
 
   it("clears the Aqa Moula place when the answer changes to With Aamil", () => {
@@ -503,14 +511,35 @@ describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
     expect(row.aqa_moula_ashara_id).toBeNull();
   });
 
-  it("records the chosen Moze and Mohallah for that year", () => {
+  it("records the chosen Moze and Venue for that year", () => {
     const state = renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
 
     fireEvent.change(screen.getByLabelText("Moze for 1446 AH"), { target: { value: "31" } });
-    fireEvent.change(screen.getByLabelText("Mohallah for 1446 AH (optional)"), {
-      target: { value: "51" }
+    fireEvent.change(screen.getByLabelText("Venue for 1446 AH (optional)"), {
+      target: { value: "71" }
     });
 
-    expect(state.value.ashara_attendances[0]).toMatchObject({ moze_id: 31, mohallah_id: 51 });
+    expect(state.value.ashara_attendances[0]).toMatchObject({ moze_id: 31, venue_id: 71 });
+  });
+
+  /**
+   * FR-077c. Inactive venues are offered and marked.
+   *
+   * An Ashara recorded for a year long past may well have been held somewhere that has since
+   * closed. Filtering those out would leave the member unable to answer truthfully, and
+   * leaving them unmarked would make a retired venue read as an ordinary choice.
+   */
+  it("offers inactive venues too, marked and sorted after the active ones", () => {
+    renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
+
+    const select = screen.getByLabelText("Venue for 1446 AH (optional)") as HTMLSelectElement;
+    const options = Array.from(select.options);
+
+    const byValue = (v: string) => options.find((o) => o.value === v)?.textContent ?? "";
+    expect(byValue("72")).toMatch(/INACTIVE/);
+    expect(byValue("71")).toBe("Active Venue");
+
+    // [0] is the placeholder; active before inactive.
+    expect(options.slice(1).map((o) => o.value)).toEqual(["71", "72"]);
   });
 });
