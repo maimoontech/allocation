@@ -1,4 +1,4 @@
-import { Input } from "../../../components/ui/Input";
+// import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { EMPTY_LOOKUP_NOTE, enumOptions, lookupOptions, toNullableId } from "./shared";
 import type { TabProps } from "./shared";
@@ -34,13 +34,13 @@ export function Tab10Asbaq({ value, lookups, errorFor, onChange, disabled }: Tab
           disabled={disabled || lookups.halqas.length === 0}
         />
 
-        <Input
+        {/* <Input
           label="Ustad"
           value={value.asbaq_ustad ?? ""}
           onChange={(e) => onChange("asbaq_ustad", e.target.value)}
           error={errorFor("asbaq_ustad")}
           disabled={disabled}
-        />
+        /> */}
       </div>
 
       {/* FR-095: an empty list explains itself and does not block the rest of the profile. */}
