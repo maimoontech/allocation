@@ -3,7 +3,7 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 a9cd4a5ec1bc8d55)
+--   Sources : membership_schema.sql (sha256 7d124939a6cb3445)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
@@ -472,8 +472,10 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   dob_hijri_month TINYINT UNSIGNED NULL,
   dob_hijri_year SMALLINT UNSIGNED NULL,
   dob_hijri_text VARCHAR(50) NULL COMMENT 'Exactly what the member was shown, so display can never disagree with the record',
+  nationality VARCHAR(100) NULL COMMENT 'FR-040a: free text. The brief asked for a field, not a managed list.',
   marital_status_id INT UNSIGNED NULL,
   residence_address TEXT NULL,
+  mohallah_id INT UNSIGNED NULL COMMENT 'FR-040b: the member's own Mohallah, from the existing master list.',
   phone_no VARCHAR(25) NULL,
   mobile_no_1 VARCHAR(25) NULL,
   mobile_no_2 VARCHAR(25) NULL,
@@ -557,6 +559,12 @@ CREATE TABLE IF NOT EXISTS member_profiles (
     FOREIGN KEY (party_id) REFERENCES parties(id) ON DELETE SET NULL,
   CONSTRAINT fk_member_profiles_marital_status_id
     FOREIGN KEY (marital_status_id) REFERENCES marital_statuses(id) ON DELETE SET NULL,
+  -- RESTRICT, not SET NULL. `mohallahs` is pre-existing master data an administrator can
+  -- delete from another panel entirely; SET NULL would silently erase the member's own
+  -- answer without anyone being told. This is a foreign key FROM a module table TO a
+  -- pre-existing one — no ALTER on mohallahs, so FR-106 holds.
+  CONSTRAINT fk_member_profiles_mohallah_id
+    FOREIGN KEY (mohallah_id) REFERENCES mohallahs(id) ON DELETE RESTRICT,
   CONSTRAINT fk_member_profiles_sanad_id
     FOREIGN KEY (sanad_id) REFERENCES sanads(id) ON DELETE SET NULL,
   CONSTRAINT fk_member_profiles_halqa_id
@@ -1007,6 +1015,44 @@ DELIMITER ;
 
 CALL mm_backfill_ashara_venue();
 DROP PROCEDURE mm_backfill_ashara_venue;
+
+
+-- ----------------------------------------------------------------------------
+-- 4d. Backfill: the two Tab 1 columns added on 2026-11-07
+--
+--     Same reason as 3b, 4b and 4c: production already has member_profiles, so
+--     CREATE TABLE IF NOT EXISTS skips it and neither column would arrive.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_backfill_personal_2026_11_07;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_personal_2026_11_07()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'nationality') THEN
+    ALTER TABLE member_profiles ADD COLUMN nationality VARCHAR(100) NULL AFTER marital_status_id;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'mohallah_id') THEN
+    ALTER TABLE member_profiles ADD COLUMN mohallah_id INT UNSIGNED NULL AFTER residence_address;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND CONSTRAINT_NAME = 'fk_member_profiles_mohallah_id') THEN
+    ALTER TABLE member_profiles
+      ADD CONSTRAINT fk_member_profiles_mohallah_id
+        FOREIGN KEY (mohallah_id) REFERENCES mohallahs(id) ON DELETE RESTRICT;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_personal_2026_11_07();
+DROP PROCEDURE mm_backfill_personal_2026_11_07;
 
 
 -- ----------------------------------------------------------------------------

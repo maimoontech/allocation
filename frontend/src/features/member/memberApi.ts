@@ -117,8 +117,12 @@ export type MemberProfile = {
   dob_hijri_month: number | null;
   dob_hijri_year: number | null;
   dob_hijri_text: string | null;
+  /** FR-040a. Free text, not a managed list — the brief asked for a field, not a dropdown. */
+  nationality: string | null;
   marital_status_id: number | null;
   residence_address: string | null;
+  /** FR-040b. From the existing `mohallahs` master list, beside the address it belongs to. */
+  mohallah_id: number | null;
   phone_no: string | null;
   mobile_no_1: string | null;
   mobile_no_2: string | null;

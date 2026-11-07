@@ -33,6 +33,43 @@ async function ensureSchema() {
     await ensureZikrEHussainColumn();
     await ensureAsharaVenueColumn();
     await ensureProfileEditAudit();
+    await ensurePersonalTabColumns();
+}
+/**
+ * Tab 1's Nationality and Mohallah (FR-040a, FR-040b).
+ *
+ * Here for the same reason as everything else in this file: the backend has shipped ahead of
+ * its migration before, and a form field whose column does not exist fails on save with
+ * nothing useful to show the member.
+ */
+async function ensurePersonalTabColumns() {
+    const [nationality] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND COLUMN_NAME = 'nationality'`);
+    if (Number(nationality[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query("ALTER TABLE member_profiles ADD COLUMN nationality VARCHAR(100) NULL AFTER marital_status_id");
+    }
+    const [mohallah] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND COLUMN_NAME = 'mohallah_id'`);
+    if (Number(mohallah[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query("ALTER TABLE member_profiles ADD COLUMN mohallah_id INT UNSIGNED NULL AFTER residence_address");
+    }
+    // Last, and only once the column exists: a constraint on a missing column fails the boot.
+    const [fk] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND CONSTRAINT_NAME = 'fk_member_profiles_mohallah_id'`);
+    if (Number(fk[0]?.cnt ?? 0) === 0) {
+        await pool_1.pool.query(`ALTER TABLE member_profiles
+       ADD CONSTRAINT fk_member_profiles_mohallah_id
+         FOREIGN KEY (mohallah_id) REFERENCES mohallahs(id) ON DELETE RESTRICT`);
+    }
 }
 /**
  * FR-047a. Who changed a member's profile, when, and which fields.

@@ -13,6 +13,7 @@ const hijriDate_1 = require("../utils/hijriDate");
 // ---------------------------------------------------------------------------
 const TEXT_COLUMNS = [
     "name",
+    "nationality",
     "father_name",
     "surname",
     "residence_address",
@@ -62,6 +63,7 @@ const DECIMAL_COLUMNS = ["height_cm", "weight_kg"];
  */
 const MAX_LENGTHS = {
     name: 100,
+    nationality: 100,
     father_name: 100,
     surname: 100,
     residence_address: 65535,
@@ -106,6 +108,10 @@ const ENUM_COLUMNS = {
 /** Lookup foreign keys: column -> table it must exist in. */
 const LOOKUP_FKS = {
     marital_status_id: { table: "marital_statuses", tab: 1 },
+    // FR-040b. `mohallahs` is pre-existing master data rather than one of this module's ten
+    // lists, but the handling is identical — parsed, persisted, read back and checked to still
+    // exist — so it belongs here rather than in a special case of its own.
+    mohallah_id: { table: "mohallahs", tab: 1 },
     sanad_id: { table: "sanads", tab: 5 },
     halqa_id: { table: "halqas", tab: 10 },
     party_tamreen_frequency_id: { table: "tamreen_frequencies", tab: 11 },
@@ -115,7 +121,8 @@ const LOOKUP_FKS = {
 /** Which tab each column belongs to, so an error can point at it (FR-029). */
 const COLUMN_TAB = {
     first_prefix: 1, name: 1, father_prefix: 1, father_name: 1, surname: 1,
-    dob_gregorian: 1, marital_status_id: 1, residence_address: 1, phone_no: 1,
+    dob_gregorian: 1, nationality: 1, marital_status_id: 1, residence_address: 1,
+    mohallah_id: 1, phone_no: 1,
     mobile_no_1: 1, mobile_no_2: 1, whatsapp_no_1: 1, whatsapp_no_2: 1, email: 1,
     prefix_year: 2,
     zone_id: 3, party_id: 3, hizb_role: 3, zikr_e_hussain_since_year: 3,

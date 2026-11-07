@@ -1,5 +1,22 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-07 — Added: Nationality and Mohallah on Tab 1
+
+- **Nationality**, before Marital Status. **Free text**, because the request named a dropdown
+  only for Mohallah and drew that distinction itself. 100 characters, optional. If you would
+  rather it were a managed list, that is a lookup table and an entry on the Dropdown Lists
+  page — say so and it is a small change, but it would need agreed values first.
+- **Mohallah**, beside Residence Address, from the existing `mohallahs` master list. No copy
+  of that list is made (FR-092) — it is the same 18 Mohallahs the rest of the system uses.
+- The foreign key is `ON DELETE RESTRICT`, not `SET NULL`. `mohallahs` is maintained from a
+  different panel, and silently erasing a member's own answer because somebody deleted a row
+  there is worse than refusing the delete.
+- Both columns are added by `ensureSchema()` at boot **and** by a new section 4d of
+  `MEMBERSHIP_LIVE_INSTALL.sql` (now 22 tables). The script alone would not be enough:
+  production already has `member_profiles`, so `CREATE TABLE IF NOT EXISTS` skips it.
+- FR-040a and FR-040b added.
+
+
 ## 2026-11-06 — Changed: the Ashara grid starts at the Zikr e Hussain year
 
 Tab 9 listed every year from the current Hijri year down to a fixed 1404 AH. It now starts at

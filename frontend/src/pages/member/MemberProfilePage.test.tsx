@@ -28,8 +28,10 @@ const PROFILE = {
   dob_hijri_month: null,
   dob_hijri_year: null,
   dob_hijri_text: null,
+  nationality: null,
   marital_status_id: null,
   residence_address: null,
+  mohallah_id: null,
   phone_no: null,
   mobile_no_1: null,
   mobile_no_2: null,
@@ -71,7 +73,10 @@ const LOOKUPS = {
     // Deactivated, and in Zone One. Tab 3 must still offer it (FR-048a).
     { id: 11, name: "Hizb Retired", zone_id: 1, is_active: false }
   ],
-  mohallahs: [],
+  mohallahs: [
+    { id: 91, name: "Mohallah Alpha", zone_id: 1, is_draft: false },
+    { id: 92, name: "Mohallah Beta", zone_id: 2, is_draft: false }
+  ],
   venues: [],
   current_hijri_year: 1448
 };
@@ -322,6 +327,83 @@ describe("MemberProfilePage", () => {
    * The ceiling is the server's current Hijri year, so the list cannot go stale and a wrong
    * device clock cannot widen it past what the server accepts.
    */
+  /**
+   * FR-040a and FR-040b — the two Tab 1 fields added on 2026-11-07.
+   *
+   * Nationality is free text and Mohallah is a dropdown, which is the distinction the
+   * request itself drew. Order is asserted because it was specified: Nationality comes
+   * before Marital Status, and Mohallah sits beside the Residence Address it qualifies.
+   */
+  describe("Tab 1 — Nationality and Mohallah", () => {
+    async function openPersonal() {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+    }
+
+    it("offers Nationality as free text, not a dropdown", async () => {
+      await openPersonal();
+
+      const field = screen.getByLabelText(/^Nationality/);
+      expect(field.tagName).toBe("INPUT");
+      expect(field).toHaveValue("");
+    });
+
+    it("puts Nationality before Marital Status", async () => {
+      await openPersonal();
+
+      const nationality = screen.getByLabelText(/^Nationality/);
+      const marital = screen.getByLabelText(/^Marital Status/);
+
+      // DOCUMENT_POSITION_FOLLOWING: marital comes after nationality in the document.
+      expect(nationality.compareDocumentPosition(marital) & Node.DOCUMENT_POSITION_FOLLOWING)
+        .toBeTruthy();
+    });
+
+    it("offers Mohallah as a dropdown of the Mohallahs the system already holds", async () => {
+      await openPersonal();
+
+      const select = screen.getByLabelText(/^Mohallah/) as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      const labels = Array.from(select.options).map((o) => o.textContent);
+      expect(labels).toContain("Mohallah Alpha");
+      expect(labels).toContain("Mohallah Beta");
+    });
+
+    it("puts Mohallah after the Residence Address it qualifies", async () => {
+      await openPersonal();
+
+      const address = screen.getByLabelText(/^Residence Address/);
+      const mohallah = screen.getByLabelText(/^Mohallah/);
+
+      expect(address.compareDocumentPosition(mohallah) & Node.DOCUMENT_POSITION_FOLLOWING)
+        .toBeTruthy();
+    });
+
+    it("saves both, Nationality as text and Mohallah as an id", async () => {
+      await openPersonal();
+
+      fireEvent.change(screen.getByLabelText(/^Nationality/), {
+        target: { value: "Pakistani" }
+      });
+      fireEvent.change(screen.getByLabelText(/^Mohallah/), { target: { value: "92" } });
+      fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+      await waitFor(() => expect(saveBodies).toHaveLength(1));
+      expect(saveBodies[0]).toMatchObject({ nationality: "Pakistani", mohallah_id: 92 });
+    });
+
+    it("sends null rather than an empty string when Mohallah is cleared", async () => {
+      await openPersonal();
+
+      fireEvent.change(screen.getByLabelText(/^Mohallah/), { target: { value: "92" } });
+      fireEvent.change(screen.getByLabelText(/^Mohallah/), { target: { value: "" } });
+      fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+      await waitFor(() => expect(saveBodies).toHaveLength(1));
+      expect(saveBodies[0]).toMatchObject({ mohallah_id: null });
+    });
+  });
+
   describe("Tab 3 — Zikr e Hussain since year", () => {
     async function openHizb() {
       renderWithProviders(<MemberProfilePage />);

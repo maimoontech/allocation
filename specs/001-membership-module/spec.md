@@ -245,6 +245,8 @@ expected values.
 - **FR-038**: Tab 1 MUST capture a Gregorian date of birth through a date picker, and MUST reject a date in the future or implausibly far in the past.
 - **FR-039**: Tab 1 MUST derive and display the Hijri date of birth from the Gregorian date of birth using the project's existing Hijri conversion logic, as a read-only value the member cannot type over.
 - **FR-040**: Tab 1 MUST offer Marital Status from a maintained list of values.
+- **FR-040a** *(authorised 2026-11-07)*: Tab 1 MUST capture **Nationality**, positioned before Marital Status. It is **free text**, not a managed list: the request asked for a field here and named a dropdown only for Mohallah. At most 100 characters, and optional.
+- **FR-040b** *(authorised 2026-11-07)*: Tab 1 MUST capture the member's **Mohallah** as a dropdown beside Residence Address, offered from the existing `mohallahs` master list. No copy of that list is made (FR-092). The value MUST be optional, and a Mohallah that no longer exists MUST be refused on save. The foreign key MUST be `ON DELETE RESTRICT`, not `SET NULL`: `mohallahs` is maintained in a different panel entirely, and silently erasing a member's own answer because someone deleted a row there is worse than refusing the delete.
 - **FR-041**: Tab 1 MUST capture Residence Address as multi-line text, and Phone No., Mobile No. 1, Mobile No. 2, WhatsApp No. 1 and WhatsApp No. 2 as telephone numbers validated against a stated format.
 - **FR-042**: Tab 1 MUST capture Email and MUST reject a malformed address.
 

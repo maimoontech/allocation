@@ -195,6 +195,45 @@ describe("member profile", () => {
       }
     });
 
+    /**
+     * FR-040a, FR-040b — the two Tab 1 fields added on 2026-11-07.
+     *
+     * Mohallah points at `mohallahs`, which is PRE-EXISTING master data rather than one of
+     * this module's own lists. It goes through the same LOOKUP_FKS path as the rest, so the
+     * test that matters is the one proving a stale id is still refused.
+     */
+    it("stores and returns Nationality and Mohallah", async () => {
+      const res = await putProfile(token, {
+        nationality: "Pakistani",
+        mohallah_id: seeded.mohallahId
+      });
+      expect(res.status).toBe(200);
+
+      const read = await getProfile(token);
+      expect(read.body.data.nationality).toBe("Pakistani");
+      expect(read.body.data.mohallah_id).toBe(seeded.mohallahId);
+    });
+
+    it("refuses a Mohallah that does not exist", async () => {
+      const res = await putProfile(token, { mohallah_id: 99999999 });
+      expect(res.status).toBe(400);
+    });
+
+    it("clears both when they are sent empty", async () => {
+      await putProfile(token, { nationality: "Pakistani", mohallah_id: seeded.mohallahId });
+      const res = await putProfile(token, { nationality: "", mohallah_id: null });
+      expect(res.status).toBe(200);
+
+      const read = await getProfile(token);
+      expect(read.body.data.nationality).toBeNull();
+      expect(read.body.data.mohallah_id).toBeNull();
+    });
+
+    it("refuses a Nationality longer than the column holds", async () => {
+      const res = await putProfile(token, { nationality: "x".repeat(101) });
+      expect(res.status).toBe(400);
+    });
+
     // FR-076: the upper bound must come from the server, not the client's clock.
     it("returns the current Hijri year, computed server-side", async () => {
       const res = await request(app)

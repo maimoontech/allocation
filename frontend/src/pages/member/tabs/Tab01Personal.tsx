@@ -7,7 +7,7 @@ import { todayIso } from "../../../utils/dates";
 import { ImageUpload, type ImageUploadValue } from "../../../components/ui/ImageUpload";
 import { resolveApiUrl } from "../../../features/api/api";
 import { authStorage } from "../../../utils/storage";
-import { lookupOptions } from "./shared";
+import { lookupOptions, toNullableId } from "./shared";
 import type { TabProps } from "./shared";
 
 export type Tab01Props = TabProps & {
@@ -102,6 +102,9 @@ export function Tab01Personal({
 
   // FR-094: a value awaiting review says so, rather than looking authoritative.
   const maritalOptions = lookupOptions(lookups.marital_statuses);
+  // FR-040b. The Mohallahs the system already holds, not a list of this module's own
+  // (FR-092 — no second copy of existing master data).
+  const mohallahOptions = lookupOptions(lookups.mohallahs);
 
   return (
     <div className="space-y-4">
@@ -203,6 +206,16 @@ export function Tab01Personal({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
+        {/* FR-040a. Free text: the brief asked for a field here, and a managed list would
+            need values nobody has agreed yet. */}
+        <Input
+          label="Nationality"
+          value={value.nationality ?? ""}
+          onChange={(e) => onChange("nationality", e.target.value)}
+          error={errorFor("nationality")}
+          disabled={disabled}
+        />
+
         <Select
           label="Marital Status"
           value={value.marital_status_id == null ? "" : String(value.marital_status_id)}
@@ -223,14 +236,26 @@ export function Tab01Personal({
         </div>
       ) : null}
 
-      <Textarea
-        label="Residence Address"
-        value={value.residence_address ?? ""}
-        onChange={(e) => onChange("residence_address", e.target.value)}
-        error={errorFor("residence_address")}
-        rows={3}
-        disabled={disabled}
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Textarea
+          label="Residence Address"
+          value={value.residence_address ?? ""}
+          onChange={(e) => onChange("residence_address", e.target.value)}
+          error={errorFor("residence_address")}
+          rows={3}
+          disabled={disabled}
+        />
+
+        {/* FR-040b. Beside the address, because it is the same question asked two ways. */}
+        <Select
+          label="Mohallah"
+          value={value.mohallah_id == null ? "" : String(value.mohallah_id)}
+          onChange={(e) => onChange("mohallah_id", toNullableId(e.target.value))}
+          options={mohallahOptions}
+          error={errorFor("mohallah_id")}
+          disabled={disabled || lookups.mohallahs.length === 0}
+        />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {(
