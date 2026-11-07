@@ -380,11 +380,16 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   last_donation_date DATE NULL,
   height_cm DECIMAL(5,2) NULL COMMENT 'Centimetres, spec assumption 10. DECIMAL not FLOAT so 72.5 stores as 72.5',
   weight_kg DECIMAL(5,2) NULL COMMENT 'Kilograms',
-  bmi DECIMAL(5,2) AS (
-    IF(height_cm > 0 AND weight_kg > 0,
+  -- DECIMAL(6,2) and a GUARDED expression, both deliberate. `> 0` accepted a height typed
+  -- in metres (1.75), which is a BMI of 228,571 -- and because this column is VIRTUAL that
+  -- stayed invisible until an ALTER rebuilt the table and the server stopped booting.
+  -- Within the bounds below the largest possible value is 500 / 0.5^2 = 2000.00, so the
+  -- width is sufficient rather than merely larger.
+  bmi DECIMAL(6,2) AS (
+    IF(height_cm BETWEEN 50 AND 300 AND weight_kg BETWEEN 2 AND 500,
        ROUND(weight_kg / POW(height_cm / 100, 2), 2),
        NULL)
-  ) VIRTUAL COMMENT 'FR-064. Generated, so MySQL rejects any write: no API or UI bug can overwrite it and it cannot drift from its inputs. NULL whenever either input is absent or non-positive',
+  ) VIRTUAL COMMENT 'FR-064. Generated, so MySQL rejects any write: no API or UI bug can overwrite it and it cannot drift from its inputs. NULL unless both inputs are plausible for a person',
 
   -- Tab 10: Asbaq
   asbaq_level ENUM('Zaher','Taweel','Haqiqat') NULL,
@@ -812,6 +817,45 @@ DELIMITER ;
 
 CALL mm_backfill_aqa_moula_ashara();
 DROP PROCEDURE mm_backfill_aqa_moula_ashara;
+
+
+-- ----------------------------------------------------------------------------
+-- 4b2. Repair: widen and guard the generated bmi column
+--
+--     MUST COME BEFORE EVERY OTHER ALTER ON member_profiles. An ALTER rebuilds the
+--     table, and a rebuild materialises every VIRTUAL column for every row. A member
+--     who typed their height in metres (1.75 rather than 175) produced a bmi of
+--     228,571 against a DECIMAL(5,2) ceiling of 999.99 -- invisible while nothing
+--     evaluated it, fatal the moment something did. On 2026-11-07 that was section
+--     4d, and the server would not boot.
+--
+--     Widening alone would not close it: the old `> 0` test still permitted a height
+--     of 0.01cm, where bmi reaches 1e11. The guard is the fix; the width merely has
+--     to fit what the guard allows, which tops out at 500 / 0.5^2 = 2000.00.
+--
+--     Idempotent on the precision: once bmi is DECIMAL(6,2) this does nothing.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_repair_bmi_column;
+
+DELIMITER $$
+CREATE PROCEDURE mm_repair_bmi_column()
+BEGIN
+  IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+               AND COLUMN_NAME = 'bmi' AND NUMERIC_PRECISION <> 6) THEN
+    ALTER TABLE member_profiles
+      MODIFY COLUMN bmi DECIMAL(6,2) AS (
+        IF(height_cm BETWEEN 50 AND 300 AND weight_kg BETWEEN 2 AND 500,
+           ROUND(weight_kg / POW(height_cm / 100, 2), 2),
+           NULL)
+      ) VIRTUAL COMMENT 'FR-064. Generated, so no write can reach it. NULL unless both inputs are plausible for a person';
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_repair_bmi_column();
+DROP PROCEDURE mm_repair_bmi_column;
 
 
 -- ----------------------------------------------------------------------------

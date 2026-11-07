@@ -89,13 +89,20 @@ export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        {/* FR-063: the unit is part of the label, so there is no ambiguity about what to type. */}
+        {/*
+          FR-063: the unit is part of the label, so there is no ambiguity about what to type.
+          The bounds match the server's, and they are not decoration: `min={1}` let a member
+          enter 1.75 — their height in METRES — which the server then stored and which made
+          the generated BMI overflow months later.
+        */}
         <Input
           label="Height (cm)"
           type="number"
           inputMode="decimal"
-          min={1}
+          min={50}
+          max={300}
           step={0.1}
+          helperText="In centimetres, e.g. 175."
           value={value.height_cm == null ? "" : String(value.height_cm)}
           onChange={(e) => onChange("height_cm", toNullableNumber(e.target.value))}
           error={errorFor("height_cm")}
@@ -106,7 +113,8 @@ export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
           label="Weight (kg)"
           type="number"
           inputMode="decimal"
-          min={1}
+          min={2}
+          max={500}
           step={0.1}
           value={value.weight_kg == null ? "" : String(value.weight_kg)}
           onChange={(e) => onChange("weight_kg", toNullableNumber(e.target.value))}

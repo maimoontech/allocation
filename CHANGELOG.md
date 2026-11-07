@@ -1,5 +1,39 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-07 — Fixed: the server would not start — "Out of range value for column 'bmi'"
+
+A member had typed their height in **metres** — 1.75 rather than 175. Nothing refused it:
+`bmi` is a **VIRTUAL** column, computed on read and never stored, so nothing evaluated
+`70 / 0.0175²  = 228,571` against its `DECIMAL(5,2)` ceiling of 999.99 at the time of the
+save. The row was fine; the derived value was not.
+
+It surfaced when yesterday's `ALTER TABLE member_profiles ADD COLUMN` rebuilt the table —
+a rebuild materialises every virtual column for every row. The ALTER failed, `ensureSchema()`
+threw, and the server stopped booting entirely. One member's typo, detonated months later by
+an unrelated migration.
+
+**Three places now refuse it, because one is not enough:**
+
+- **The column.** `bmi` is `DECIMAL(6,2)` and its expression yields NULL unless *both* inputs
+  are plausible for a person. Widening alone would not have closed this: the old `> 0` test
+  still allowed a height of 0.01 cm, where BMI reaches 1e11. The guard is the fix; the width
+  only has to fit what the guard allows, which tops out at 500 / 0.5² = 2000.00.
+- **The server.** `height_cm` must be 50–300 cm and `weight_kg` 2–500 kg. The old bound was
+  "whatever `DECIMAL(5,2)` holds", which is a storage fact, not a fact about people. The
+  error names the unit, because the unit is the mistake worth catching.
+- **The browser.** The same bounds on the inputs, and `computeBmi` applies the same guard, so
+  the live preview can no longer show a BMI the database will store as NULL. It previously
+  displayed 228,571 without comment, which is how the value came to look acceptable going in.
+
+**Recovery is automatic.** `ensureSchema()` repairs the column *before* any other ALTER on
+`member_profiles`, so the next boot fixes itself. `MEMBERSHIP_LIVE_INSTALL.sql` carries the
+same repair as section 4b2, ordered ahead of 4c and 4d for the same reason.
+
+The member's stored 1.75 is left as it is: their BMI now reads blank, and the next time they
+touch the field they will be asked for centimetres. Guessing that they meant 175 would be
+putting a number in someone's medical record on an assumption.
+
+
 ## 2026-11-07 — Added: Nationality and Mohallah on Tab 1
 
 - **Nationality**, before Marital Status. **Free text**, because the request named a dropdown

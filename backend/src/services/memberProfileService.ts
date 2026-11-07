@@ -137,7 +137,22 @@ const MAX_LENGTHS: Record<string, number> = {
  * The lower bounds are the same "must be positive" rule as before, stated as a range so the
  * message can name both ends. A height of 5000cm is not a typo worth storing.
  */
-const DECIMAL_MAX = 999.99;
+
+/**
+ * Plausible ranges for a person, not merely what the column can hold.
+ *
+ * 0.01 to 999.99 was "whatever DECIMAL(5,2) accepts", which let a member type their height
+ * in METRES. 1.75 stored happily — `bmi` is a VIRTUAL column, so nothing evaluated it at
+ * write time — and the derived BMI of 228,571 only surfaced months later when an unrelated
+ * ALTER rebuilt the table and the server stopped booting.
+ *
+ * These bounds are what make that unrepresentable rather than merely unlikely: the widest
+ * BMI they allow is 500 / 0.5^2 = 2000.00, which fits the column with room to spare.
+ */
+const PLAUSIBLE_RANGES: Record<string, { min: number; max: number; unit: string }> = {
+  height_cm: { min: 50, max: 300, unit: "cm" },
+  weight_kg: { min: 2, max: 500, unit: "kg" }
+};
 
 /** Closed sets fixed by the requirement, stored as inline ENUMs. */
 const ENUM_COLUMNS: Record<string, readonly string[]> = {
@@ -486,11 +501,13 @@ export async function saveMemberProfile(
       continue;
     }
     const num = Number(value);
-    // FR-063, FR-064: a non-positive height or weight is meaningless and would make the
-    // generated BMI column null anyway. The upper bound is what DECIMAL(5,2) can hold —
-    // without it MySQL rejects the value and the member gets a 500 naming no field.
-    if (!Number.isFinite(num) || num <= 0 || num > DECIMAL_MAX) {
-      add(column, `Must be a positive number no greater than ${DECIMAL_MAX}.`);
+    // FR-063, FR-064. The range is what is plausible for a PERSON, not what the column can
+    // hold. The old bound was the latter, and it accepted a height of 1.75 — metres instead
+    // of centimetres — which is how a BMI of 228,571 came to exist. The unit is named in the
+    // message because that mistake is the one worth catching, and "invalid" would not say so.
+    const range = PLAUSIBLE_RANGES[column];
+    if (!Number.isFinite(num) || num < range.min || num > range.max) {
+      add(column, `Must be between ${range.min} and ${range.max} ${range.unit}.`);
       continue;
     }
     values[column] = num;

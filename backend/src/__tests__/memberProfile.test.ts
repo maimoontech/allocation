@@ -377,6 +377,79 @@ describe("member profile", () => {
       expect((await getProfile(token)).body.data.bmi).toBeNull();
     });
 
+    /**
+     * THE OUTAGE OF 2026-11-07, pinned so it cannot return.
+     *
+     * `bmi` is a VIRTUAL column, computed on read and never stored. A member who typed
+     * their height in METRES — 1.75 rather than 175 — saved without complaint, because
+     * nothing evaluated bmi at write time. The derived value was 228,571 against a
+     * DECIMAL(5,2) ceiling of 999.99, and it stayed invisible until an unrelated ALTER
+     * rebuilt the table, materialised every virtual column, and stopped the server booting.
+     *
+     * Two separate guarantees, so a future change cannot quietly drop one:
+     *   - the VALUE is refused at the edge, which is what stops the row existing;
+     *   - the COLUMN yields NULL rather than overflowing, which is what stops a row that
+     *     somehow exists from taking the server down again.
+     */
+    it("refuses a height typed in metres, naming the unit", async () => {
+      const res = await putProfile(token, { height_cm: 1.75, weight_kg: 70 });
+
+      expect(res.status).toBe(400);
+      const error = res.body.data.errors.find((e: any) => e.field === "height_cm");
+      expect(error).toBeDefined();
+      expect(error.message).toContain("cm");
+    });
+
+    it("refuses heights and weights outside what is plausible for a person", async () => {
+      for (const payload of [
+        { height_cm: 49 },
+        { height_cm: 301 },
+        { weight_kg: 1 },
+        { weight_kg: 501 }
+      ]) {
+        expect((await putProfile(token, payload)).status, JSON.stringify(payload)).toBe(400);
+      }
+    });
+
+    it("still accepts the extremes that are plausible", async () => {
+      for (const payload of [
+        { height_cm: 50, weight_kg: 2 },
+        { height_cm: 300, weight_kg: 500 }
+      ]) {
+        expect((await putProfile(token, payload)).status, JSON.stringify(payload)).toBe(200);
+      }
+    });
+
+    /**
+     * The column's own guarantee, tested by writing a bad height AROUND the application —
+     * which is the only way such a row ever came to exist. The read must give NULL, not an
+     * error and not an overflow.
+     */
+    it("yields NULL rather than overflowing when a bad height is already stored", async () => {
+      const [rows] = await pool.query<any[]>(
+        "SELECT id FROM member_accounts WHERE its_no = :i",
+        { i: TEST_CREDENTIALS.memberSettled.itsNo }
+      );
+      const memberId = Number(rows[0].id);
+
+      await putProfile(token, { height_cm: 174, weight_kg: 70 });
+      await pool.query(
+        "UPDATE member_profiles SET height_cm = 1.75 WHERE member_account_id = :id",
+        { id: memberId }
+      );
+
+      try {
+        const read = await getProfile(token);
+        expect(read.status).toBe(200);
+        expect(read.body.data.bmi).toBeNull();
+      } finally {
+        await pool.query(
+          "UPDATE member_profiles SET height_cm = NULL, weight_kg = NULL WHERE member_account_id = :id",
+          { id: memberId }
+        );
+      }
+    });
+
     it("ignores a submitted ITS number (FR-034)", async () => {
       await putProfile(token, { its_no: "11111111", name: "Still Me" });
 

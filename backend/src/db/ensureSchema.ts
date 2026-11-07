@@ -1,6 +1,12 @@
 import { pool } from "./pool";
 
 export async function ensureSchema() {
+  // FIRST, before anything that alters member_profiles. See repairBmiColumn: until this has
+  // run, any ALTER on that table rebuilds it, materialises the virtual bmi column, and dies
+  // on the first row whose height makes bmi overflow. That is what took the server down on
+  // 2026-11-07, and the repair has to come before the ALTERs that trip it.
+  await repairBmiColumn();
+
   const [schedulePublishColumnRows] = await pool.query<any[]>(
     `SELECT COUNT(*) AS cnt
      FROM INFORMATION_SCHEMA.COLUMNS
@@ -44,6 +50,51 @@ export async function ensureSchema() {
   await ensureAsharaVenueColumn();
   await ensureProfileEditAudit();
   await ensurePersonalTabColumns();
+}
+
+/**
+ * Widens and guards the generated `bmi` column.
+ *
+ * WHAT WENT WRONG. `bmi` is VIRTUAL, so it is computed on read and never stored. A member
+ * who typed their height in METRES — 1.75 rather than 175 — saved without complaint, because
+ * nothing evaluated bmi at write time. The stored row was fine; the derived value was
+ * 70 / (0.0175^2) = 228,571, against a DECIMAL(5,2) ceiling of 999.99.
+ *
+ * It stayed invisible until an ALTER TABLE on member_profiles rebuilt the table, which
+ * materialises every virtual column for every row. The rebuild failed, `ensureSchema` threw,
+ * and the server would not boot at all — one member's typo, surfaced months later by an
+ * unrelated migration.
+ *
+ * THE FIX IS THE EXPRESSION, NOT THE WIDTH. Widening alone does not close it: at the limits
+ * the old expression still allowed (height 0.01cm, weight 999.99kg) bmi reaches 1e11, which
+ * overflows any sane column. So the expression now yields NULL unless BOTH inputs are
+ * plausible for a person. Within those bounds the largest possible value is 500 / 0.5^2 =
+ * 2000.00, which is why DECIMAL(6,2) is enough and not merely bigger.
+ *
+ * Idempotent on the precision: once the column is DECIMAL(6,2) this does nothing. It runs
+ * before every other ALTER in this file, because those are what trigger the rebuild.
+ */
+async function repairBmiColumn() {
+  const [rows] = await pool.query<any[]>(
+    `SELECT NUMERIC_PRECISION AS precision_digits
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND COLUMN_NAME = 'bmi'`
+  );
+  // No column, no profiles table yet: a fresh database gets the right definition from the
+  // CREATE TABLE and needs nothing here.
+  if (rows.length === 0) return;
+  if (Number(rows[0]?.precision_digits ?? 0) === 6) return;
+
+  await pool.query(
+    `ALTER TABLE member_profiles
+     MODIFY COLUMN bmi DECIMAL(6,2) AS (
+       IF(height_cm BETWEEN 50 AND 300 AND weight_kg BETWEEN 2 AND 500,
+          ROUND(weight_kg / POW(height_cm / 100, 2), 2),
+          NULL)
+     ) VIRTUAL COMMENT 'FR-064. Generated, so no write can reach it. NULL unless both inputs are plausible for a person - an implausible height is a typo, and a BMI derived from one is worse than no BMI.'`
+  );
 }
 
 /**

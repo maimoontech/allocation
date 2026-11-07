@@ -88,8 +88,16 @@ export function toNullableNumber(raw: string): number | null {
  * fills the gap between typing and saving, so the field is not blank until a save. Returns
  * null on non-positive input, matching the generated column exactly.
  */
+export const PLAUSIBLE_HEIGHT_CM = { min: 50, max: 300 };
+export const PLAUSIBLE_WEIGHT_KG = { min: 2, max: 500 };
+
 export function computeBmi(heightCm: number | null, weightKg: number | null): number | null {
-  if (!heightCm || !weightKg || heightCm <= 0 || weightKg <= 0) return null;
+  // The same guard the generated column applies, so the live preview cannot show a BMI the
+  // database will store as NULL. `> 0` alone let a height of 1.75 — metres — preview as
+  // 228,571, which is how that value came to look acceptable on the way in.
+  if (heightCm == null || weightKg == null) return null;
+  if (heightCm < PLAUSIBLE_HEIGHT_CM.min || heightCm > PLAUSIBLE_HEIGHT_CM.max) return null;
+  if (weightKg < PLAUSIBLE_WEIGHT_KG.min || weightKg > PLAUSIBLE_WEIGHT_KG.max) return null;
   const metres = heightCm / 100;
   return Math.round((weightKg / (metres * metres)) * 100) / 100;
 }
