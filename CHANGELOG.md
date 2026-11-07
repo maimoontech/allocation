@@ -1,5 +1,25 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-07 — Changed: height is entered in feet and inches
+
+Tab 6 asks for height as **feet and inches** instead of a single centimetre box, and shows
+the centimetre value it will save underneath.
+
+- **Stored as centimetres still.** BMI is a generated column computed from `height_cm`;
+  changing the stored unit would mean rewriting that expression and migrating every row to
+  record the same measurement differently. Feet and inches are how it is asked, centimetres
+  how it is kept. No schema change, no migration.
+- **Inches are not whole numbers.** 174 cm is 5 ft 8.5 in. Rounding it to 5 ft 9 would move a
+  stored height by 1.26 cm every time a member opened the tab and saved anything at all —
+  so the half inch is kept, and a round-trip test holds it to under 0.1 cm.
+- 12 inches carries into the next foot, or 182.8 cm would display as "5 ft 12 in".
+- The two boxes keep their own typed state, so entering feet before inches does not renumber
+  the other box, and clearing one does not wipe both.
+- This also closes the unit confusion behind yesterday's outage from the other side: a single
+  "Height (cm)" field invited 1.75, whereas 5 and 9 cannot be mistaken for anything else.
+- FR-063b added.
+
+
 ## 2026-11-07 — Fixed: the server would not start — "Out of range value for column 'bmi'"
 
 A member had typed their height in **metres** — 1.75 rather than 175. Nothing refused it:

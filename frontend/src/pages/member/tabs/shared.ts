@@ -89,6 +89,52 @@ export function toNullableNumber(raw: string): number | null {
  * null on non-positive input, matching the generated column exactly.
  */
 export const PLAUSIBLE_HEIGHT_CM = { min: 50, max: 300 };
+
+const CM_PER_INCH = 2.54;
+
+/**
+ * Feet and inches to centimetres, which is what is stored (FR-063b).
+ *
+ * The COLUMN stays `height_cm` deliberately. BMI is a generated column computed from it, so
+ * changing the unit in the database would mean rewriting that expression and migrating every
+ * existing row — all to store the same measurement differently. Feet and inches are how the
+ * member is asked; centimetres are how it is kept.
+ *
+ * Inches are not restricted to whole numbers. 174 cm is 5 ft 8.5 in, and forcing it to 5 ft 9
+ * would quietly change a stored height by more than a centimetre every time a member opened
+ * the tab and saved anything at all.
+ */
+export function feetInchesToCm(feet: number | null, inches: number | null): number | null {
+  if (feet == null && inches == null) return null;
+  const ft = Number(feet ?? 0);
+  const inch = Number(inches ?? 0);
+  if (!Number.isFinite(ft) || !Number.isFinite(inch)) return null;
+  const total = ft * 12 + inch;
+  if (total <= 0) return null;
+  return Math.round(total * CM_PER_INCH * 100) / 100;
+}
+
+/**
+ * Centimetres back to feet and inches, for display.
+ *
+ * Inches are rounded to one decimal, and carry into feet when that rounding reaches 12 —
+ * without the carry, 182.8 cm would render as "5 ft 12 in".
+ */
+export function cmToFeetInches(
+  cm: number | null
+): { feet: number | null; inches: number | null } {
+  if (cm == null || !Number.isFinite(Number(cm)) || Number(cm) <= 0) {
+    return { feet: null, inches: null };
+  }
+  const totalInches = Number(cm) / CM_PER_INCH;
+  let feet = Math.floor(totalInches / 12);
+  let inches = Math.round((totalInches - feet * 12) * 10) / 10;
+  if (inches >= 12) {
+    feet += 1;
+    inches = 0;
+  }
+  return { feet, inches };
+}
 export const PLAUSIBLE_WEIGHT_KG = { min: 2, max: 500 };
 
 export function computeBmi(heightCm: number | null, weightKg: number | null): number | null {

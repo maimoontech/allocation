@@ -1,10 +1,17 @@
+import { useState } from "react";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { DatePicker } from "../../../components/ui/DatePicker";
 import { YesNoField } from "../../../components/ui/YesNoField";
 import { todayIso } from "../../../utils/dates";
 import { BmiMeter } from "./BmiMeter";
-import { computeBmi, enumOptions, toNullableNumber } from "./shared";
+import {
+  cmToFeetInches,
+  computeBmi,
+  enumOptions,
+  feetInchesToCm,
+  toNullableNumber
+} from "./shared";
 import type { TabProps } from "./shared";
 
 /** FR-061. A fixed medical standard, so these are hard-coded rather than a lookup. */
@@ -24,6 +31,40 @@ const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const
  */
 export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
   const isDonor = value.is_regular_donor === true;
+
+  /**
+   * FR-063b. Height is ASKED in feet and inches and STORED in centimetres.
+   *
+   * The two boxes need their own state, because a half-typed height is not yet a height:
+   * deriving them from `height_cm` alone would renumber the inches box the moment the feet
+   * box changed, and clearing feet would wipe inches. So the typed text is kept here and
+   * only turned into centimetres on the way out.
+   *
+   * The entry is remembered WITH the centimetre value it produced. When `height_cm` changes
+   * from anywhere else — the profile loading, Discard, an administrator's copy of this form
+   * — it no longer matches and the stored value takes over, which is what keeps the boxes
+   * honest without a second effect to synchronise them.
+   */
+  const [entry, setEntry] = useState<{ cm: number | null; feet: string; inches: string } | null>(
+    null
+  );
+
+  const derived = cmToFeetInches(value.height_cm);
+  const height =
+    entry && entry.cm === value.height_cm
+      ? entry
+      : {
+          cm: value.height_cm,
+          feet: derived.feet == null ? "" : String(derived.feet),
+          inches: derived.inches == null ? "" : String(derived.inches)
+        };
+
+  function onHeightPart(part: "feet" | "inches", raw: string) {
+    const next = { ...height, [part]: raw };
+    const cm = feetInchesToCm(toNullableNumber(next.feet), toNullableNumber(next.inches));
+    setEntry({ cm, feet: next.feet, inches: next.inches });
+    onChange("height_cm", cm);
+  }
 
   // Live figure, for display between keystroke and save. The stored one is authoritative.
   const liveBmi = computeBmi(value.height_cm, value.weight_kg);
@@ -90,24 +131,49 @@ export function Tab06Health({ value, errorFor, onChange, disabled }: TabProps) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         {/*
-          FR-063: the unit is part of the label, so there is no ambiguity about what to type.
-          The bounds match the server's, and they are not decoration: `min={1}` let a member
-          enter 1.75 — their height in METRES — which the server then stored and which made
-          the generated BMI overflow months later.
+          FR-063b. Two boxes, and the centimetres shown beneath them.
+          Asking for a single number in centimetres is what let a member enter 1.75 — their
+          height in metres — which stored happily and overflowed the generated BMI months
+          later. Feet and inches have no unit to confuse: 5 and 9 cannot be mistaken for
+          anything else, and the readout shows exactly what will be saved.
         */}
-        <Input
-          label="Height (cm)"
-          type="number"
-          inputMode="decimal"
-          min={50}
-          max={300}
-          step={0.1}
-          helperText="In centimetres, e.g. 175."
-          value={value.height_cm == null ? "" : String(value.height_cm)}
-          onChange={(e) => onChange("height_cm", toNullableNumber(e.target.value))}
-          error={errorFor("height_cm")}
-          disabled={disabled}
-        />
+        <div>
+          <div className="mb-1 text-sm font-semibold">Height</div>
+          <div className="flex gap-2">
+            <Input
+              aria-label="Height in feet"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={9}
+              step={1}
+              placeholder="ft"
+              value={height.feet}
+              onChange={(e) => onHeightPart("feet", e.target.value)}
+              disabled={disabled}
+            />
+            <Input
+              aria-label="Height in inches"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={11.9}
+              step={0.5}
+              placeholder="in"
+              value={height.inches}
+              onChange={(e) => onHeightPart("inches", e.target.value)}
+              disabled={disabled}
+            />
+          </div>
+          <div className="mt-1 text-xs text-textMuted">
+            {value.height_cm == null
+              ? "Feet and inches, e.g. 5 ft 9 in."
+              : `Saved as ${value.height_cm} cm.`}
+          </div>
+          {errorFor("height_cm") ? (
+            <div className="mt-1 text-xs text-danger">{errorFor("height_cm")}</div>
+          ) : null}
+        </div>
 
         <Input
           label="Weight (kg)"

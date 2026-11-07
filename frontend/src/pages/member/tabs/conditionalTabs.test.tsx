@@ -211,12 +211,77 @@ describe("Tab 6 — Health & Fitness", () => {
     expect(bmi.value).toBe("");
     expect(bmi).toHaveAttribute("readonly");
 
-    fireEvent.change(screen.getByLabelText(/^Height \(cm\)/), { target: { value: "170" } });
+    // Height is asked in feet and inches now (FR-063b). 5 ft 7 in = 170.18 cm.
+    fireEvent.change(screen.getByLabelText("Height in feet"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Height in inches"), { target: { value: "7" } });
     expect((screen.getByLabelText(/^BMI/) as HTMLInputElement).value).toBe("");
 
     fireEvent.change(screen.getByLabelText(/^Weight \(kg\)/), { target: { value: "70" } });
-    // 70 / 1.70^2 = 24.22
-    expect((screen.getByLabelText(/^BMI/) as HTMLInputElement).value).toBe("24.22");
+    // 70 / 1.7018^2 = 24.17
+    expect((screen.getByLabelText(/^BMI/) as HTMLInputElement).value).toBe("24.17");
+  });
+
+  /**
+   * FR-063b — height is asked in feet and inches and stored in centimetres.
+   *
+   * The unit confusion is the whole reason: a single "Height (cm)" box let a member type
+   * 1.75, their height in metres, which stored happily and overflowed the generated BMI
+   * months later. 5 and 9 cannot be mistaken for anything else.
+   */
+  describe("height in feet and inches", () => {
+    it("stores centimetres from the two boxes", () => {
+      const state = renderTab(Tab06Health, {});
+
+      fireEvent.change(screen.getByLabelText("Height in feet"), { target: { value: "5" } });
+      fireEvent.change(screen.getByLabelText("Height in inches"), { target: { value: "9" } });
+
+      // (5*12 + 9) * 2.54 = 175.26
+      expect(state.value.height_cm).toBeCloseTo(175.26, 2);
+    });
+
+    it("shows an existing centimetre height back as feet and inches", () => {
+      renderTab(Tab06Health, { height_cm: 175.26 });
+
+      expect((screen.getByLabelText("Height in feet") as HTMLInputElement).value).toBe("5");
+      expect((screen.getByLabelText("Height in inches") as HTMLInputElement).value).toBe("9");
+    });
+
+    /** 174 cm is 5 ft 8.5 in. Rounding it to 5 ft 9 would move a stored height by 1.26 cm. */
+    it("keeps the half inch rather than rounding a stored height", () => {
+      renderTab(Tab06Health, { height_cm: 174 });
+
+      expect((screen.getByLabelText("Height in inches") as HTMLInputElement).value).toBe("8.5");
+    });
+
+    it("says what will be saved, in centimetres", () => {
+      renderTab(Tab06Health, { height_cm: 175.26 });
+
+      expect(screen.getByText(/Saved as 175.26 cm/)).toBeInTheDocument();
+    });
+
+    it("lets feet be entered before inches without losing either", () => {
+      const state = renderTab(Tab06Health, {});
+
+      fireEvent.change(screen.getByLabelText("Height in feet"), { target: { value: "6" } });
+      // 6 ft alone is already a height.
+      expect(state.value.height_cm).toBeCloseTo(182.88, 2);
+      expect((screen.getByLabelText("Height in feet") as HTMLInputElement).value).toBe("6");
+
+      fireEvent.change(screen.getByLabelText("Height in inches"), { target: { value: "2" } });
+      expect(state.value.height_cm).toBeCloseTo(187.96, 2);
+      // The feet box must still read 6 — deriving it from the new centimetres would be the
+      // bug this local state exists to prevent.
+      expect((screen.getByLabelText("Height in feet") as HTMLInputElement).value).toBe("6");
+    });
+
+    it("clears the height when both boxes are emptied", () => {
+      const state = renderTab(Tab06Health, { height_cm: 175.26 });
+
+      fireEvent.change(screen.getByLabelText("Height in feet"), { target: { value: "" } });
+      fireEvent.change(screen.getByLabelText("Height in inches"), { target: { value: "" } });
+
+      expect(state.value.height_cm).toBeNull();
+    });
   });
 });
 
