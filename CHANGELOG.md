@@ -1,5 +1,26 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-08 — Added: two Idarat al Zakereen fields on Tab 3
+
+- **Registered with Idarat al Zakereen** — Yes/No.
+- **When were the recordings of 5 Kalam uploaded on the Idarat al Zakereen website?** — free
+  text, 150 characters, optional.
+
+Two choices worth stating:
+
+- **Radios, not a checkbox.** You asked for a checkbox, and a checkbox cannot express "not
+  answered yet" — it would read as "No" from the moment the form opened, and nobody could
+  tell a member who answered no from one who has not been asked. Tab 11 settled the same
+  question the same way, and the column is nullable so the distinction survives a save.
+  Say the word if you want a true checkbox and I will change it.
+- **Free text, not a date.** The question asks *when*, but the answer a member actually holds
+  is often "last Ashara" or "not yet". A date control would reject the honest answer.
+
+Both columns arrive via `ensureSchema()` at boot and via a new section 4e of
+`MEMBERSHIP_LIVE_INSTALL.sql`, ordered after the BMI repair that makes any `ALTER` on
+`member_profiles` safe. FR-049b and FR-049c added.
+
+
 ## 2026-11-07 — Changed: height is entered in feet and inches
 
 Tab 6 asks for height as **feet and inches** instead of a single centimetre box, and shows

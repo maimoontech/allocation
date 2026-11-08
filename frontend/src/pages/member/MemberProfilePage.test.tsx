@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MemberProfilePage } from "./MemberProfilePage";
 import { renderWithProviders } from "../../test-utils";
 
@@ -43,6 +43,8 @@ const PROFILE = {
   party_id: null,
   hizb_role: null,
   zikr_e_hussain_since_year: null,
+  registered_with_idaratuz_zakereen: null,
+  five_kalam_uploaded_when: null,
   bmi: null,
   titles: [],
   sharafs: [],
@@ -442,6 +444,67 @@ describe("MemberProfilePage", () => {
 
       await waitFor(() => expect(saveBodies).toHaveLength(1));
       expect(saveBodies[0]).toMatchObject({ zikr_e_hussain_since_year: 1420 });
+    });
+  });
+
+  /**
+   * FR-049b and FR-049c — the two Hizb fields added on 2026-11-08.
+   *
+   * The registration question is RADIOS, not a checkbox. A checkbox has no third state, so
+   * an unanswered question would read as "No" from the moment the form opened and nobody
+   * could tell a member who had answered no from one who had not answered at all. Tab 11
+   * already settled that for the same reason, and this keeps the two consistent.
+   */
+  describe("Tab 3 — Idarat registration and the 5 Kalam upload", () => {
+    async function openHizb() {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+    }
+
+    it("asks about Idarat registration as Yes/No with neither chosen at first", async () => {
+      await openHizb();
+
+      const group = screen.getByRole("group", { name: /Registered with Idarat al Zakereen/ });
+      const yes = within(group).getByLabelText("Yes") as HTMLInputElement;
+      const no = within(group).getByLabelText("No") as HTMLInputElement;
+
+      expect(yes.checked).toBe(false);
+      expect(no.checked).toBe(false);
+    });
+
+    it("saves Yes as true and No as false", async () => {
+      await openHizb();
+
+      const group = screen.getByRole("group", { name: /Registered with Idarat al Zakereen/ });
+      fireEvent.click(within(group).getByLabelText("Yes"));
+      fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+      await waitFor(() => expect(saveBodies).toHaveLength(1));
+      expect(saveBodies[0]).toMatchObject({ registered_with_idaratuz_zakereen: true });
+    });
+
+    it("offers the 5 Kalam question as free text, not a date", async () => {
+      await openHizb();
+
+      const field = screen.getByLabelText(/^When were the recordings of 5 Kalam/);
+      expect(field.tagName).toBe("INPUT");
+      expect(field).not.toHaveAttribute("type", "date");
+    });
+
+    it("saves whatever the member writes about the 5 Kalam recordings", async () => {
+      await openHizb();
+
+      fireEvent.change(screen.getByLabelText(/^When were the recordings of 5 Kalam/), {
+        target: { value: "Ashara 1446, before Muharram" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+      await waitFor(() => expect(saveBodies).toHaveLength(1));
+      expect(saveBodies[0]).toMatchObject({
+        five_kalam_uploaded_when: "Ashara 1446, before Muharram"
+      });
     });
   });
 

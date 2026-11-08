@@ -214,6 +214,43 @@ describe("member profile", () => {
       expect(read.body.data.mohallah_id).toBe(seeded.mohallahId);
     });
 
+    /**
+     * FR-049b, FR-049c — the two Hizb fields added on 2026-11-08.
+     *
+     * The boolean is NULLABLE, and that is the point of the third test: "not answered" has
+     * to survive a round trip as null rather than arriving back as false, or the Yes/No
+     * control cannot show an unanswered question and the member is credited with an answer
+     * they never gave.
+     */
+    it("stores and returns the Idarat registration and the 5 Kalam note", async () => {
+      const res = await putProfile(token, {
+        registered_with_idaratuz_zakereen: true,
+        five_kalam_uploaded_when: "Ashara 1446"
+      });
+      expect(res.status).toBe(200);
+
+      const read = await getProfile(token);
+      expect(read.body.data.registered_with_idaratuz_zakereen).toBe(true);
+      expect(read.body.data.five_kalam_uploaded_when).toBe("Ashara 1446");
+    });
+
+    it("keeps No distinct from Yes", async () => {
+      await putProfile(token, { registered_with_idaratuz_zakereen: false });
+      expect((await getProfile(token)).body.data.registered_with_idaratuz_zakereen).toBe(false);
+    });
+
+    it("keeps unanswered as null, not false", async () => {
+      await putProfile(token, { registered_with_idaratuz_zakereen: true });
+      await putProfile(token, { registered_with_idaratuz_zakereen: null });
+
+      expect((await getProfile(token)).body.data.registered_with_idaratuz_zakereen).toBeNull();
+    });
+
+    it("refuses a 5 Kalam note longer than the column holds", async () => {
+      const res = await putProfile(token, { five_kalam_uploaded_when: "x".repeat(151) });
+      expect(res.status).toBe(400);
+    });
+
     it("refuses a Mohallah that does not exist", async () => {
       const res = await putProfile(token, { mohallah_id: 99999999 });
       expect(res.status).toBe(400);

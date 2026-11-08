@@ -1,5 +1,7 @@
 import { useMemo } from "react";
+import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
+import { YesNoField } from "../../../components/ui/YesNoField";
 import { lookupOptions, toNullableId, yearOptions } from "./shared";
 import type { TabProps } from "./shared";
 
@@ -154,6 +156,33 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
           disabled={disabled}
         />
       </div>
+
+      {/*
+        FR-049b. Radios, not a checkbox, for the reason Tab 11 already records: a checkbox
+        has no third state, so an unanswered question would read as "No" from the moment the
+        form opened and nobody could tell the difference.
+      */}
+      <YesNoField
+        label="Registered with Idarat al Zakereen"
+        name="registered_with_idaratuz_zakereen"
+        value={value.registered_with_idaratuz_zakereen}
+        onChange={(next) => onChange("registered_with_idaratuz_zakereen", next)}
+        error={errorFor("registered_with_idaratuz_zakereen")}
+        disabled={disabled}
+      />
+
+      {/*
+        FR-049c. Free text, not a date picker. The question asks when, but the honest answer
+        is often "last Ashara" or "not yet" — a date field would force a precision the member
+        does not have and would reject the answer they actually hold.
+      */}
+      <Input
+        label="When were the recordings of 5 Kalam uploaded on the Idarat al Zakereen website?"
+        value={value.five_kalam_uploaded_when ?? ""}
+        onChange={(e) => onChange("five_kalam_uploaded_when", e.target.value)}
+        error={errorFor("five_kalam_uploaded_when")}
+        disabled={disabled}
+      />
 
       {/* Spec assumption 16: a member need not belong to a Party, so this cannot block a save. */}
       <div className="text-xs text-textMuted">

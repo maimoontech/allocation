@@ -50,6 +50,38 @@ export async function ensureSchema() {
   await ensureAsharaVenueColumn();
   await ensureProfileEditAudit();
   await ensurePersonalTabColumns();
+  await ensureHizbTabColumns();
+}
+
+/**
+ * Tab 3's Idarat registration and the 5 Kalam upload note (FR-049b, FR-049c).
+ *
+ * Here for the same reason as the rest of this file: the backend has shipped ahead of its
+ * migration before, and a form field whose column does not exist fails on save.
+ */
+async function ensureHizbTabColumns() {
+  const columns: Array<[string, string]> = [
+    [
+      "registered_with_idaratuz_zakereen",
+      "ALTER TABLE member_profiles ADD COLUMN registered_with_idaratuz_zakereen TINYINT(1) NULL AFTER zikr_e_hussain_since_year"
+    ],
+    [
+      "five_kalam_uploaded_when",
+      "ALTER TABLE member_profiles ADD COLUMN five_kalam_uploaded_when VARCHAR(150) NULL AFTER registered_with_idaratuz_zakereen"
+    ]
+  ];
+
+  for (const [column, alter] of columns) {
+    const [rows] = await pool.query<any[]>(
+      `SELECT COUNT(*) AS cnt
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'member_profiles'
+         AND COLUMN_NAME = :column`,
+      { column }
+    );
+    if (Number(rows[0]?.cnt ?? 0) === 0) await pool.query(alter);
+  }
 }
 
 /**

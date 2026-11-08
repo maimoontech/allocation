@@ -43,6 +43,8 @@ const PROFILE = {
   party_id: null,
   hizb_role: null,
   zikr_e_hussain_since_year: null,
+  registered_with_idaratuz_zakereen: null,
+  five_kalam_uploaded_when: null,
   blood_group: "AB-",
   bmi: null,
   titles: [],

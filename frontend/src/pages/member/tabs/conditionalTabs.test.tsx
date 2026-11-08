@@ -52,6 +52,8 @@ const BASE: MemberProfile = {
   party_id: null,
   hizb_role: null,
   zikr_e_hussain_since_year: null,
+  registered_with_idaratuz_zakereen: null,
+  five_kalam_uploaded_when: null,
   occupation_type: null,
   organisation_name: null,
   designation: null,

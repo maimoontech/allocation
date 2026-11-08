@@ -3,7 +3,7 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 b0631b1386a47ae4)
+--   Sources : membership_schema.sql (sha256 278f1baaa2ad2dba)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
@@ -491,6 +491,8 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   party_id INT UNSIGNED NULL COMMENT 'FR-048; must belong to zone_id, checked in the application',
   hizb_role ENUM('Leader','Side Lead','Member') NULL COMMENT 'FR-049',
   zikr_e_hussain_since_year SMALLINT UNSIGNED NULL COMMENT 'FR-049a: Hijri year, 1375 AH to the current Hijri year. Floor is lower than the other profile years on purpose - this one reaches back further than a title or a sharaf.',
+  registered_with_idaratuz_zakereen TINYINT(1) NULL COMMENT 'FR-049b: Yes/No. NULLABLE, so "not answered yet" is distinct from "no" - a checkbox would collapse the two.',
+  five_kalam_uploaded_when VARCHAR(150) NULL COMMENT 'FR-049c: free text. The question asks WHEN, but the answer is whatever the member can recall, which is not reliably a date.',
 
   -- Tab 4: Occupation
   occupation_type ENUM('Job','Business') NULL,
@@ -1097,6 +1099,39 @@ DELIMITER ;
 
 CALL mm_backfill_personal_2026_11_07();
 DROP PROCEDURE mm_backfill_personal_2026_11_07;
+
+
+-- ----------------------------------------------------------------------------
+-- 4e. Backfill: the two Hizb columns added on 2026-11-08
+--
+--     Same reason as 3b, 4b, 4c and 4d. Production already has member_profiles,
+--     so CREATE TABLE IF NOT EXISTS skips it and neither column would arrive.
+--     Runs after 4b2, which is what makes any ALTER on this table safe at all.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_backfill_hizb_2026_11_08;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_hizb_2026_11_08()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'registered_with_idaratuz_zakereen') THEN
+    ALTER TABLE member_profiles
+      ADD COLUMN registered_with_idaratuz_zakereen TINYINT(1) NULL AFTER zikr_e_hussain_since_year;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'five_kalam_uploaded_when') THEN
+    ALTER TABLE member_profiles
+      ADD COLUMN five_kalam_uploaded_when VARCHAR(150) NULL AFTER registered_with_idaratuz_zakereen;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_hizb_2026_11_08();
+DROP PROCEDURE mm_backfill_hizb_2026_11_08;
 
 
 -- ----------------------------------------------------------------------------

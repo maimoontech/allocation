@@ -137,6 +137,10 @@ export type MemberProfile = {
   hizb_role: string | null;
   /** FR-049a. Hijri, 1375 AH to the current Hijri year — a lower floor than the other years. */
   zikr_e_hussain_since_year: number | null;
+  /** FR-049b. Nullable on purpose: "not answered yet" is not the same as "no". */
+  registered_with_idaratuz_zakereen: boolean | null;
+  /** FR-049c. Free text — the question asks when, but the answer is whatever they recall. */
+  five_kalam_uploaded_when: string | null;
 
   occupation_type: string | null;
   organisation_name: string | null;

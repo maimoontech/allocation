@@ -53,6 +53,7 @@ export type SaveResult =
 const TEXT_COLUMNS = [
   "name",
   "nationality",
+  "five_kalam_uploaded_when",
   "father_name",
   "surname",
   "residence_address",
@@ -90,7 +91,8 @@ const BOOLEAN_COLUMNS = [
   "is_regular_donor",
   "attends_karachi_tamreen",
   "takes_ustad_assistance",
-  "uses_idaratuz_zakereen_books"
+  "uses_idaratuz_zakereen_books",
+  "registered_with_idaratuz_zakereen"
 ] as const;
 
 const DECIMAL_COLUMNS = ["height_cm", "weight_kg"] as const;
@@ -108,6 +110,7 @@ const DECIMAL_COLUMNS = ["height_cm", "weight_kg"] as const;
 const MAX_LENGTHS: Record<string, number> = {
   name: 100,
   nationality: 100,
+  five_kalam_uploaded_when: 150,
   father_name: 100,
   surname: 100,
   residence_address: 65535,
@@ -189,6 +192,7 @@ const COLUMN_TAB: Record<string, number> = {
   mobile_no_1: 1, mobile_no_2: 1, whatsapp_no_1: 1, whatsapp_no_2: 1, email: 1,
   prefix_year: 2,
   zone_id: 3, party_id: 3, hizb_role: 3, zikr_e_hussain_since_year: 3,
+  registered_with_idaratuz_zakereen: 3, five_kalam_uploaded_when: 3,
   occupation_type: 4, organisation_name: 4, designation: 4, occupation_since_year: 4,
   work_address: 4, work_phone_no: 4,
   education_level: 5, major_subjects: 5, education_status: 5, has_hifz_sanad: 5,
