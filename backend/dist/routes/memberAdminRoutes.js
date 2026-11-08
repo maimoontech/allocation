@@ -360,6 +360,86 @@ exports.memberAdminRoutes.put("/:id/profile", (0, auth_1.requireRole)(["admin"])
     }
 });
 /**
+ * An administrator resets one member's password. ADMIN ONLY.
+ *
+ * FR-005a, authorised 2026-11-08. FR-005 said a member who has chosen their own password
+ * keeps it, and the activate/deactivate route still honours that — it is amended here only
+ * for this deliberate, audited action, which exists because a member who cannot sign in has
+ * no other way back in.
+ *
+ * FOUR THINGS HAPPEN TOGETHER, in one transaction, and each matters:
+ *
+ *   1. The new hash, at bcrypt cost 10, matching every other password this system stores.
+ *   2. `must_change_password = 1`. The administrator now knows this password, so it is a
+ *      one-time credential exactly like a provisioned one (FR-004).
+ *   3. `password_changed_at = NOW()` — NOT NULL, which is what the create route uses.
+ *      This is the subtle one. `requireMember` compares the token's stamp to this column
+ *      for EQUALITY, so writing NULL would leave every token minted while it was already
+ *      NULL still valid: whoever is signed in as that member stays signed in, through the
+ *      very reset meant to lock them out. NOW() cannot collide with an older token.
+ *   4. Refresh tokens revoked. Access tokens are stateless and die by (3); refresh tokens
+ *      are rows and would otherwise mint fresh ones straight past it.
+ *
+ * Failed login attempts are cleared too. A locked-out member is the commonest reason to
+ * reset at all, and leaving the lockout in place would mean the reset appeared to work and
+ * changed nothing they could observe.
+ *
+ * The response carries no password material (FR-015). The administrator already has the
+ * value — they chose it — and echoing it back only puts it somewhere else.
+ */
+exports.memberAdminRoutes.post("/:id/reset-password", (0, auth_1.requireRole)(["admin"]), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0)
+        return (0, response_1.fail)(res, "Invalid request", 400);
+    const body = req.body ?? {};
+    const password = typeof body.password === "string" ? body.password : "";
+    const policyError = (0, authService_1.validateMemberPassword)(password);
+    if (policyError)
+        return (0, response_1.fail)(res, policyError, 400);
+    try {
+        const [rows] = await pool_1.pool.query("SELECT id, its_no, member_name FROM member_accounts WHERE id = :id LIMIT 1", { id });
+        const account = rows[0];
+        if (!account)
+            return (0, response_1.fail)(res, "Member not found", 404);
+        const password_hash = await bcryptjs_1.default.hash(password, 10);
+        const connection = await pool_1.pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            await connection.query(`UPDATE member_accounts
+         SET password_hash = :password_hash,
+             must_change_password = 1,
+             password_changed_at = NOW()
+         WHERE id = :id`, { password_hash, id });
+            await connection.query(`UPDATE refresh_tokens
+         SET revoked_at = NOW()
+         WHERE user_role = 'member' AND user_id = :id AND revoked_at IS NULL`, { id });
+            // The lockout is counted by ITS number, so it is cleared by ITS number.
+            await connection.query("DELETE FROM member_login_attempts WHERE its_no = :its_no", {
+                its_no: account.its_no
+            });
+            await connection.query(`INSERT INTO member_password_resets (member_account_id, reset_by_admin_id)
+         VALUES (:member_account_id, :admin_id)`, { member_account_id: id, admin_id: req.user.id });
+            await connection.commit();
+        }
+        catch (error) {
+            await connection.rollback();
+            throw error;
+        }
+        finally {
+            connection.release();
+        }
+        return (0, response_1.ok)(res, {
+            id: Number(account.id),
+            its_no: account.its_no,
+            member_name: account.member_name,
+            must_change_password: true
+        }, "Password reset. The member must change it at their next sign-in.");
+    }
+    catch {
+        return (0, response_1.fail)(res, "Failed to reset the password", 500);
+    }
+});
+/**
  * Activates or deactivates one account.
  *
  * `is_active` is the ONLY field this accepts. A password cannot be changed here, so a member

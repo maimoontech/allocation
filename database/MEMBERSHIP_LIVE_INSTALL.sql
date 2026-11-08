@@ -3,13 +3,13 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 278f1baaa2ad2dba)
+--   Sources : membership_schema.sql (sha256 2ec25efd27bc6d53)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
 --
 -- WHAT THIS DOES
---   Creates 22 new tables and seeds 10 of the 11 lookup lists with reviewed values.
+--   Creates 23 new tables and seeds 10 of the 11 lookup lists with reviewed values.
 --   The eleventh, aqa_moula_asharas, ships EMPTY on purpose — an administrator enters
 --   its values through the Dropdown Lists panel.
 --
@@ -850,6 +850,25 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+-- FR-005a. Who reset a member's password, for whom, and when.
+--
+-- No password material, obviously, and none is needed: the question an audit of
+-- this has to answer is "who gave someone else access to this account", and the
+-- admin id and the timestamp answer it. A reset is rarer and more serious than a
+-- profile edit, which is why it is its own table rather than a row type in the
+-- other one.
+CREATE TABLE IF NOT EXISTS member_password_resets (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  member_account_id INT UNSIGNED NOT NULL,
+  reset_by_admin_id INT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_member_password_resets_member (member_account_id, created_at),
+  CONSTRAINT fk_member_password_resets_member_account_id
+    FOREIGN KEY (member_account_id) REFERENCES member_accounts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 -- FR-047a. Who changed a member's profile, when, and WHICH fields.
 --
 -- Field NAMES only. The old and new VALUES are deliberately not stored: Tab 6 holds
@@ -1137,7 +1156,7 @@ DROP PROCEDURE mm_backfill_hizb_2026_11_08;
 -- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 22 new tables, and every existing count unchanged.
+--    Expect 23 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -1149,9 +1168,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
-    'aqa_moula_asharas','member_profile_edits'
+    'aqa_moula_asharas','member_profile_edits','member_password_resets'
   );
--- Expected: 22
+-- Expected: 23
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION
@@ -1615,9 +1634,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
-    'aqa_moula_asharas','member_profile_edits'
+    'aqa_moula_asharas','member_profile_edits','member_password_resets'
   );
--- Expected: 22
+-- Expected: 23
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will

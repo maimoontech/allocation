@@ -1,5 +1,35 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-08 — Added: an administrator can reset a member's password
+
+**Reset password** against each row on Admin → Members, opening a panel that names the
+member. Administrators only — the server refuses a Zonal Head, so the control is not shown
+to one.
+
+A reset does five things in one transaction, and the third is the one that matters:
+
+1. Stores the new hash under the same policy as a member's own password change.
+2. Sets `must_change_password` — the administrator now knows this value, so it is a
+   one-time credential exactly like a provisioned one.
+3. Sets `password_changed_at` to **now, and not NULL**. `requireMember` compares that column
+   to the token's stamp for *equality*, so writing NULL — which is what the create route
+   does — would have left every token minted while it was already NULL still valid. Whoever
+   was signed in as that member would have stayed signed in, through the very reset meant to
+   lock them out.
+4. Revokes the member's refresh tokens. Access tokens are stateless and die by (3); refresh
+   tokens are rows, and would otherwise mint new ones straight past it.
+5. Clears their failed sign-in attempts. A lockout is the commonest reason to reset, and
+   leaving it would mean the reset appeared to work and changed nothing the member could see.
+
+- The panel warns that the member will be signed out everywhere, because an administrator
+  who does not know that will not understand why the person they were helping dropped off
+  the call.
+- `member_password_resets` records who reset it, for whom, and when. No password material —
+  the question an audit has to answer is who gave somebody else access to this account.
+- The response echoes nothing of the password (FR-015). The administrator already has it.
+- FR-005a added, narrowing FR-005.
+
+
 ## 2026-11-08 — Added: two Idarat al Zakereen fields on Tab 3
 
 - **Registered with Idarat al Zakereen** — Yes/No.

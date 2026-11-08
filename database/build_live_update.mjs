@@ -138,9 +138,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
-    'aqa_moula_asharas','member_profile_edits'
+    'aqa_moula_asharas','member_profile_edits','member_password_resets'
   );
--- Expected: 22
+-- Expected: 23
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will
@@ -237,7 +237,7 @@ function build() {
     "--   Verify  : node database/build_live_update.mjs --check",
     "--",
     "-- WHAT THIS DOES",
-    "--   Creates 22 new tables and seeds 10 of the 11 lookup lists with reviewed values.",
+    "--   Creates 23 new tables and seeds 10 of the 11 lookup lists with reviewed values.",
     "--   The eleventh, aqa_moula_asharas, ships EMPTY on purpose — an administrator enters",
     "--   its values through the Dropdown Lists panel.",
     "--",

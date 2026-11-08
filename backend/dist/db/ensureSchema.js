@@ -40,6 +40,23 @@ async function ensureSchema() {
     await ensureProfileEditAudit();
     await ensurePersonalTabColumns();
     await ensureHizbTabColumns();
+    await ensurePasswordResetAudit();
+}
+/**
+ * FR-005a. Who reset a member's password, for whom, and when.
+ *
+ * No password material, and none is needed: the question this has to answer is "who gave
+ * somebody else access to this account", which the admin id and the timestamp answer.
+ */
+async function ensurePasswordResetAudit() {
+    await pool_1.pool.query(`CREATE TABLE IF NOT EXISTS member_password_resets (
+       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+       member_account_id INT UNSIGNED NOT NULL,
+       reset_by_admin_id INT UNSIGNED NOT NULL,
+       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       PRIMARY KEY (id),
+       KEY idx_member_password_resets_member (member_account_id, created_at)
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
 }
 /**
  * Tab 3's Idarat registration and the 5 Kalam upload note (FR-049b, FR-049c).

@@ -9,6 +9,7 @@ import {
   useCreateMemberAccountMutation,
   useGetMemberAccountsQuery,
   useGetMemberPhotoQuery,
+  useResetMemberPasswordMutation,
   useSetMemberActiveMutation,
   type CreatedMemberAccount,
   type MemberAccount
@@ -246,6 +247,102 @@ function AddMemberForm({
   );
 }
 
+/**
+ * Resets one member's password (FR-005a).
+ *
+ * A panel above the table rather than a control in the row. The row is narrow, and more
+ * importantly this is not a small action: it signs the member out everywhere, clears any
+ * lockout and forces a change at their next sign-in. Naming the member at the top of a
+ * panel makes it much harder to reset the wrong one than a button in the fifth column of
+ * row forty would.
+ *
+ * The password can be revealed, for the same reason the Add form allows it: the
+ * administrator has to read this value out to the member, and a typo they cannot see is a
+ * member who simply cannot sign in.
+ */
+function ResetPasswordPanel({
+  member,
+  onDone,
+  onClose
+}: {
+  member: MemberAccount;
+  onDone: (member: MemberAccount) => void;
+  onClose: () => void;
+}) {
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resetPassword, state] = useResetMemberPasswordMutation();
+
+  const name = memberFullName(member) || member.member_name || member.its_no;
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await resetPassword({ id: member.id, password }).unwrap();
+      setPassword("");
+      onDone(member);
+      onClose();
+    } catch (err: unknown) {
+      // Surfaced verbatim: the server names the rule that failed, and "could not reset"
+      // would throw that away.
+      const message = (err as { data?: { message?: string } } | undefined)?.data?.message;
+      setError(typeof message === "string" && message ? message : "Could not reset the password.");
+    }
+  }
+
+  return (
+    <Card>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div className="text-sm font-semibold">
+          Reset password for {name} ({member.its_no})
+        </div>
+
+        <div className="rounded-input border border-warning bg-warning/5 p-2 text-xs text-warning">
+          This signs the member out everywhere and clears any sign-in lockout. They will have
+          to change this password the next time they sign in, so tell it to them directly.
+        </div>
+
+        {error ? (
+          <div className="rounded-input border border-danger bg-danger/5 p-2 text-sm text-danger">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Input
+              label="New Password"
+              type={show ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              helperText={PASSWORD_RULE}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              className="mt-1 text-xs underline"
+              onClick={() => setShow((v) => !v)}
+            >
+              {show ? "Hide password" : "Show password"}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button type="submit" disabled={state.isLoading}>
+            {state.isLoading ? "Resetting..." : "Reset password"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={state.isLoading}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
 export function MembersPage() {
   const role = useAppSelector((s) => s.auth.user?.role);
   const isZonalHead = role === "zonal_head";
@@ -256,6 +353,8 @@ export function MembersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [created, setCreated] = useState<CreatedMemberAccount[]>([]);
+  const [resetTarget, setResetTarget] = useState<MemberAccount | null>(null);
+  const [resetDone, setResetDone] = useState<string | null>(null);
 
   const queryArg = useMemo(
     () => ({
@@ -298,6 +397,25 @@ export function MembersPage() {
           ) : null}
         </div>
       </div>
+
+      {resetTarget ? (
+        <ResetPasswordPanel
+          member={resetTarget}
+          onDone={(member) =>
+            setResetDone(
+              `${memberFullName(member) || member.member_name || member.its_no} (${member.its_no})`
+            )
+          }
+          onClose={() => setResetTarget(null)}
+        />
+      ) : null}
+
+      {resetDone ? (
+        <div className="rounded-input border border-primary bg-primary/5 p-3 text-sm">
+          Password reset for <span className="font-semibold">{resetDone}</span>. They must
+          change it at their next sign-in.
+        </div>
+      ) : null}
 
       {showAddForm ? (
         <AddMemberForm
@@ -442,6 +560,20 @@ export function MembersPage() {
                         >
                           View profile
                         </Link>
+                        {/* FR-005a. Administrators only — the server refuses a Zonal Head,
+                            and offering a button that gets refused is worse than no button. */}
+                        {!isZonalHead ? (
+                          <button
+                            type="button"
+                            className="whitespace-nowrap text-sm underline"
+                            onClick={() => {
+                              setResetDone(null);
+                              setResetTarget(member);
+                            }}
+                          >
+                            Reset password
+                          </button>
+                        ) : null}
                         <Button
                           variant={member.is_active ? "danger" : "primary"}
                           disabled={setActiveState.isLoading}

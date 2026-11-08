@@ -137,6 +137,36 @@ export const memberAdminApi = api.injectEndpoints({
       ]
     }),
 
+    /**
+     * An administrator resets a member's password (FR-005a).
+     *
+     * The server refuses a Zonal Head, signs the member out everywhere, clears any lockout,
+     * and records who did it. Nothing about the password comes back — the administrator
+     * already has the value they typed.
+     */
+    resetMemberPassword: builder.mutation<
+      { id: number; its_no: string; member_name: string | null; must_change_password: boolean },
+      { id: number; password: string }
+    >({
+      query: ({ id, password }) => ({
+        url: `/members/${id}/reset-password`,
+        method: "POST",
+        body: { password }
+      }),
+      transformResponse: (
+        res: ApiEnvelope<{
+          id: number;
+          its_no: string;
+          member_name: string | null;
+          must_change_password: boolean;
+        }>
+      ) => res.data,
+      invalidatesTags: (_r, _e, arg) => [
+        { type: "Members", id: arg.id },
+        { type: "Members", id: "LIST" }
+      ]
+    }),
+
     /** `is_active` is the only field the server accepts here. */    setMemberActive: builder.mutation<
       { id: number; is_active: boolean },
       { id: number; is_active: boolean }
@@ -169,6 +199,7 @@ export const {
   useGetAdminMemberProfileQuery,
   useSaveMemberProfileAsAdminMutation,
   useCreateMemberAccountMutation,
+  useResetMemberPasswordMutation,
   useSetMemberActiveMutation,
   useGetMemberPhotoQuery
 } = memberAdminApi;

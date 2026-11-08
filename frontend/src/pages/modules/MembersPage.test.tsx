@@ -82,11 +82,14 @@ let requested: string[] = [];
 let posted: any[] = [];
 /** Set by a test to make the next create fail with this status and message. */
 let createFailure: { status: number; message: string } | null = null;
+/** Set by a test to make the next password reset fail. */
+let resetFailure: { status: number; message: string } | null = null;
 
 beforeEach(() => {
   requested = [];
   posted = [];
   createFailure = null;
+  resetFailure = null;
 
   Object.assign(URL, {
     createObjectURL: vi.fn(() => "blob:member-photo"),
@@ -105,6 +108,32 @@ beforeEach(() => {
           status: 200,
           headers: { "Content-Type": "image/png" }
         });
+      }
+
+      if (method === "POST" && url.includes("/reset-password")) {
+        const raw = input instanceof Request ? await input.clone().text() : String(init?.body ?? "{}");
+        posted.push({ resetUrl: url, ...JSON.parse(raw || "{}") });
+
+        if (resetFailure) {
+          return new Response(
+            JSON.stringify({ success: false, data: null, message: resetFailure.message }),
+            { status: resetFailure.status, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              id: 11,
+              its_no: "40480241",
+              member_name: "Husain",
+              must_change_password: true
+            },
+            message: "Password reset."
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
       }
 
       if (method === "POST" && url.includes("/members")) {
@@ -285,5 +314,105 @@ describe("MembersPage — adding a member", () => {
     expect(
       screen.queryByText(/A new account has no zone until the member chooses one/i)
     ).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * FR-005a — an administrator resets a member's password.
+ *
+ * The control is admin-only, which is the first test: the server refuses a Zonal Head, and
+ * a button that gets refused is worse than no button.
+ *
+ * The warning is not decoration either. A reset signs the member out everywhere and clears
+ * their lockout, and an administrator who does not know that will not understand why the
+ * member they were helping was suddenly logged out mid-call.
+ */
+describe("MembersPage — resetting a password", () => {
+  /**
+   * The row control and the panel's submit button share a name, deliberately — both say
+   * what they do. They are told apart by type, which is what a person does visually.
+   */
+  const submitReset = () =>
+    screen
+      .getAllByRole("button", { name: /^Reset password$/ })
+      .find((b) => (b as HTMLButtonElement).type === "submit") as HTMLButtonElement;
+
+  async function openReset(role: Role = "admin") {
+    renderWithProviders(<MembersPage />, { store: storeAs(role, 7) });
+    await waitFor(() => expect(screen.getByText("40480241")).toBeInTheDocument());
+    const buttons = screen.getAllByRole("button", { name: "Reset password" });
+    fireEvent.click(buttons[0]);
+    return screen.getByLabelText(/^New Password/) as HTMLInputElement;
+  }
+
+  it("offers the reset to an administrator", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin", 7) });
+    await waitFor(() => expect(screen.getByText("40480241")).toBeInTheDocument());
+
+    expect(screen.getAllByRole("button", { name: "Reset password" }).length).toBeGreaterThan(0);
+  });
+
+  it("does not offer it to a Zonal Head", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("zonal_head", 7) });
+    await waitFor(() => expect(screen.getByText("40480241")).toBeInTheDocument());
+
+    expect(screen.queryByRole("button", { name: "Reset password" })).not.toBeInTheDocument();
+  });
+
+  it("names the member being reset, so the wrong row cannot be picked silently", async () => {
+    await openReset();
+
+    expect(screen.getByText(/Reset password for .*40480241/)).toBeInTheDocument();
+  });
+
+  it("warns that the member will be signed out", async () => {
+    await openReset();
+
+    expect(screen.getByText(/signs the member out everywhere/i)).toBeInTheDocument();
+  });
+
+  it("posts the new password to that member's reset endpoint", async () => {
+    const field = await openReset();
+
+    fireEvent.change(field, { target: { value: "Tanzeem#2026" } });
+    fireEvent.click(submitReset());
+
+    await waitFor(() => expect(posted.some((p) => p.resetUrl)).toBe(true));
+    const sent = posted.find((p) => p.resetUrl);
+    expect(sent.resetUrl).toContain("/members/11/reset-password");
+    expect(sent.password).toBe("Tanzeem#2026");
+  });
+
+  it("confirms afterwards, and says the member must change it", async () => {
+    const field = await openReset();
+
+    fireEvent.change(field, { target: { value: "Tanzeem#2026" } });
+    fireEvent.click(submitReset());
+
+    await waitFor(() =>
+      expect(screen.getByText(/must\s+change it at their next sign-in/i)).toBeInTheDocument()
+    );
+  });
+
+  /** The server names the rule that failed; a generic message would throw that away. */
+  it("shows the server's reason verbatim when the reset is refused", async () => {
+    resetFailure = { status: 400, message: "Password must be at least 8 characters." };
+    const field = await openReset();
+
+    fireEvent.change(field, { target: { value: "short" } });
+    fireEvent.click(submitReset());
+
+    await waitFor(() =>
+      expect(screen.getByText("Password must be at least 8 characters.")).toBeInTheDocument()
+    );
+  });
+
+  it("can be abandoned without sending anything", async () => {
+    await openReset();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByLabelText(/^New Password/)).not.toBeInTheDocument();
+    expect(posted.some((p) => p.resetUrl)).toBe(false);
   });
 });

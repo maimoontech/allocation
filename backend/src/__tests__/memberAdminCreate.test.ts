@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import bcrypt from "bcryptjs";
 import { authRoutes } from "../routes/authRoutes";
 import { memberAdminRoutes } from "../routes/memberAdminRoutes";
 import { pool } from "../db/pool";
@@ -388,6 +389,157 @@ describe("zonal head scoping of member administration", () => {
       .send({ is_active: false });
 
     expect(res.status).toBe(200);
+  });
+
+  /**
+   * RESETTING A MEMBER'S PASSWORD (FR-005a)
+   *
+   * Authorised 2026-11-08. Administrators only; a Zonal Head is refused.
+   *
+   * The security-relevant half is not that the hash changes. It is that the member's
+   * existing sessions stop working. `requireMember` compares the token's `pwdAt` against
+   * `password_changed_at` for EQUALITY, so a reset writing NULL would leave every token
+   * minted while the column was already NULL still valid - the member stays signed in
+   * through the very reset meant to lock them out. Two tests below are that one point:
+   * the stamp is set, and the refresh tokens are revoked.
+   */
+  describe("resetting a member password", () => {
+    const NEW_PASSWORD = "Tanzeem#2027";
+
+    function reset(token: string, id: number, password: string) {
+      return request(app)
+        .post(`/api/v1/members/${id}/reset-password`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ password });
+    }
+
+    beforeEach(async () => {
+      await pool.query(
+        "UPDATE member_accounts SET must_change_password = 0, password_changed_at = NULL WHERE id = :id",
+        { id: inZoneId }
+      );
+      await pool.query("DELETE FROM member_password_resets WHERE member_account_id = :id", {
+        id: inZoneId
+      });
+      await pool.query("DELETE FROM member_login_attempts WHERE its_no = :i", { i: IN_ZONE_ITS });
+    });
+
+    it("sets a new password and forces a change at the next sign-in", async () => {
+      const res = await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.must_change_password).toBe(true);
+
+      const [rows] = await pool.query<any[]>(
+        "SELECT password_hash, must_change_password FROM member_accounts WHERE id = :id",
+        { id: inZoneId }
+      );
+      expect(Number(rows[0].must_change_password)).toBe(1);
+      expect(await bcrypt.compare(NEW_PASSWORD, rows[0].password_hash)).toBe(true);
+    });
+
+    /**
+     * The one that would have been easy to get wrong. NULL is what the CREATE route writes,
+     * and copying it here would silently preserve the session a reset exists to end.
+     */
+    it("stamps password_changed_at, so tokens minted before the reset stop working", async () => {
+      await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      const [rows] = await pool.query<any[]>(
+        "SELECT password_changed_at FROM member_accounts WHERE id = :id",
+        { id: inZoneId }
+      );
+      expect(rows[0].password_changed_at).not.toBeNull();
+    });
+
+    it("revokes the refresh tokens, so none can mint a fresh access token", async () => {
+      await pool.query(
+        `INSERT INTO refresh_tokens (token_hash, user_role, user_id, expires_at, created_at)
+         VALUES ('__TEST_RESET_HASH__', 'member', :id, DATE_ADD(NOW(), INTERVAL 7 DAY), NOW())`,
+        { id: inZoneId }
+      );
+
+      await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      const [rows] = await pool.query<any[]>(
+        "SELECT revoked_at FROM refresh_tokens WHERE token_hash = '__TEST_RESET_HASH__'"
+      );
+      expect(rows[0].revoked_at).not.toBeNull();
+      await pool.query("DELETE FROM refresh_tokens WHERE token_hash = '__TEST_RESET_HASH__'");
+    });
+
+    /** A lockout is the commonest reason to reset. Leaving it would make the reset a no-op. */
+    it("clears the sign-in lockout", async () => {
+      await pool.query(
+        `INSERT INTO member_login_attempts (its_no, ip_hash, succeeded, attempted_at)
+         VALUES (:i, NULL, 0, NOW())`,
+        { i: IN_ZONE_ITS }
+      );
+
+      await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      const [rows] = await pool.query<any[]>(
+        "SELECT COUNT(*) AS cnt FROM member_login_attempts WHERE its_no = :i",
+        { i: IN_ZONE_ITS }
+      );
+      expect(Number(rows[0].cnt)).toBe(0);
+    });
+
+    it("records who reset it and when, with no password material", async () => {
+      await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      const [rows] = await pool.query<any[]>(
+        "SELECT reset_by_admin_id, created_at FROM member_password_resets WHERE member_account_id = :id",
+        { id: inZoneId }
+      );
+      expect(rows).toHaveLength(1);
+      expect(Number(rows[0].reset_by_admin_id)).toBeGreaterThan(0);
+      expect(rows[0].created_at).not.toBeNull();
+    });
+
+    it("refuses a Zonal Head, and changes nothing", async () => {
+      const [before] = await pool.query<any[]>(
+        "SELECT password_hash FROM member_accounts WHERE id = :id",
+        { id: inZoneId }
+      );
+
+      expect((await reset(zonalToken, inZoneId, NEW_PASSWORD)).status).toBe(403);
+
+      const [after] = await pool.query<any[]>(
+        "SELECT password_hash FROM member_accounts WHERE id = :id",
+        { id: inZoneId }
+      );
+      expect(after[0].password_hash).toBe(before[0].password_hash);
+    });
+
+    it("applies the member password policy", async () => {
+      const res = await reset(adminToken, inZoneId, "short");
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/8/);
+    });
+
+    it("never echoes the password back", async () => {
+      const res = await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      expect(JSON.stringify(res.body)).not.toContain(NEW_PASSWORD);
+    });
+
+    it("404s for a member that does not exist", async () => {
+      expect((await reset(adminToken, 99999999, NEW_PASSWORD)).status).toBe(404);
+    });
+
+    /** The member must be able to sign in with it, or the reset achieved nothing. */
+    it("lets the member sign in with the new password", async () => {
+      await reset(adminToken, inZoneId, NEW_PASSWORD);
+
+      const res = await request(app)
+        .post("/api/v1/auth/login")
+        .send({ identifier: IN_ZONE_ITS, password: NEW_PASSWORD, role: "member" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.mustChangePassword).toBe(true);
+    });
   });
 
   /**
