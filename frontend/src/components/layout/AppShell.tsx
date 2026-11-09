@@ -83,7 +83,7 @@ export function AppShell() {
       <aside className="hidden w-64 flex-shrink-0 border-r border-border bg-white p-4 md:block">
         <div className="mb-4 text-left">
           <div className="text-lg font-bold text-primary">ZSMS</div>
-          <div className="text-xs text-textMuted">Zakereen Scheduling</div>
+          {/* <div className="text-xs text-textMuted">Zakereen Scheduling</div> */}
         </div>
         <nav className="flex flex-col gap-1">
           {nav.map((item) => (

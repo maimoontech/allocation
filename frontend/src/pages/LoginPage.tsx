@@ -50,7 +50,7 @@ export function LoginPage() {
         <div className="mb-4 text-center">
           <img src="/logo.png" alt="Anjuman logo" className="mx-auto mb-3 h-24 w-24 object-contain" />
           <div className="text-2xl font-bold text-primary">Anjuman-e-Zakereen Hussain A.S Karachi</div>
-          <div className="text-sm text-textMuted">Zakereen Scheduling System</div>
+          {/* <div className="text-sm text-textMuted">Zakereen Scheduling System</div> */}
         </div>
         <Card>
           <form
