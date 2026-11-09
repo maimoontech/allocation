@@ -3,7 +3,7 @@ import { Select } from "../../../components/ui/Select";
 import { Textarea } from "../../../components/ui/Textarea";
 import { RadioGroup } from "../../../components/ui/RadioGroup";
 import { MultiSelect } from "../../../components/ui/MultiSelect";
-import { toNullableId, yearOptions } from "./shared";
+import { byName, toNullableId, yearOptions } from "./shared";
 import type { TabProps } from "./shared";
 
 const THIS_YEAR = new Date().getFullYear();
@@ -102,7 +102,9 @@ export function Tab04Occupation({ value, lookups, errorFor, onChange, disabled }
 
       <MultiSelect
         label="Skills"
-        options={lookups.skills}
+        // FR-093a. A-Z, like every other list of names. 45 skills unsorted is a list you
+        // read rather than scan, and the search box helps only once you know the word.
+        options={[...lookups.skills].sort(byName)}
         value={value.skill_ids ?? []}
         onChange={(ids) => onChange("skill_ids", ids)}
         error={errorFor("skill_ids")}

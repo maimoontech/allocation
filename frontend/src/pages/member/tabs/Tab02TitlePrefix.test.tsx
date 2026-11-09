@@ -117,8 +117,10 @@ const LOOKUPS: MemberLookups = {
   parties: [],
   mohallahs: [{ id: 51, name: "A Mohallah", zone_id: 1, is_draft: false }],
   venues: [
-    { id: 71, name: "Active Venue", mohallah_id: 51, is_active: true },
-    { id: 72, name: "Closed Venue", mohallah_id: 51, is_active: false }
+    { id: 71, name: "Zulu Venue", mohallah_id: 51, is_active: true },
+    // Deliberately sorts BEFORE the active one. Under the old active-first grouping this
+    // came second, so the ordering test below can tell the two rules apart.
+    { id: 72, name: "Alpha Venue", mohallah_id: 51, is_active: false }
   ],
   current_hijri_year: 1448
 };
@@ -533,18 +535,28 @@ describe("Tab 9 — where the member attended (FR-077a, FR-077b)", () => {
    * closed. Filtering those out would leave the member unable to answer truthfully, and
    * leaving them unmarked would make a retired venue read as an ordinary choice.
    */
-  it("offers inactive venues too, marked and sorted after the active ones", () => {
+  /**
+   * FR-093a. Straight A-Z, with no active/inactive grouping and no marker.
+   *
+   * The fixture is chosen so the two rules disagree: the INACTIVE venue sorts first by name.
+   * Under the grouping this replaced it came second, so this test fails if that returns.
+   */
+  it("lists venues A-Z, active and inactive together and unmarked", () => {
     renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
 
     const select = screen.getByLabelText("Venue for 1446 AH (optional)") as HTMLSelectElement;
     const options = Array.from(select.options);
 
-    const byValue = (v: string) => options.find((o) => o.value === v)?.textContent ?? "";
-    expect(byValue("72")).toMatch(/INACTIVE/);
-    expect(byValue("71")).toBe("Active Venue");
+    // [0] is the placeholder. Alphabetical puts the inactive "Alpha Venue" first.
+    expect(options.slice(1).map((o) => o.value)).toEqual(["72", "71"]);
+    expect(options.slice(1).map((o) => o.textContent)).toEqual(["Alpha Venue", "Zulu Venue"]);
+  });
 
-    // [0] is the placeholder; active before inactive.
-    expect(options.slice(1).map((o) => o.value)).toEqual(["71", "72"]);
+  it("still offers an inactive venue at all, so an old Ashara can be recorded", () => {
+    renderTab(Tab09Ashara, { ashara_attendances: [AAMIL()] });
+
+    const select = screen.getByLabelText("Venue for 1446 AH (optional)") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toContain("72");
   });
 });
 

@@ -1,5 +1,5 @@
 import { Select } from "../../../components/ui/Select";
-import { EMPTY_LOOKUP_NOTE, lookupOptions, toNullableId } from "./shared";
+import { EMPTY_LOOKUP_NOTE, byName, lookupOptions, toNullableId } from "./shared";
 import type { TabProps } from "./shared";
 import type { AqaMoulaPlace, AsharaEntry } from "../../../features/member/memberApi";
 
@@ -67,25 +67,16 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
   const records = (value.ashara_attendances ?? []).filter((r) => r.hijri_year > 0);
   const maxHijriYear = lookups.current_hijri_year;
 
-  // FR-077c. Active venues first, then the retired ones, each group alphabetical.
-  //
-  // Inactive venues are OFFERED, because an Ashara recorded for 1430 AH may well have been
-  // held somewhere that has since closed — filtering them out would leave the member unable
-  // to answer truthfully. They are MARKED for the same reason the Hizb list marks them: an
-  // unmarked retired venue reads as an ordinary choice.
+  // FR-077c, FR-093a. Inactive venues are OFFERED, because an Ashara recorded for 1430 AH
+  // may well have been held somewhere that has since closed — filtering them out would
+  // leave the member unable to answer truthfully. They are neither marked nor grouped:
+  // straight A-Z, so a venue is found by its name alone.
   const venueOptions = [
     { value: "", label: "Venue (optional)" },
-    ...[...lookups.venues]
-      .sort((a, b) =>
-        a.is_active === b.is_active
-          ? a.name.localeCompare(b.name)
-          : Number(b.is_active) - Number(a.is_active)
-      )
-      .map((v) => ({
-        value: String(v.id),
-       // label: v.is_active ? v.name : `${v.name} — INACTIVE`
-        label: v.is_active ? v.name : v.name
-      }))
+    ...[...lookups.venues].sort(byName).map((v) => ({
+      value: String(v.id),
+      label: v.name
+    }))
   ];
 
   const placeByYear = new Map<number, AqaMoulaPlace>();

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
 import { YesNoField } from "../../../components/ui/YesNoField";
-import { lookupOptions, toNullableId, yearOptions } from "./shared";
+import { byName, lookupOptions, toNullableId, yearOptions } from "./shared";
 import type { TabProps } from "./shared";
 
 /**
@@ -37,12 +37,13 @@ const ROLE_OPTIONS = [
  *   - The Party select is disabled until a Zone is chosen, because an unfiltered list of
  *     every party in the organisation is not a useful thing to scroll.
  *
- * FR-048a: the list holds INACTIVE Hizbs as well as active ones, marked rather than hidden.
- * Two reasons. A member whose own Hizb was deactivated would otherwise find their saved
- * value missing from the list — the select renders blank and the save is refused with
- * nothing on screen to explain why. And a member who genuinely belongs to one that has been
- * retired has no way to say so if it is not offered. Marking is the other half: an unmarked
- * inactive Hizb reads as an ordinary choice.
+ * FR-048a: the list holds INACTIVE Hizbs as well as active ones. A member whose own Hizb was
+ * deactivated would otherwise find their saved value missing — the select renders blank and
+ * the save is refused with nothing on screen to explain why — and a member who genuinely
+ * belongs to a retired Hizb would have no way to say so.
+ *
+ * FR-093a: they are NOT marked and NOT grouped. Straight A-Z, so a Hizb is found by its name
+ * and reads the same wherever it sits.
  */
 export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const zoneOptions = useMemo(() => lookupOptions(lookups.zones), [lookups.zones]);
@@ -71,21 +72,15 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
               ? "Select..."
               : "No parties in this Zone"
       },
-      // Active first, then inactive, each group alphabetical — so the ordinary choice is
-      // what a member meets first and the retired ones are not salted through the list.
-      ...[...partiesInZone]
-        .sort((a, b) =>
-          a.is_active === b.is_active
-            ? a.name.localeCompare(b.name)
-            : Number(b.is_active) - Number(a.is_active)
-        )
-        .map((p) => ({
-          value: String(p.id),
-          // Marked, not hidden. An unmarked inactive Hizb reads as an ordinary choice, and a
-          // member would have no way to tell it is no longer running.
-          //label: p.is_active ? p.name : `${p.name} — INACTIVE`
-          label: p.is_active ? p.name : p.name
-        }))
+      // Straight A-Z, active and inactive together (FR-093a). This used to put the active
+      // ones first; a member looking for a named Hizb was then searching two lists, and had
+      // to know which half it was in before the alphabet helped them.
+      // The name alone. The inactive ones carried an "— INACTIVE" suffix until 2026-11-09;
+      // it was dropped deliberately, so a Hizb reads the same wherever it sits in the list.
+      ...[...partiesInZone].sort(byName).map((p) => ({
+        value: String(p.id),
+        label: p.name
+      }))
     ],
     [partiesInZone, value.zone_id]
   );

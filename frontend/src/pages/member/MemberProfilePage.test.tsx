@@ -70,10 +70,12 @@ const LOOKUPS = {
     { id: 2, name: "Zone Two", is_draft: false }
   ],
   parties: [
-    { id: 10, name: "Hizb In One", zone_id: 1, is_active: true },
+    { id: 10, name: "Zulu Hizb In One", zone_id: 1, is_active: true },
     { id: 20, name: "Hizb In Two", zone_id: 2, is_active: true },
     // Deactivated, and in Zone One. Tab 3 must still offer it (FR-048a).
-    { id: 11, name: "Hizb Retired", zone_id: 1, is_active: false }
+    // Sorts BEFORE the active one by name. Under the active-first grouping this replaced,
+    // it came second — which is how the ordering test tells the two rules apart.
+    { id: 11, name: "Alpha Hizb Retired", zone_id: 1, is_active: false }
   ],
   mohallahs: [
     { id: 91, name: "Mohallah Alpha", zone_id: 1, is_draft: false },
@@ -528,7 +530,7 @@ describe("MemberProfilePage", () => {
 
       const party = screen.getByLabelText("Party") as HTMLSelectElement;
       const labels = Array.from(party.options).map((o) => o.textContent);
-      expect(labels).toContain("Hizb In One");
+      expect(labels).toContain("Zulu Hizb In One");
       expect(labels).not.toContain("Hizb In Two");
     });
 
@@ -573,7 +575,7 @@ describe("MemberProfilePage", () => {
       expect(values).toContain("11");
     });
 
-    it("marks an inactive Hizb, so it does not read as an ordinary choice", async () => {
+    it("does not mark an inactive Hizb — a Hizb reads the same wherever it sits", async () => {
       renderWithProviders(<MemberProfilePage />);
       await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
       fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
@@ -585,12 +587,18 @@ describe("MemberProfilePage", () => {
       const byValue = (v: string) =>
         Array.from(party.options).find((o) => o.value === v)?.textContent ?? "";
 
-      expect(byValue("11")).toMatch(/INACTIVE/);
-      // The active one must NOT be marked, or the mark means nothing.
-      expect(byValue("10")).toBe("Hizb In One");
+      // FR-093a. The suffix was dropped on 2026-11-09, together with the grouping.
+      expect(byValue("11")).toBe("Alpha Hizb Retired");
+      expect(byValue("10")).toBe("Zulu Hizb In One");
     });
 
-    it("keeps the active Hizbs ahead of the retired ones", async () => {
+    /**
+     * FR-093a. A-Z, with the active and inactive interleaved.
+     *
+     * The fixture makes the two rules disagree on purpose: the inactive Hizb sorts first by
+     * name, so this fails if active-first grouping ever returns.
+     */
+    it("lists Hizbs A-Z, active and inactive together", async () => {
       renderWithProviders(<MemberProfilePage />);
       await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
       fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
@@ -599,9 +607,9 @@ describe("MemberProfilePage", () => {
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
 
       const party = screen.getByLabelText("Party") as HTMLSelectElement;
-      // [0] is the placeholder.
+      // [0] is the placeholder. Alphabetical puts the inactive "Alpha Hizb Retired" first.
       const values = Array.from(party.options).map((o) => o.value).slice(1);
-      expect(values).toEqual(["10", "11"]);
+      expect(values).toEqual(["11", "10"]);
     });
 
     it("still keeps a Zone's Hizbs out of another Zone's list", async () => {

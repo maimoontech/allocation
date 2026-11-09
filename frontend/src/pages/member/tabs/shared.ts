@@ -29,13 +29,27 @@ export type TabProps = {
  * FR-094: a draft value must not read as authoritative. FR-095: an empty list says so rather
  * than presenting an empty dropdown that looks broken.
  */
+/**
+ * Case-insensitive A-Z, for every dropdown whose options are names (FR-093a).
+ *
+ * The one ordering a member can predict. Anything else — the server's `display_order`, a
+ * grouping by active and inactive — means scanning the whole list to find out whether the
+ * value you want is there at all.
+ *
+ * Sorted on the raw NAME, never the rendered label, so a "(DRAFT — NEEDS REVIEW)" or
+ * "— INACTIVE" suffix cannot drag an entry away from its letter.
+ */
+export function byName<T extends { name: string }>(a: T, b: T): number {
+  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+}
+
 export function lookupOptions(
   list: LookupValue[],
   placeholder = "Select..."
 ): SelectOption[] {
   return [
     { value: "", label: list.length ? placeholder : "No options available" },
-    ...list.map((item) => ({
+    ...[...list].sort(byName).map((item) => ({
       value: String(item.id),
       label: item.is_draft ? `${item.name}  (DRAFT — NEEDS REVIEW)` : item.name
     }))

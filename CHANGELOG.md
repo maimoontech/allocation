@@ -1,5 +1,36 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-09 — Changed: every dropdown of names is A-Z, active and inactive together
+
+Sorting is now case-insensitive alphabetical, applied to the stored name rather than the
+rendered label — so a "(DRAFT — NEEDS REVIEW)" suffix cannot file a value under the wrong
+letter.
+
+- `lookupOptions` sorts, which covers ten dropdowns at once: Titles, Sharaf, Halqas, Mozes,
+  Maqamaat Muqaddasah, Hifz Sanads, Marital Statuses, both Tamreen lists and Zones.
+- **Hizb and Venue lose their active-first grouping.** A member looking for a named Hizb was
+  searching two lists and had to know which half it was in before the alphabet helped.
+- **The "— INACTIVE" suffix is gone from both**, following the change already made in the
+  working tree. Inactive values are still *offered* — a member whose own Hizb was
+  deactivated must still find it — they are simply no longer distinguished.
+- Skills (45 of them, on Tab 4) now sorted too; it was taking the server's order.
+
+**Two things deliberately left alone**, because "text dropdown" does not describe them:
+
+- **Year lists** stay numeric and newest-first. Alphabetising 1448, 1447, 1446 would be
+  nonsense.
+- **Fixed enumerations** keep the order their requirement gives them — Education Level runs
+  Primary → Middle → Secondary → Intermediate → Bachelors → Masters → PhD, which is a
+  progression the alphabet would shred. Same for Prefix, Hizb Role, Education Status, Blood
+  Group, Asbaq Level and Khidmat Type. Say the word if you want those alphabetical too.
+
+**One consequence worth knowing:** `display_order` on the Dropdown Lists page no longer
+affects what a member sees. It is still editable and still shown; it just does not order
+anything any more.
+
+FR-093a added; FR-048a and FR-077c amended where they required the marking and grouping.
+
+
 ## 2026-11-08 — Added: an administrator can reset a member's password
 
 **Reset password** against each row on Admin → Members, opening a panel that names the
