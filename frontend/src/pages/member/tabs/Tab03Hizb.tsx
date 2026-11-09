@@ -83,7 +83,8 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
           value: String(p.id),
           // Marked, not hidden. An unmarked inactive Hizb reads as an ordinary choice, and a
           // member would have no way to tell it is no longer running.
-          label: p.is_active ? p.name : `${p.name} — INACTIVE`
+          //label: p.is_active ? p.name : `${p.name} — INACTIVE`
+          label: p.is_active ? p.name : p.name
         }))
     ],
     [partiesInZone, value.zone_id]

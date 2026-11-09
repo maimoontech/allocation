@@ -83,7 +83,8 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
       )
       .map((v) => ({
         value: String(v.id),
-        label: v.is_active ? v.name : `${v.name} — INACTIVE`
+       // label: v.is_active ? v.name : `${v.name} — INACTIVE`
+        label: v.is_active ? v.name : v.name
       }))
   ];
 
