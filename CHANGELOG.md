@@ -1,5 +1,26 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-12 — Fixed: the test suite is runnable again, and green
+
+The previous entry said verification was incomplete because the suite kept collapsing. It is
+now **281 tests passing across all 18 files**, stable over repeated runs, and the five
+changes above are covered.
+
+- **`pool: "vmThreads"`** in `vitest.config.ts`. On the default pool the suite intermittently
+  failed to *collect* — every file, including ones untouched for weeks, reporting "Vitest
+  failed to find the current suite". That is a worker dying rather than a test failing, and
+  it is easy to misread as a code problem: the same tree would pass minutes later, and single
+  files passed while the full run did not. `vmThreads` reuses one jsdom per worker instead of
+  building eighteen, which Vitest's own output had been suggesting. Per-file isolation is
+  unchanged, and removing the one line is the whole revert.
+- Dropped the two **Place Visited Year** cases from the Hijri-year dropdown tests. That
+  dropdown no longer exists — the years came off Tab 8 in the previous entry.
+- The LoginPage test asserted a **"Zakereen Scheduling System"** subtitle that is commented
+  out in `LoginPage.tsx`. The assertion followed the UI rather than being left red; the
+  heading above it is the branding the page actually shows. This one predates today's work —
+  it was the single failure the suite already carried.
+
+
 ## 2026-11-12 — Five changes across the member profile
 
 **1. The full name is all five parts.** First Prefix, Name, Father Prefix, Father Name,

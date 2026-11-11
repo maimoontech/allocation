@@ -361,7 +361,10 @@ describe("Tab 9 — Ashara Mubaraka year grid (FR-075, FR-076, FR-076b)", () => 
 });
 
 /**
- * The five year dropdowns are HIJRI, 1401 AH to the current Hijri year.
+ * The Hijri year dropdowns, 1401 AH to the current Hijri year.
+ *
+ * Four of them. Place Visited Year was the fifth until 2026-11-12, when the years were
+ * removed from Tab 8 altogether (FR-072a) and there was no longer a dropdown to check.
  *
  * They used to offer Gregorian 1950-2026, which is the kind of mistake nothing catches: a
  * Hijri year sits inside that range as comfortably as a Gregorian one, so the wrong calendar
@@ -403,15 +406,6 @@ describe("the Hijri year dropdowns", () => {
       () => {
         renderTab(Tab07Sharaf, { sharafs: [{ sharaf_id: 21, sharaf_year: 1420 }] });
         return screen.getByLabelText(/^Year \(AH\)/);
-      }
-    ],
-    [
-      "Place Visited Year",
-      () => {
-        renderTab(Tab08PlacesVisited, {
-          places_visited: [{ place_id: 41, times_count: 0, years: [] }]
-        });
-        return screen.getByLabelText("Add a year");
       }
     ],
     [

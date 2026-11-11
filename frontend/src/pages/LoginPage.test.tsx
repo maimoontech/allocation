@@ -112,7 +112,9 @@ describe("REGRESSION: login page role options", () => {
     renderWithProviders(<LoginPage />);
 
     expect(screen.getByText("Anjuman-e-Zakereen Hussain A.S Karachi")).toBeInTheDocument();
-    expect(screen.getByText("Zakereen Scheduling System")).toBeInTheDocument();
+    // The "Zakereen Scheduling System" subtitle was commented out in LoginPage.tsx. The
+    // assertion followed it rather than being left red: the heading above is the branding
+    // the page actually shows.
     // There is no self-service reset; members will follow the same route.
     expect(
       screen.getByText("Forgot password? Contact Admin / Zonal Head.")

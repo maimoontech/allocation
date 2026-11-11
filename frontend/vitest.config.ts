@@ -9,6 +9,22 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: "jsdom",
+      /**
+       * `vmThreads` rather than the default `threads`.
+       *
+       * On the default pool this suite intermittently collapsed: every file, including ones
+       * untouched for weeks, failing to collect with "Vitest failed to find the current
+       * suite" pointing at the setup file. It is a worker dying, not a test — the same tree
+       * would pass minutes later, and single files passed while the full run did not, which
+       * makes it very easy to misread as a code problem. It cost most of a session on
+       * 2026-11-12 before the pattern was clear.
+       *
+       * `vmThreads` reuses one jsdom per worker instead of building 18 of them (Vitest's own
+       * hint, and ~50s of the run), and the suite has been stable on it. Per-file isolation
+       * is unchanged. If a test ever needs something a VM context cannot give it, dropping
+       * this line is the whole revert.
+       */
+      pool: "vmThreads",
       include: ["src/**/*.test.{ts,tsx}"],
       setupFiles: ["./src/test-setup.ts"],
       restoreMocks: true,
