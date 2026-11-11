@@ -188,7 +188,7 @@ describe("MembersPage", () => {
     renderWithProviders(<MembersPage />);
 
     expect(await screen.findByText("40480241")).toBeInTheDocument();
-    expect(screen.getByText("Mulla Husain Ali Kaukawala")).toBeInTheDocument();
+    expect(screen.getByText("Mulla Husain Sheikh Ali Kaukawala")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Picture" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Zone" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Party" })).toBeInTheDocument();
@@ -210,7 +210,7 @@ describe("MembersPage", () => {
   it("loads a photograph only for members that have one", async () => {
     renderWithProviders(<MembersPage />);
 
-    const photo = await screen.findByAltText("Mulla Husain Ali Kaukawala photograph");
+    const photo = await screen.findByAltText("Mulla Husain Sheikh Ali Kaukawala photograph");
     expect(photo).toHaveAttribute("src", "blob:member-photo");
     expect(screen.getByText("F")).toBeInTheDocument();
     expect(requested.some((url) => url.includes("/members/11/photo"))).toBe(true);

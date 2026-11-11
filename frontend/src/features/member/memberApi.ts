@@ -186,6 +186,8 @@ export type MemberProfile = {
   titles: TitleEntry[];
   sharafs: SharafEntry[];
   skill_ids: number[];
+  /** FR-084a. Several methods; `tamreen_method_id` is the retired single answer. */
+  tamreen_method_ids: number[];
   places_visited: PlaceVisitEntry[];
   ashara_attendances: AsharaEntry[];
 };

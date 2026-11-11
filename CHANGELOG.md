@@ -1,5 +1,45 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-12 — Five changes across the member profile
+
+**1. The full name is all five parts.** First Prefix, Name, Father Prefix, Father Name,
+Surname — the profile header was showing Name and Surname only. It was being composed four
+different ways in four files; there is now one function, and the Party Members page, which
+already did it correctly, is what the others were brought to match. "None" on either prefix
+is treated as absent.
+
+**2. Years are gone from Maqamaat Muqaddasah.** Only the place and the number of times are
+asked for now. **FR-073 went with them** — the rule that Number of Times had to equal the
+number of years listed has nothing left to compare against, so it is removed from the form
+*and* the server. Years already stored are left untouched rather than deleted; they are
+simply no longer shown or required.
+
+**3. "Not attended" is gone from Ashara Mubaraka.** A year nobody has answered now shows no
+choice selected, which is the same thing it always meant. That radio was *also* the only way
+to take an answer back, so an **answered** year gets a Clear control — without it a wrong
+answer would have been permanent.
+
+**4. Method Used for Tamreen takes several answers.** A new `member_tamreen_methods` table,
+and the single `tamreen_method_id` is kept and no longer written. The migration carries an
+existing answer across once, so nobody re-enters what they already said.
+
+**5. A rejected photograph is deleted.** It used to be flagged `rejected` and left in place,
+so the member went on seeing it on their profile and in the admin list — the one thing a
+rejection is for did not happen. `has_photo` comes from the row existing, so removing the row
+is what actually clears it. The reason is returned to the administrator and not retained;
+nothing ever showed it to the member.
+
+FR-034a, FR-072a (superseding FR-073), FR-075a, FR-084a and FR-058a added.
+
+**Verification is incomplete and I am not claiming otherwise.** Both typechecks and both
+builds are clean, and the generated SQL has the expected 24 tables with the backfill ordered
+after its CREATE. The frontend test suite could not be run reliably: workers kept dying
+during collection, taking files I never touched with them. One run that did complete showed
+5 failures, all stale assertions, which are fixed here. **Please run `npm test` in
+`frontend/` yourself** — ideally when the `hrms` dev stack is not running, since that is the
+likeliest cause.
+
+
 ## 2026-11-11 — Changed: three lists keep their own order; the prefixes go alphabetical
 
 Yesterday's blanket A-Z was too wide in one direction and too narrow in another.

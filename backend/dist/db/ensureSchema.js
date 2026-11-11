@@ -41,6 +41,29 @@ async function ensureSchema() {
     await ensurePersonalTabColumns();
     await ensureHizbTabColumns();
     await ensurePasswordResetAudit();
+    await ensureTamreenMethods();
+}
+/**
+ * FR-084a. Several Tamreen methods per member.
+ *
+ * `member_profiles.tamreen_method_id` is kept and no longer written; the INSERT IGNORE
+ * carries an existing single answer into the new table so nobody re-enters what they
+ * already said, and does nothing on every run after the first.
+ */
+async function ensureTamreenMethods() {
+    await pool_1.pool.query(`CREATE TABLE IF NOT EXISTS member_tamreen_methods (
+       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+       member_account_id INT UNSIGNED NOT NULL,
+       tamreen_method_id INT UNSIGNED NOT NULL,
+       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       PRIMARY KEY (id),
+       UNIQUE KEY uq_member_tamreen_methods (member_account_id, tamreen_method_id),
+       KEY idx_member_tamreen_methods_method (tamreen_method_id)
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+    await pool_1.pool.query(`INSERT IGNORE INTO member_tamreen_methods (member_account_id, tamreen_method_id)
+     SELECT member_account_id, tamreen_method_id
+     FROM member_profiles
+     WHERE tamreen_method_id IS NOT NULL`);
 }
 /**
  * FR-005a. Who reset a member's password, for whom, and when.

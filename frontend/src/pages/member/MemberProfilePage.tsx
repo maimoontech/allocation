@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Card } from "../../components/ui/Card";
 import { Tabs, type TabDefinition } from "../../components/ui/Tabs";
+import { fullNameOr } from "../../features/member/fullName";
 import {
   ALL_TABS,
   ProfileTabPanel,
@@ -194,7 +195,8 @@ export function MemberProfilePage() {
     disabled: isBusy
   };
 
-  const fullName = merged.name ? `${merged.name} ${merged.surname ?? ""}`.trim() : merged.its_no;
+  // FR-034a. All five parts, not just Name and Surname.
+  const fullName = fullNameOr(merged, merged.its_no);
   const initials =
     fullName
       .split(" ")

@@ -277,6 +277,13 @@ export async function readMemberProfile(memberAccountId: number) {
     "SELECT skill_id FROM member_skills WHERE member_account_id = :id ORDER BY skill_id",
     { id: memberAccountId }
   );
+  // FR-084a. Several methods per member; `tamreen_method_id` on the profile row is kept
+  // for the answers given before this table existed, and is no longer written.
+  const [tamreenMethods] = await pool.query<any[]>(
+    `SELECT tamreen_method_id FROM member_tamreen_methods
+     WHERE member_account_id = :id ORDER BY tamreen_method_id`,
+    { id: memberAccountId }
+  );
   const [visits] = await pool.query<any[]>(
     `SELECT v.id, v.place_id, v.times_count,
             GROUP_CONCAT(y.visited_year ORDER BY y.visited_year) AS years
@@ -347,6 +354,7 @@ export async function readMemberProfile(memberAccountId: number) {
     sharaf_year: Number(s.sharaf_year)
   }));
   profile.skill_ids = skills.map((s) => Number(s.skill_id));
+  profile.tamreen_method_ids = tamreenMethods.map((m) => Number(m.tamreen_method_id));
   profile.places_visited = visits.map((v) => ({
     place_id: Number(v.place_id),
     times_count: Number(v.times_count),
@@ -640,15 +648,18 @@ export async function saveMemberProfile(
   const titles = has("titles") ? parseTitles(raw("titles"), add) : undefined;
   const sharafs = has("sharafs") ? parseSharafs(raw("sharafs"), add) : undefined;
   const skillIds = has("skill_ids") ? parseSkillIds(raw("skill_ids"), add) : undefined;
+  const tamreenMethodIds = has("tamreen_method_ids")
+    ? parseIdList(raw("tamreen_method_ids"), "tamreen_method_ids", 11, add)
+    : undefined;
   const visits = has("places_visited") ? parseVisits(raw("places_visited"), add) : undefined;
   const ashara = has("ashara_attendances")
     ? parseAshara(raw("ashara_attendances"), add)
     : undefined;
 
-  // FR-073, before the referential checks because it reports regardless of other failures.
-  if (visits?.length) {
-    await checkVisitCounts(visits, add);
-  }
+  // FR-073 was the rule that Number of Times had to equal the number of years listed. The
+  // years were removed from Tab 8 on 2026-11-12 (FR-072a), so there is nothing left to
+  // match against and the check is gone with them. `member_place_visit_years` keeps the
+  // rows it already holds; they are simply no longer collected, compared or required.
 
   // FR-077b, before the referential checks so the id they verify is the one that is saved.
   if (ashara?.length) {
@@ -660,7 +671,10 @@ export async function saveMemberProfile(
   // queries rather than one per field.
   // -------------------------------------------------------------------------
   if (errors.length === 0) {
-    await checkReferences({ values, titles, sharafs, skillIds, visits, ashara }, add);
+    await checkReferences(
+      { values, titles, sharafs, skillIds, tamreenMethodIds, visits, ashara },
+      add
+    );
   }
 
   if (errors.length > 0) return { ok: false, kind: "validation", errors };
@@ -746,6 +760,15 @@ export async function saveMemberProfile(
       await replaceRows(connection, "member_skills", memberAccountId, skillIds, (id) => ({
         skill_id: id
       }));
+    }
+    if (tamreenMethodIds !== undefined) {
+      await replaceRows(
+        connection,
+        "member_tamreen_methods",
+        memberAccountId,
+        tamreenMethodIds,
+        (id) => ({ tamreen_method_id: id })
+      );
     }
     if (ashara !== undefined) {
       await replaceRows(
@@ -899,6 +922,33 @@ function parseSharafs(value: unknown, add: Add): SharafEntry[] | undefined {
     }
     seen.add(key);
     out.push({ sharaf_id, sharaf_year });
+  });
+  return out;
+}
+
+/**
+ * A list of lookup ids, de-duplicated and order-preserving.
+ *
+ * Generalised from `parseSkillIds` when Tamreen methods became multi-select (FR-084a): the
+ * two want identical handling and differ only in which field and tab an error names.
+ */
+function parseIdList(
+  value: unknown,
+  field: string,
+  tab: number,
+  add: Add
+): number[] | undefined {
+  const list = asArray(value, field, tab, add);
+  if (!list) return undefined;
+
+  const out: number[] = [];
+  list.forEach((entry, index) => {
+    const id = Number(entry);
+    if (!Number.isInteger(id) || id <= 0) {
+      add(`${field}[${index}]`, "Invalid selection.", tab);
+      return;
+    }
+    if (!out.includes(id)) out.push(id);
   });
   return out;
 }
@@ -1113,32 +1163,6 @@ async function existingIds(table: string, ids: number[]): Promise<Set<number>> {
  * who has a count mismatch AND an unrelated typo should be told both at once, rather than
  * fixing the typo, saving, and only then discovering the mismatch.
  */
-async function checkVisitCounts(visits: PlaceVisitEntry[], add: Add) {
-  const mismatched = visits
-    .map((visit, index) => ({ visit, index }))
-    .filter(({ visit }) => visit.times_count !== visit.years.length);
-
-  if (mismatched.length === 0) return;
-
-  const ids = mismatched.map(({ visit }) => visit.place_id);
-  const [rows] = await pool.query<any[]>(
-    `SELECT id, place_name FROM places WHERE id IN (${ids.map(() => "?").join(",")})`,
-    ids
-  );
-  const nameById = new Map<number, string>(rows.map((r) => [Number(r.id), String(r.place_name)]));
-
-  for (const { visit, index } of mismatched) {
-    // An unknown id is reported as a bad selection by checkReferences; this message still has
-    // to say something sensible if both are wrong at once.
-    const place = nameById.get(visit.place_id) ?? "the selected place";
-    add(
-      `places_visited[${index}]`,
-      `${place}: Number of times (${visit.times_count}) does not match the ` +
-        `${visit.years.length} year(s) listed.`,
-      8
-    );
-  }
-}
 
 async function checkReferences(
   input: {
@@ -1146,12 +1170,13 @@ async function checkReferences(
     titles?: TitleEntry[];
     sharafs?: SharafEntry[];
     skillIds?: number[];
+    tamreenMethodIds?: number[];
     visits?: PlaceVisitEntry[];
     ashara?: AsharaEntry[];
   },
   add: Add
 ) {
-  const { values, titles, sharafs, skillIds, visits, ashara } = input;
+  const { values, titles, sharafs, skillIds, tamreenMethodIds, visits, ashara } = input;
 
   for (const [column, meta] of Object.entries(LOOKUP_FKS)) {
     const id = values[column];
@@ -1204,6 +1229,15 @@ async function checkReferences(
     const found = await existingIds("skills", skillIds);
     skillIds.forEach((id, i) => {
       if (!found.has(id)) add(`skill_ids[${i}]`, "Selection is no longer available.", 4);
+    });
+  }
+
+  if (tamreenMethodIds?.length) {
+    const found = await existingIds("tamreen_methods", tamreenMethodIds);
+    tamreenMethodIds.forEach((id, i) => {
+      if (!found.has(id)) {
+        add(`tamreen_method_ids[${i}]`, "Selection is no longer available.", 11);
+      }
     });
   }
 

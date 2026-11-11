@@ -639,6 +639,26 @@ CREATE TABLE IF NOT EXISTS member_skills (
     FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- FR-084a. Several Tamreen methods per member, not one.
+--
+-- `member_profiles.tamreen_method_id` is kept so existing answers are not destroyed, and
+-- is no longer written. A member who had one method before this table existed is
+-- backfilled into it by the migration, so nobody has to re-enter what they already said.
+CREATE TABLE IF NOT EXISTS member_tamreen_methods (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  member_account_id INT UNSIGNED NOT NULL,
+  tamreen_method_id INT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_member_tamreen_methods (member_account_id, tamreen_method_id),
+  KEY idx_member_tamreen_methods_method (tamreen_method_id),
+  CONSTRAINT fk_member_tamreen_methods_member_account_id
+    FOREIGN KEY (member_account_id) REFERENCES member_accounts(id) ON DELETE CASCADE,
+  CONSTRAINT fk_member_tamreen_methods_method_id
+    FOREIGN KEY (tamreen_method_id) REFERENCES tamreen_methods(id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 -- FR-070 to FR-073. Two tables, because the request requires several years PER
 -- place.
 --
@@ -1018,9 +1038,23 @@ DROP PROCEDURE mm_backfill_hizb_2026_11_08;
 
 
 -- ----------------------------------------------------------------------------
+-- 4f. Backfill: carry the single Tamreen method into the new table
+--
+--     Runs once in effect: the INSERT IGNORE finds nothing to add on a second run
+--     because the unique key already holds the row. A member who answered before
+--     2026-11-12 keeps their answer without re-entering it.
+-- ----------------------------------------------------------------------------
+
+INSERT IGNORE INTO member_tamreen_methods (member_account_id, tamreen_method_id)
+SELECT member_account_id, tamreen_method_id
+FROM member_profiles
+WHERE tamreen_method_id IS NOT NULL;
+
+
+-- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 23 new tables, and every existing count unchanged.
+--    Expect 24 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -1032,9 +1066,10 @@ WHERE TABLE_SCHEMA = DATABASE()
     'member_place_visit_years','member_ashara_attendances',
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
-    'aqa_moula_asharas','member_profile_edits','member_password_resets'
+    'aqa_moula_asharas','member_profile_edits','member_password_resets',
+    'member_tamreen_methods'
   );
--- Expected: 23
+-- Expected: 24
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION

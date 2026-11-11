@@ -4,6 +4,7 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Select } from "../../components/ui/Select";
 import { Button } from "../../components/ui/Button";
+import { composeFullName } from "../../features/member/fullName";
 import { useAppSelector } from "../../hooks/storeHooks";
 import {
   useCreateMemberAccountMutation,
@@ -30,7 +31,6 @@ import {
 
 const PAGE_SIZE = 25;
 
-const PREFIX_PLACEHOLDER = "None";
 
 const activeFilterOptions = [
   { value: "all", label: "All accounts" },
@@ -46,11 +46,9 @@ const activeFilterOptions = [
 const PASSWORD_RULE =
   "At least 8 characters. Under 12 must mix three of: lower case, upper case, digits, symbols.";
 
+/** FR-034a. The shared composition, so the list and the profile agree. */
 export function memberFullName(member: MemberAccount): string {
-  return [member.first_prefix, member.name, member.father_name, member.surname]
-    .filter((part) => part && part !== PREFIX_PLACEHOLDER)
-    .join(" ")
-    .trim();
+  return composeFullName(member);
 }
 
 function initials(member: MemberAccount): string {

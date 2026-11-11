@@ -10,8 +10,16 @@ const WITH_AAMIL = "With Aamil";
  * FR-075. The two stored values exactly as the requirement names them, plus "not attended",
  * which is not stored: it is the absence of a record for that year.
  */
+/**
+ * FR-075a. The two real answers only.
+ *
+ * "Not attended" was a third radio, and it was how a year with no record was shown AND how
+ * an answered year was taken back. Removing the radio keeps the first of those — a year the
+ * member has not answered simply has no radio selected — but it would have removed the
+ * second, leaving a wrong answer permanent. The Clear control on an answered row is that
+ * half, kept.
+ */
 const CHOICES = [
-  { value: "", label: "Not attended" },
   { value: WITH_AQA_MOULA, label: "With Aqa Moula TUS" },
   { value: WITH_AAMIL, label: "With Aamil" }
 ] as const;
@@ -224,6 +232,20 @@ export function Tab09Ashara({ value, lookups, errorFor, onChange, disabled }: Ta
                     {option.label}
                   </label>
                 ))}
+
+                {/* Only on an answered year: with "Not attended" gone, this is the only way
+                    back to no record at all. */}
+                {record ? (
+                  <button
+                    type="button"
+                    className="text-xs underline disabled:opacity-60"
+                    onClick={() => choose(year, "")}
+                    disabled={disabled}
+                    aria-label={`Clear ${year} AH`}
+                  >
+                    Clear
+                  </button>
+                ) : null}
               </div>
 
               <div className="min-w-0 text-sm">

@@ -194,23 +194,23 @@ memberPhotoApprovalRoutes.post("/:photoId/reject", async (req, res) => {
       return fail(res, "Forbidden", 403);
     }
     
-    await pool.query(
-      `UPDATE member_photos 
-       SET approval_status = 'rejected', 
-           approved_by = :approvedBy, 
-           approved_by_role = :approvedByRole, 
-           approved_at = NOW(),
-           rejection_reason = :reason
-       WHERE id = :photoId`,
-      {
-        approvedBy: user.id,
-        approvedByRole: user.role,
-        reason: reason || null,
-        photoId
-      }
+    // FR-058a. A rejected photograph is DELETED, not flagged.
+    //
+    // It used to be marked `rejected` and left in place, which meant the member went on
+    // seeing it on their own profile and in the admin list: the one thing a rejection is
+    // supposed to achieve did not happen. `has_photo` is derived from the row existing at
+    // all, so removing the row is what actually clears it everywhere.
+    //
+    // The reason is recorded in the response and then gone with the row. Nothing ever
+    // showed it to the member, so nothing is lost that anyone could read; if the member
+    // should be told why, that is a notification to build, not a reason to keep the image.
+    await pool.query("DELETE FROM member_photos WHERE id = :photoId", { photoId });
+
+    return ok(
+      res,
+      { success: true, removed: true, member_account_id: photo.member_account_id },
+      reason ? `Photo rejected and removed: ${reason}` : "Photo rejected and removed"
     );
-    
-    return ok(res, { success: true }, "Photo rejected");
   } catch {
     return fail(res, "Failed to reject photo", 500);
   }

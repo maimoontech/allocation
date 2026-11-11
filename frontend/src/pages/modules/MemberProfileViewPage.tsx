@@ -9,6 +9,7 @@ import {
   TAB_BY_NUMBER,
   TAB_IDS
 } from "../member/tabs/profileTabs";
+import { fullNameOr } from "../../features/member/fullName";
 import { useGetMemberLookupsQuery } from "../../features/member/memberApi";
 import {
   useGetAdminMemberProfileQuery,
@@ -151,8 +152,8 @@ export function MemberProfileViewPage() {
     );
   }
 
-  const fullName =
-    [merged.name, merged.surname].filter(Boolean).join(" ").trim() || merged.its_no;
+  // FR-034a. The same five parts the member sees on their own header.
+  const fullName = fullNameOr(merged, merged.its_no);
 
   return (
     <div className="space-y-4 p-4 sm:p-6">

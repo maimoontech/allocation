@@ -91,6 +91,7 @@ const BASE = {
   titles: [],
   sharafs: [],
   skill_ids: [],
+  tamreen_method_ids: [],
   places_visited: [],
   ashara_attendances: []
 } satisfies MemberProfile;
@@ -226,49 +227,48 @@ describe("the repeatable row editor (FR-046)", () => {
   });
 });
 
-describe("Tab 8 — places visited (FR-071, FR-073)", () => {
-  it("warns as soon as the count and the years disagree, and offers the correction", () => {
+/**
+ * FR-071, and FR-072a from 2026-11-12.
+ *
+ * The per-year chips and the rule that Number of Times had to equal the number of years
+ * are gone. What is left is one row per place with a count, and the rule that a place
+ * cannot be chosen twice.
+ */
+describe("Tab 8 — places visited (FR-071, FR-072a)", () => {
+  it("asks for the place and the number of times, and no longer for years", () => {
+    renderTab(Tab08PlacesVisited, {
+      places_visited: [{ place_id: 41, times_count: 3, years: [1439] }]
+    });
+
+    expect(screen.getByLabelText("Place")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Number of Times/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Add a year")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Years \(AH\)/)).not.toBeInTheDocument();
+  });
+
+  /** Years already recorded are carried untouched rather than wiped by the removal. */
+  it("leaves any years already saved on the row alone", () => {
     const state = renderTab(Tab08PlacesVisited, {
       places_visited: [{ place_id: 41, times_count: 3, years: [1439] }]
     });
 
-    expect(screen.getByText(/Number of Times is 3 but 1 year is listed/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Number of Times/), { target: { value: "2" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /Set to 1/ }));
+    expect(state.value.places_visited[0].years).toEqual([1439]);
+    expect(state.value.places_visited[0].times_count).toBe(2);
+  });
 
-    expect(state.value.places_visited[0].times_count).toBe(1);
+  it("no longer complains when the count and the saved years disagree", () => {
+    renderTab(Tab08PlacesVisited, {
+      places_visited: [{ place_id: 41, times_count: 3, years: [1439] }]
+    });
+
+    expect(screen.queryByText(/does not match/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/must match/i)).not.toBeInTheDocument();
   });
 
-  it("adds and removes a year, keeping them sorted", () => {
-    const state = renderTab(Tab08PlacesVisited, {
-      places_visited: [{ place_id: 41, times_count: 0, years: [] }]
-    });
 
-    fireEvent.change(screen.getByLabelText("Add a year"), { target: { value: "1440" } });
-    fireEvent.change(screen.getByLabelText("Add a year"), { target: { value: "1435" } });
-    expect(state.value.places_visited[0].years).toEqual([1440, 1435]);
 
-    // Displayed in order even though they were not entered that way.
-    const chips = screen.getAllByRole("button", { name: /^Remove year/ });
-    expect(chips.map((c) => c.getAttribute("aria-label"))).toEqual([
-      "Remove year 1435",
-      "Remove year 1440"
-    ]);
-
-    fireEvent.click(screen.getByRole("button", { name: "Remove year 1435" }));
-    expect(state.value.places_visited[0].years).toEqual([1440]);
-  });
-
-  it("does not offer a year already listed against the same place", () => {
-    renderTab(Tab08PlacesVisited, {
-      places_visited: [{ place_id: 41, times_count: 1, years: [1440] }]
-    });
-
-    const adder = screen.getByLabelText("Add a year");
-    expect(within(adder).queryByRole("option", { name: "1440" })).not.toBeInTheDocument();
-    expect(within(adder).getByRole("option", { name: "1439" })).toBeInTheDocument();
-  });
 
   it("does not offer a place already used by another row (FR-071)", () => {
     renderTab(Tab08PlacesVisited, {
@@ -288,7 +288,7 @@ describe("Tab 8 — places visited (FR-071, FR-073)", () => {
 });
 
 /**
- * Tab 9 is one row per Hijri year, current year down to 1405 AH (FR-076b). "Not attended" is
+ * Tab 9 is one row per Hijri year (FR-076b, FR-076c). An unanswered year is
  * the absence of a record, so the saved array keeps its old shape: one entry per attended year.
  */
 describe("Tab 9 — Ashara Mubaraka year grid (FR-075, FR-076, FR-076b)", () => {
@@ -315,18 +315,33 @@ describe("Tab 9 — Ashara Mubaraka year grid (FR-075, FR-076, FR-076b)", () => 
     expect(within(yearRow(1402)).getByLabelText("With Aamil")).toBeChecked();
   });
 
-  it("adds one record when a year is marked attended, and removes it on Not attended", () => {
+  /**
+   * FR-075a. "Not attended" was removed as a choice on 2026-11-12; Clear is what takes an
+   * answer back, and only an answered year has one.
+   */
+  it("adds one record when a year is marked attended, and removes it on Clear", () => {
     const state = renderTab(Tab09Ashara, {});
 
     fireEvent.click(within(yearRow(1440)).getByLabelText("With Aamil"));
     expect(state.value.ashara_attendances).toHaveLength(1);
-    expect(state.value.ashara_attendances[0]).toMatchObject({
-      attended_with: "With Aamil",
-      hijri_year: 1440
-    });
+    expect(state.value.ashara_attendances[0].hijri_year).toBe(1440);
 
-    fireEvent.click(within(yearRow(1440)).getByLabelText("Not attended"));
-    expect(state.value.ashara_attendances).toEqual([]);
+    fireEvent.click(within(yearRow(1440)).getByRole("button", { name: "Clear 1440 AH" }));
+    expect(state.value.ashara_attendances).toHaveLength(0);
+  });
+
+  it("offers no Not attended choice, and no Clear until the year is answered", () => {
+    renderTab(Tab09Ashara, {});
+
+    expect(screen.queryByLabelText("Not attended")).not.toBeInTheDocument();
+    expect(
+      within(yearRow(1440)).queryByRole("button", { name: "Clear 1440 AH" })
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(within(yearRow(1440)).getByLabelText("With Aamil"));
+    expect(
+      within(yearRow(1440)).getByRole("button", { name: "Clear 1440 AH" })
+    ).toBeInTheDocument();
   });
 
   it("keeps each year's answer separate", () => {

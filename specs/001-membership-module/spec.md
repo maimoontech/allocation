@@ -240,6 +240,7 @@ expected values.
 #### Tab 1 — Personal Information
 
 - **FR-034**: Tab 1 MUST display the signed-in member's own ITS Number (labelled "ITS No.") as a read-only value, and the system MUST ignore any attempt to submit a different one.
+- **FR-034a** *(authorised 2026-11-12)*: A member's full name MUST be composed as **First Prefix, Name, Father Prefix, Father Name, Surname**, omitting any part that is absent and treating the stored "None" on either prefix as absent. The same composition MUST be used wherever a full name is shown — the member's own header, the administrator's read of a profile, and the member list — because a name that differs by page is a name nobody can search for.
 - **FR-035**: Tab 1 MUST offer First Prefix and Father Prefix each as a choice of None, Sheikh or Mulla.
 - **FR-036**: Tab 1 MUST capture Name, Father Name and Surname as free text.
 - **FR-037**: Tab 1 MUST allow a photograph to be attached to the profile, replaced, and removed.
@@ -283,6 +284,7 @@ expected values.
 - **FR-056**: Tab 5 MUST offer Standard or Degree as a choice of Primary, Middle, Secondary, Intermediate, Bachelors, Masters or PhD.
 - **FR-057**: Tab 5 MUST capture Major Subjects as free text, and Status as a choice of Complete or Ongoing.
 - **FR-058**: Tab 5 MUST capture Hifz Sanad as a Yes or No answer.
+- **FR-058a** *(authorised 2026-11-12)*: Rejecting a member's photograph MUST **remove it**, not merely mark it rejected. Marking it left the image on the member's profile and in the administrator's list, so the one thing a rejection is for did not happen. The rejection reason is returned to the administrator who gave it and is not retained; nothing ever showed it to the member.
 - **FR-059**: Tab 5 MUST offer Sanad from exactly the ten values named in the request — Surah Balad, Surah Inshiqaq, Marhala Ula, Marhala Sania, Marhala Salesa, Marhala Rabea, Marhala Khamesa, Marhala Sadesa, Marhala Sabea, Shahadat Hifz al-Quran al-Kareem — and MUST require one when Hifz Sanad is Yes.
 - **FR-060**: Tab 5 MUST capture a Hifz Current Status of Surah, Ayyah and a Last Update date.
 
@@ -314,12 +316,14 @@ Tab 8 records the **places a member has visited**, with how many times and in wh
 - **FR-070**: Tab 8 MUST offer Place Visited from a maintained list of places, kept entirely separately from the scheduling calendar.
 - **FR-071**: Tab 8 MUST allow several entries per member, each recording one place, a Number of Times visited, and the years concerned; the same place MUST NOT appear twice for one member, so that its count and years form one coherent record.
 - **FR-072** *(amended 2026-11-04)*: Tab 8 MUST allow several years to be recorded against a single place, each chosen from 1401 AH through the current Hijri year on the same terms as FR-044, and MUST allow each entry to be added, corrected and removed independently.
+- **FR-072a** *(authorised 2026-11-12; supersedes FR-073)*: Tab 8 MUST NOT ask for the years of a visit. Only the place and the number of times are collected. **FR-073 is withdrawn** with them: there is no longer a year count for Number of Times to agree with, so the match rule is gone from both the form and the server. Years already stored MUST be left in place rather than deleted — they are simply no longer shown, required or edited.
 - **FR-073**: Tab 8 MUST refuse a save where the Number of Times recorded for a place does not equal the number of years listed against it, naming the place and both counts.
 
 #### Tab 9 — Ashara Mubaraka
 
 - **FR-074**: Tab 9 MUST allow several attendance records per member, each added, corrected and removed independently.
 - **FR-075**: Tab 9 MUST capture Attended With as a choice between With Aqa Moula TUS and With Aamil.
+- **FR-075a** *(authorised 2026-11-12)*: Tab 9 MUST NOT offer "Not attended" as a choice. A year the member has not answered MUST show no choice selected, which is the same state as having no record. Because that choice was also the only way to withdraw an answer, an **answered** year MUST offer a way to clear it; without one a wrong answer would be permanent.
 - **FR-076**: Tab 9 MUST offer a Hijri Year from 1400 AH through the current Hijri year, determined using the project's existing Hijri logic, and MUST NOT offer a later year.
 - **FR-076b** *(authorised 2026-11-05)*: Tab 9 MUST present Ashara Mubaraka as one row per Hijri year, from the current Hijri year down to its lower bound (1405 AH as first written; 1404 AH from `fedb903`, and per-member from FR-076c), each answered Not attended, With Aqa Moula TUS or With Aamil. Not attended MUST mean no record for that year. The server MUST continue to accept 1400 to 1404 AH (FR-076), and a record already saved for one of those years MUST be shown as an extra row rather than hidden.
 - **FR-076c** *(authorised 2026-11-06; supersedes the fixed lower bound in FR-076b)*: The Tab 9 grid MUST start at the member's Zikr e Hussain year from Tab 3 (FR-049a), because a member cannot have attended Ashara Mubaraka before they began doing Zikr. Where that year is earlier than **1404 AH**, or has not been given, the grid MUST start at 1404 AH. The grid MUST follow the UNSAVED value, so changing the year on Tab 3 and returning to Tab 9 shows the new range before saving. A record already saved for a year below where the grid starts MUST still be shown, marked, and remain correctable — including one saved before the member shortened their own Zikr year. This is a presentation rule only: the server MUST continue to accept 1400 AH upwards (FR-076), because tightening it would reject historical records that are already valid.
@@ -341,6 +345,7 @@ Tab 8 records the **places a member has visited**, with how many times and in wh
 - **FR-082**: Tab 11 MUST capture Party Tamreen Frequency and Solo Tamreen Frequency, each from a maintained list of frequency values.
 - **FR-083**: Tab 11 MUST capture the Method Used for Tamreen from a maintained list of method values.
 - **FR-084**: Tab 11 MUST capture whether the member takes assistance from an Ustad or senior Zakireen, and whether they use Idaratuz Zakereen books, each as a Yes or No answer.
+- **FR-084a** *(authorised 2026-11-12)*: The Tamreen method MUST allow **several selections**, not one. `member_profiles.tamreen_method_id` is retained so answers given before this change are not destroyed, is no longer written, and MUST be carried into the new table once so no member is asked to re-enter it.
 
 #### Tab 12 — Other Sansta Khidmat
 

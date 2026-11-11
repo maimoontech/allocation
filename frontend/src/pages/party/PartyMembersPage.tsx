@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { composeFullName } from "../../features/member/fullName";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
@@ -18,19 +19,13 @@ import {
 
 const PAGE_SIZE = 25;
 
-const PREFIX_PLACEHOLDER = "None";
-
+/**
+ * FR-034a. This page already composed the name the way the requirement now states, which is
+ * why the other three were brought to match it rather than the other way round. It delegates
+ * so there is one definition and not a fourth.
+ */
 export function fullName(member: PartyMember): string {
-  return [
-    member.first_prefix,
-    member.name,
-    member.father_prefix,
-    member.father_name,
-    member.surname
-  ]
-    .filter((part) => part && part !== PREFIX_PLACEHOLDER)
-    .join(" ")
-    .trim();
+  return composeFullName(member);
 }
 
 function initials(member: PartyMember): string {

@@ -1,7 +1,8 @@
 import { Select } from "../../../components/ui/Select";
 import { Textarea } from "../../../components/ui/Textarea";
+import { MultiSelect } from "../../../components/ui/MultiSelect";
 import { YesNoField } from "../../../components/ui/YesNoField";
-import { lookupOptions, toNullableId } from "./shared";
+import { byName, lookupOptions, toNullableId } from "./shared";
 import type { TabProps } from "./shared";
 
 /**
@@ -81,12 +82,15 @@ export function Tab11Tamreen({ value, lookups, errorFor, onChange, disabled }: T
           disabled={disabled || lookups.tamreen_frequencies.length === 0}
         />
 
-        <Select
+        {/* FR-084a. Several methods, not one — a member may do more than one of them. */}
+        <MultiSelect
           label="Method Used for Tamreen"
-          value={value.tamreen_method_id == null ? "" : String(value.tamreen_method_id)}
-          onChange={(e) => onChange("tamreen_method_id", toNullableId(e.target.value))}
-          options={lookupOptions(lookups.tamreen_methods)}
-          error={errorFor("tamreen_method_id")}
+          options={[...lookups.tamreen_methods].sort(byName)}
+          value={value.tamreen_method_ids ?? []}
+          onChange={(ids) => onChange("tamreen_method_ids", ids)}
+          error={errorFor("tamreen_method_ids")}
+          helperText="Select any that apply."
+          searchPlaceholder="Search methods..."
           disabled={disabled || lookups.tamreen_methods.length === 0}
         />
       </div>

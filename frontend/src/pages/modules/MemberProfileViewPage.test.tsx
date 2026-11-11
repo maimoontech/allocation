@@ -50,6 +50,7 @@ const PROFILE = {
   titles: [],
   sharafs: [],
   skill_ids: [],
+  tamreen_method_ids: [],
   places_visited: [],
   ashara_attendances: []
 };
