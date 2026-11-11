@@ -1,5 +1,27 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-11 — Changed: three lists keep their own order; the prefixes go alphabetical
+
+Yesterday's blanket A-Z was too wide in one direction and too narrow in another.
+
+- **Titles, Hifz Sanads and Halqas** follow `display_order` again — the column an
+  administrator sets on the Dropdown Lists page. These three carry a sequence the alphabet
+  does not know: titles and sanads rank, and halqas run in the organisation's own order.
+  So `display_order` is meaningful again, for these three.
+- **First Prefix and Father Prefix** are now alphabetical: None, Mulla, Sheikh.
+
+**"None" stays at the top** rather than taking its alphabetical place between Mulla and
+Sheikh. It is not a prefix — it is this field's way of saying there isn't one, which every
+other dropdown here expresses with a "Select..." placeholder, and placeholders belong first.
+Say the word if you want it strictly alphabetical instead.
+
+The ordering is now stated at each call site (`"name"` or `"display"`) rather than inferred,
+because nothing about a list's contents says which rule it wants — a silent default is how
+Titles got alphabetised in the first place. Everything else stays A-Z per FR-093a.
+
+FR-093b added.
+
+
 ## 2026-11-09 — Changed: every dropdown of names is A-Z, active and inactive together
 
 Sorting is now case-insensitive alphabetical, applied to the stored name rather than the

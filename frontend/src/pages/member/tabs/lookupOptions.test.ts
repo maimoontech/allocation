@@ -69,3 +69,50 @@ describe("byName", () => {
     expect(byName({ name: "Same" }, { name: "same" })).toBe(0);
   });
 });
+
+/**
+ * FR-093b — Titles, Hifz Sanads and Halqas follow the administrator's own order.
+ *
+ * These three carry a sequence the alphabet does not know: titles and sanads rank, and
+ * halqas run in the organisation's order. The server sends them by `display_order`, and
+ * "display" means "leave that alone".
+ *
+ * The fixture is supplied in an order that alphabetising would CHANGE, so these fail if the
+ * default ever creeps back.
+ */
+describe("lookupOptions ordered by display_order", () => {
+  const ranked = [
+    { id: 1, name: "Zulu Rank One", is_draft: false },
+    { id: 2, name: "Alpha Rank Two", is_draft: false },
+    { id: 3, name: "Mike Rank Three", is_draft: false }
+  ];
+
+  const labels = (opts: { label: string }[]) => opts.slice(1).map((o) => o.label);
+
+  it("keeps the order the server sent", () => {
+    expect(labels(lookupOptions(ranked, "Select...", "display"))).toEqual([
+      "Zulu Rank One",
+      "Alpha Rank Two",
+      "Mike Rank Three"
+    ]);
+  });
+
+  it("alphabetises the very same list when asked for name order", () => {
+    expect(labels(lookupOptions(ranked, "Select...", "name"))).toEqual([
+      "Alpha Rank Two",
+      "Mike Rank Three",
+      "Zulu Rank One"
+    ]);
+  });
+
+  it("still defaults to A-Z when no order is given", () => {
+    expect(labels(lookupOptions(ranked))[0]).toBe("Alpha Rank Two");
+  });
+
+  it("still keeps the placeholder first", () => {
+    expect(lookupOptions(ranked, "Pick...", "display")[0]).toEqual({
+      value: "",
+      label: "Pick..."
+    });
+  });
+});

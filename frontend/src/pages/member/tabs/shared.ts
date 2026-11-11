@@ -43,13 +43,29 @@ export function byName<T extends { name: string }>(a: T, b: T): number {
   return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
 }
 
+/**
+ * How a lookup dropdown is ordered (FR-093a, FR-093b).
+ *
+ *   "name"    A-Z. The default, and right for lists whose values have no inherent sequence.
+ *   "display" The order the SERVER sent, which is `display_order` then name — the column an
+ *             administrator sets on the Dropdown Lists page. Chosen for Titles, Hifz Sanads
+ *             and Halqas, where the sequence means something the alphabet does not know:
+ *             titles and sanads rank, and halqas follow the organisation's own order.
+ *
+ * Stated per call site rather than inferred, because nothing about a list's CONTENT says
+ * which it wants, and a silent default is how Titles ended up alphabetised by mistake.
+ */
+export type LookupOrder = "name" | "display";
+
 export function lookupOptions(
   list: LookupValue[],
-  placeholder = "Select..."
+  placeholder = "Select...",
+  order: LookupOrder = "name"
 ): SelectOption[] {
+  const ordered = order === "name" ? [...list].sort(byName) : list;
   return [
     { value: "", label: list.length ? placeholder : "No options available" },
-    ...[...list].sort(byName).map((item) => ({
+    ...ordered.map((item) => ({
       value: String(item.id),
       label: item.is_draft ? `${item.name}  (DRAFT — NEEDS REVIEW)` : item.name
     }))

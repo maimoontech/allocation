@@ -93,7 +93,7 @@ export function Tab02TitlePrefix({ value, lookups, errorFor, onChange, disabled 
                 label="Title"
                 value={row.title_id === 0 ? "" : String(row.title_id)}
                 onChange={(e) => update({ ...row, title_id: Number(e.target.value || 0) })}
-                options={lookupOptions(lookups.titles)}
+                options={lookupOptions(lookups.titles, "Select...", "display")}
                 error={errorFor(`titles[${index}].title_id`)}
                 disabled={disabled}
               />

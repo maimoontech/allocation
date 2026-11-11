@@ -29,7 +29,7 @@ export function Tab10Asbaq({ value, lookups, errorFor, onChange, disabled }: Tab
           label="Halqa"
           value={value.halqa_id == null ? "" : String(value.halqa_id)}
           onChange={(e) => onChange("halqa_id", toNullableId(e.target.value))}
-          options={lookupOptions(lookups.halqas)}
+          options={lookupOptions(lookups.halqas, "Select...", "display")}
           error={errorFor("halqa_id")}
           disabled={disabled || lookups.halqas.length === 0}
         />

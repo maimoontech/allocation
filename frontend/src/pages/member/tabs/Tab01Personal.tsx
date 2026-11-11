@@ -25,10 +25,18 @@ export type Tab01Props = TabProps & {
   photoPath?: string;
 };
 
+/**
+ * First Prefix and Father Prefix, A-Z (FR-093b).
+ *
+ * "None" stays at the top rather than taking its alphabetical place between Mulla and
+ * Sheikh. It is not a prefix — it is this field's way of saying there isn't one, the role
+ * every other dropdown here gives to a "Select..." placeholder, and placeholders belong
+ * first. The two actual prefixes below it are alphabetical.
+ */
 const PREFIX_OPTIONS = [
   { value: "None", label: "None" },
-  { value: "Sheikh", label: "Sheikh" },
-  { value: "Mulla", label: "Mulla" }
+  { value: "Mulla", label: "Mulla" },
+  { value: "Sheikh", label: "Sheikh" }
 ];
 
 /**

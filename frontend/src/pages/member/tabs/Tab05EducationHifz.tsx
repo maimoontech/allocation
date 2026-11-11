@@ -92,7 +92,7 @@ export function Tab05EducationHifz({ value, lookups, errorFor, onChange, disable
               label="Sanad"
               value={value.sanad_id == null ? "" : String(value.sanad_id)}
               onChange={(e) => onChange("sanad_id", toNullableId(e.target.value))}
-              options={lookupOptions(lookups.sanads)}
+              options={lookupOptions(lookups.sanads, "Select...", "display")}
               error={errorFor("sanad_id")}
               disabled={disabled}
             />
