@@ -3,6 +3,7 @@ import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Textarea } from "../../components/ui/Textarea";
+import { apiErrorMessage } from "../../features/api/apiErrorMessage";
 import {
   useCreateHelpTopicMutation,
   useDeleteHelpTopicMutation,
@@ -80,10 +81,10 @@ export function HelpTopicsPage() {
       }
       cancelEdit();
     } catch (err: unknown) {
-      // Shown verbatim: the server names the rule that failed — a duplicate key, or
-      // keywords too weak to ever match — and a generic message would throw that away.
-      const message = (err as { data?: { message?: string } } | undefined)?.data?.message;
-      setFormError(typeof message === "string" && message ? message : "Could not save the topic.");
+      // The server's own words when it has any — it names the rule that failed, a duplicate
+      // key or keywords too weak to ever match. When it has none, apiErrorMessage says why
+      // rather than leaving "could not save" to be interpreted.
+      setFormError(apiErrorMessage(err, "Could not save the topic."));
     }
   }
 

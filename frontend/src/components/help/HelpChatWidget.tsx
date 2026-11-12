@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { apiErrorMessage } from "../../features/api/apiErrorMessage";
 import { useAskHelpChatMutation, useRateHelpChatMutation } from "../../features/member/helpChatApi";
 
 /**
@@ -70,8 +71,7 @@ export function HelpChatWidget() {
       setQuestion("");
       setStep("answered");
     } catch (err: unknown) {
-      const message = (err as { data?: { message?: string } } | undefined)?.data?.message;
-      setError(typeof message === "string" && message ? message : "Could not answer that right now.");
+      setError(apiErrorMessage(err, "Could not answer that right now."));
     }
   }
 
