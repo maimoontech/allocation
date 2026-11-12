@@ -1,5 +1,40 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-12 — Added: the Need Help chat for members
+
+A **Need Help** button sits at the bottom right of every member screen. It opens a chat that
+answers questions about filling in the profile, asks for a five-star rating, then "Do you
+need further help?" — Yes returns to the question box with the conversation still above, No
+replies "Thanks from Anjuman e Zakereen Hussain AS." and closes.
+
+**The answers are a knowledge base, not a language model.** Every one restates a rule this
+application actually enforces — 1375 AH for the Zikr e Hussain year and 1401 for the others,
+why BMI stays blank, why the Hizb list needs a Zone first, that a rejected photograph is
+removed. A member told the wrong range loses a save and makes a phone call, and an answer
+that merely sounds right is worse than none. It also needs no API key, costs nothing per
+message, and works when the network does not.
+
+- A question matching nothing is answered honestly: it says so and lists what can be asked.
+  Nothing is guessed, and **one weak keyword will not produce an answer** — "a question about
+  my year" reaches a person rather than a confident paragraph about titles.
+- The steps are a state machine, not a set of flags: the stars cannot appear before an
+  answer, the Yes/No cannot appear before a rating, and a second question cannot be typed
+  while the first is unrated. Tests assert each of those absences.
+- Every exchange is stored with ITS Number, Name, Question, Agent Reply and Star Rating. The
+  ITS number and name are **copied onto the row**, so the log says who asked at the time
+  rather than being rewritten by a later name change. An unrated answer stays NULL — the
+  member closed the window or is still reading, which is not a score of zero.
+- **Admin → Help Chats** lists every exchange with its rating, the average, and how often the
+  agent had no answer at all. That last number is the one worth acting on: each is a gap a
+  member actually hit.
+- The widget is mounted on the member shell rather than the profile page, so it is reachable
+  from every member screen — including the forced password change, where someone who cannot
+  get in is most likely to want it.
+
+FR-110 added. 293 frontend tests pass (12 new); the knowledge base has 22 tests of its own,
+which found two wrong answers before they shipped.
+
+
 ## 2026-11-12 — Fixed: the test suite is runnable again, and green
 
 The previous entry said verification was incomplete because the suite kept collapsing. It is

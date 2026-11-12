@@ -3,13 +3,13 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 cde87bda3d68cfec)
+--   Sources : membership_schema.sql (sha256 7d712f6a5e2f7bca)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
 --
 -- WHAT THIS DOES
---   Creates 24 new tables and seeds 10 of the 11 lookup lists with reviewed values.
+--   Creates 25 new tables and seeds 10 of the 11 lookup lists with reviewed values.
 --   The eleventh, aqa_moula_asharas, ships EMPTY on purpose — an administrator enters
 --   its values through the Dropdown Lists panel.
 --
@@ -870,6 +870,34 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+-- FR-110. One row per answered question in the Need Help chat.
+--
+-- `its_no` and `member_name` are COPIED here rather than joined. The chat log is a
+-- record of what was asked and answered at a moment in time, and a member who
+-- later corrects their name should not silently rewrite who asked last month.
+-- `member_account_id` is still the link, and survives a name change either way.
+--
+-- `star_rating` is NULL until the member rates the answer, which is a real state:
+-- they closed the window, or are still reading. 0 would be a score they gave.
+CREATE TABLE IF NOT EXISTS member_help_chats (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  member_account_id INT UNSIGNED NOT NULL,
+  its_no VARCHAR(20) NOT NULL COMMENT 'As it was when the question was asked',
+  member_name VARCHAR(150) NULL COMMENT 'As it was when the question was asked',
+  question VARCHAR(1000) NOT NULL,
+  agent_reply TEXT NOT NULL,
+  topic VARCHAR(60) NULL COMMENT 'Which knowledge-base entry answered, or NULL when nothing matched',
+  star_rating TINYINT UNSIGNED NULL COMMENT '1 to 5. NULL means not rated, which is not the same as a low score',
+  rated_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_member_help_chats_member (member_account_id, created_at),
+  KEY idx_member_help_chats_rating (star_rating),
+  CONSTRAINT fk_member_help_chats_member_account_id
+    FOREIGN KEY (member_account_id) REFERENCES member_accounts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 -- FR-005a. Who reset a member's password, for whom, and when.
 --
 -- No password material, obviously, and none is needed: the question an audit of
@@ -1190,7 +1218,7 @@ WHERE tamreen_method_id IS NOT NULL;
 -- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 24 new tables, and every existing count unchanged.
+--    Expect 25 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -1203,9 +1231,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
     'aqa_moula_asharas','member_profile_edits','member_password_resets',
-    'member_tamreen_methods'
+    'member_tamreen_methods','member_help_chats'
   );
--- Expected: 24
+-- Expected: 25
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION
@@ -1670,9 +1698,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
     'aqa_moula_asharas','member_profile_edits','member_password_resets',
-    'member_tamreen_methods'
+    'member_tamreen_methods','member_help_chats'
   );
--- Expected: 24
+-- Expected: 25
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will

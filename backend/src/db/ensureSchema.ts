@@ -53,6 +53,34 @@ export async function ensureSchema() {
   await ensureHizbTabColumns();
   await ensurePasswordResetAudit();
   await ensureTamreenMethods();
+  await ensureHelpChats();
+}
+
+/**
+ * FR-110. The Need Help chat log.
+ *
+ * `its_no` and `member_name` are copied onto each row rather than joined, so the log says
+ * who asked at the time; `star_rating` is NULL until rated, which is not the same as a
+ * score of zero.
+ */
+async function ensureHelpChats() {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS member_help_chats (
+       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+       member_account_id INT UNSIGNED NOT NULL,
+       its_no VARCHAR(20) NOT NULL,
+       member_name VARCHAR(150) NULL,
+       question VARCHAR(1000) NOT NULL,
+       agent_reply TEXT NOT NULL,
+       topic VARCHAR(60) NULL,
+       star_rating TINYINT UNSIGNED NULL,
+       rated_at DATETIME NULL,
+       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       PRIMARY KEY (id),
+       KEY idx_member_help_chats_member (member_account_id, created_at),
+       KEY idx_member_help_chats_rating (star_rating)
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+  );
 }
 
 /**

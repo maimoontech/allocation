@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { HelpChatWidget } from "../help/HelpChatWidget";
 import { useAppDispatch, useAppSelector } from "../../hooks/storeHooks";
 import { clearAuth } from "../../features/auth/authSlice";
 import { Button } from "../ui/Button";
@@ -21,6 +22,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/reports", label: "Reports" },
     { to: "/members", label: "Members" },
     { to: "/member-lookups", label: "Dropdown Lists" },
+    { to: "/help-chats", label: "Help Chats" },
     { to: "/member-photo-approvals", label: "Photo Approvals" },
     { to: "/import-export", label: "Import/Export" }
   ],
@@ -66,15 +68,21 @@ export function AppShell() {
   // A member gets the Dynamics 365 styled frame; every other role keeps this one.
   if (user.role === "member") {
     return (
-      <MemberShell
-        nav={nav}
-        displayName={user.displayName}
-        avatarUrl={avatarUrl}
-        onLogout={() => {
-          dispatch(clearAuth());
-          navigate("/login", { replace: true });
-        }}
-      />
+      <>
+        <MemberShell
+          nav={nav}
+          displayName={user.displayName}
+          avatarUrl={avatarUrl}
+          onLogout={() => {
+            dispatch(clearAuth());
+            navigate("/login", { replace: true });
+          }}
+        />
+        {/* FR-110. On the shell rather than the profile page, so Need Help is reachable from
+            every member screen — including the forced password change, where a member who
+            cannot get in is most likely to want it. */}
+        <HelpChatWidget />
+      </>
     );
   }
 

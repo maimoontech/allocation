@@ -22,6 +22,7 @@ const importExportRoutes_1 = require("./routes/importExportRoutes");
 const memberAdminRoutes_1 = require("./routes/memberAdminRoutes");
 const memberLookupAdminRoutes_1 = require("./routes/memberLookupAdminRoutes");
 const memberLookupsRoutes_1 = require("./routes/memberLookupsRoutes");
+const memberHelpChatRoutes_1 = require("./routes/memberHelpChatRoutes");
 const memberProfileRoutes_1 = require("./routes/memberProfileRoutes");
 const memberPhotoRoutes_1 = require("./routes/memberPhotoRoutes");
 const memberPhotoApprovalRoutes_1 = require("./routes/memberPhotoApprovalRoutes");
@@ -59,9 +60,15 @@ app.use("/api/v1/import-export", importExportRoutes_1.importExportRoutes);
 // refused 403 by the admin guard before reaching their own route. The specific "/me/..."
 // paths cannot collide with the admin router's "/" and "/:id".
 app.use("/api/v1/members", memberProfileRoutes_1.memberProfileRoutes);
+// Member-owned, and mounted with the other "/me/..." routers for the same reason: ahead of
+// the admin router, whose "/:id" would otherwise swallow these paths.
+app.use("/api/v1/members", memberHelpChatRoutes_1.memberHelpChatRoutes);
 app.use("/api/v1/members", memberPhotoRoutes_1.memberPhotoRoutes);
 app.use("/api/v1/members/lookups", memberLookupsRoutes_1.memberLookupsRoutes);
 app.use("/api/v1/members", memberAdminRoutes_1.memberAdminRoutes);
+// Admin -> Help Chats. Its own base path rather than another rule on /api/v1/members,
+// which is already shared between member-owned and admin-only routers.
+app.use("/api/v1/help-chats", memberHelpChatRoutes_1.helpChatAdminRoutes);
 // Admin maintenance of the membership lookup lists. A separate base path from
 // /api/v1/members on purpose: that path is shared by the member-owned routers and an
 // admin-only router, and adding a third set of rules to that overlap is how the 403-on-

@@ -17,6 +17,7 @@ import { importExportRoutes } from "./routes/importExportRoutes";
 import { memberAdminRoutes } from "./routes/memberAdminRoutes";
 import { memberLookupAdminRoutes } from "./routes/memberLookupAdminRoutes";
 import { memberLookupsRoutes } from "./routes/memberLookupsRoutes";
+import { helpChatAdminRoutes, memberHelpChatRoutes } from "./routes/memberHelpChatRoutes";
 import { memberProfileRoutes } from "./routes/memberProfileRoutes";
 import { memberPhotoRoutes } from "./routes/memberPhotoRoutes";
 import { memberPhotoApprovalRoutes } from "./routes/memberPhotoApprovalRoutes";
@@ -61,9 +62,16 @@ app.use("/api/v1/import-export", importExportRoutes);
 // refused 403 by the admin guard before reaching their own route. The specific "/me/..."
 // paths cannot collide with the admin router's "/" and "/:id".
 app.use("/api/v1/members", memberProfileRoutes);
+// Member-owned, and mounted with the other "/me/..." routers for the same reason: ahead of
+// the admin router, whose "/:id" would otherwise swallow these paths.
+app.use("/api/v1/members", memberHelpChatRoutes);
 app.use("/api/v1/members", memberPhotoRoutes);
 app.use("/api/v1/members/lookups", memberLookupsRoutes);
 app.use("/api/v1/members", memberAdminRoutes);
+
+// Admin -> Help Chats. Its own base path rather than another rule on /api/v1/members,
+// which is already shared between member-owned and admin-only routers.
+app.use("/api/v1/help-chats", helpChatAdminRoutes);
 
 // Admin maintenance of the membership lookup lists. A separate base path from
 // /api/v1/members on purpose: that path is shared by the member-owned routers and an

@@ -22,6 +22,7 @@ import { MemberProfilePage } from "../pages/member/MemberProfilePage";
 import { MembersPage } from "../pages/modules/MembersPage";
 import { MemberPhotoApprovalPage } from "../pages/modules/MemberPhotoApprovalPage";
 import { MemberProfileViewPage } from "../pages/modules/MemberProfileViewPage";
+import { HelpChatsPage } from "../pages/modules/HelpChatsPage";
 import { MemberLookupsPage } from "../pages/modules/MemberLookupsPage";
 import { MemberLookupEditPage } from "../pages/modules/MemberLookupEditPage";
 
@@ -46,6 +47,9 @@ export function AppRoutes() {
           <Route path="/import-export" element={<ImportExportPage />} />
           {/* The dropdown options members choose from. Five of the ten lists ship empty, so
               this is how they get their authoritative values. */}
+          {/* FR-110. Admin-only: the log is read to find out which questions keep coming
+              up and which answers score badly, which is a question about the form. */}
+          <Route path="/help-chats" element={<HelpChatsPage />} />
           <Route path="/member-lookups" element={<MemberLookupsPage />} />
           <Route path="/member-lookups/:entity" element={<MemberLookupEditPage />} />
         </Route>
