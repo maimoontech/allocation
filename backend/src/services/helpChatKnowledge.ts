@@ -288,18 +288,46 @@ function normalise(text: string): string {
 export type HelpAnswer = { topic: string | null; reply: string };
 
 /**
+ * Turns the keywords an administrator typed into the weighted form the matcher uses
+ * (FR-110a).
+ *
+ * Comma separated, with a trailing `*` doubling a word: `ashara*, attended, moze`. That
+ * syntax is the whole of what an administrator has to learn, and it is explained next to
+ * the box. Empty entries are dropped so a trailing comma is harmless.
+ */
+export function parseKeywords(raw: string): Array<string | [string, number]> {
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .map((part) =>
+      part.endsWith("*") ? ([part.slice(0, -1).trim(), 2] as [string, number]) : part
+    )
+    .filter((part) => (Array.isArray(part) ? part[0] !== "" : true));
+}
+
+/**
  * The best-matching topic for a question, or a fallback that says what can be asked.
  *
  * Scores every topic and takes the highest, rather than returning the first hit: "which
  * years can I choose for Ashara" contains both "year" and "ashara", and the Ashara answer
  * is the useful one.
  */
-export function answerHelpQuestion(question: string): HelpAnswer {
+export function answerHelpQuestion(
+  question: string,
+  adminTopics: HelpTopic[] = []
+): HelpAnswer {
   const haystack = normalise(question);
+
+  // An administrator's topic sharing a key with a built-in REPLACES it (FR-110a). That is
+  // how a built-in answer gets reworded without a deploy, and deactivating the row — which
+  // simply stops it arriving here — puts the original back.
+  const overridden = new Set(adminTopics.map((t) => t.id));
+  const topics = [...HELP_TOPICS.filter((t) => !overridden.has(t.id)), ...adminTopics];
 
   let best: { topic: HelpTopic; score: number } | null = null;
 
-  for (const topic of HELP_TOPICS) {
+  for (const topic of topics) {
     let score = 0;
     for (const keyword of topic.keywords) {
       const [term, weight] = Array.isArray(keyword) ? keyword : [keyword, 1];
@@ -314,7 +342,9 @@ export function answerHelpQuestion(question: string): HelpAnswer {
       reply:
         "I could not match that to something I know about. I can help with questions on " +
         "any of these:\n\n" +
-        HELP_TOPICS.map((t) => `• ${t.label}`).join("\n") +
+        // `topics`, not HELP_TOPICS: a subject an administrator added must appear in
+        // the list of what can be asked, or nobody will know to ask for it.
+        topics.map((t) => `• ${t.label}`).join("\n") +
         "\n\nTry naming the tab or the field — for example 'what years can I pick for a " +
         "title' or 'why is my BMI blank'. For anything outside the form itself, your Zonal " +
         "Head or an administrator can help."

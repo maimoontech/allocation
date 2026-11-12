@@ -31,6 +31,36 @@ export type HelpChatPage = {
   page_size: number;
 };
 
+export type BuiltInTopic = {
+  topic_key: string;
+  label: string;
+  /** True when an active custom topic with the same key is answering instead. */
+  overridden: boolean;
+  times_used: number;
+  average_rating: number | null;
+};
+
+export type CustomTopic = {
+  id: number;
+  topic_key: string;
+  label: string;
+  keywords: string;
+  answer: string;
+  is_active: boolean;
+  overrides_built_in: boolean;
+  times_used: number;
+  average_rating: number | null;
+};
+
+export type HelpTopicsResponse = { built_in: BuiltInTopic[]; custom: CustomTopic[] };
+
+export type TopicInput = {
+  topic_key?: string;
+  label: string;
+  keywords: string;
+  answer: string;
+};
+
 export const helpChatApi = api.injectEndpoints({
   endpoints: (builder) => ({
     /**
@@ -56,6 +86,45 @@ export const helpChatApi = api.injectEndpoints({
       invalidatesTags: [{ type: "HelpChats", id: "LIST" }]
     }),
 
+    /** Admin → Help Topics: everything the agent knows, built-in and written. */
+    getHelpTopics: builder.query<HelpTopicsResponse, void>({
+      query: () => "/help-topics",
+      transformResponse: (res: ApiEnvelope<HelpTopicsResponse>) => res.data,
+      providesTags: [{ type: "HelpTopics", id: "LIST" }]
+    }),
+
+    createHelpTopic: builder.mutation<{ id: number }, TopicInput>({
+      query: (body) => ({ url: "/help-topics", method: "POST", body }),
+      transformResponse: (res: ApiEnvelope<{ id: number }>) => res.data,
+      invalidatesTags: [{ type: "HelpTopics", id: "LIST" }]
+    }),
+
+    updateHelpTopic: builder.mutation<
+      { id: number },
+      { id: number; body: Partial<TopicInput> & { is_active?: boolean } }
+    >({
+      query: ({ id, body }) => ({ url: `/help-topics/${id}`, method: "PATCH", body }),
+      transformResponse: (res: ApiEnvelope<{ id: number }>) => res.data,
+      invalidatesTags: [{ type: "HelpTopics", id: "LIST" }]
+    }),
+
+    deleteHelpTopic: builder.mutation<{ id: number }, number>({
+      query: (id) => ({ url: `/help-topics/${id}`, method: "DELETE" }),
+      transformResponse: (res: ApiEnvelope<{ id: number }>) => res.data,
+      invalidatesTags: [{ type: "HelpTopics", id: "LIST" }]
+    }),
+
+    /** Try a question without leaving a chat row behind. */
+    previewHelpTopic: builder.mutation<
+      { topic: string | null; reply: string; matched: boolean },
+      { question: string }
+    >({
+      query: (body) => ({ url: "/help-topics/preview", method: "POST", body }),
+      transformResponse: (
+        res: ApiEnvelope<{ topic: string | null; reply: string; matched: boolean }>
+      ) => res.data
+    }),
+
     /** Admin → Help Chats. */
     getHelpChats: builder.query<HelpChatPage, { page?: number; rated?: string } | void>({
       query: (arg) => {
@@ -74,5 +143,10 @@ export const helpChatApi = api.injectEndpoints({
 export const {
   useAskHelpChatMutation,
   useRateHelpChatMutation,
-  useGetHelpChatsQuery
+  useGetHelpChatsQuery,
+  useGetHelpTopicsQuery,
+  useCreateHelpTopicMutation,
+  useUpdateHelpTopicMutation,
+  useDeleteHelpTopicMutation,
+  usePreviewHelpTopicMutation
 } = helpChatApi;

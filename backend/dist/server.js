@@ -23,6 +23,7 @@ const memberAdminRoutes_1 = require("./routes/memberAdminRoutes");
 const memberLookupAdminRoutes_1 = require("./routes/memberLookupAdminRoutes");
 const memberLookupsRoutes_1 = require("./routes/memberLookupsRoutes");
 const memberHelpChatRoutes_1 = require("./routes/memberHelpChatRoutes");
+const helpTopicAdminRoutes_1 = require("./routes/helpTopicAdminRoutes");
 const memberProfileRoutes_1 = require("./routes/memberProfileRoutes");
 const memberPhotoRoutes_1 = require("./routes/memberPhotoRoutes");
 const memberPhotoApprovalRoutes_1 = require("./routes/memberPhotoApprovalRoutes");
@@ -69,6 +70,7 @@ app.use("/api/v1/members", memberAdminRoutes_1.memberAdminRoutes);
 // Admin -> Help Chats. Its own base path rather than another rule on /api/v1/members,
 // which is already shared between member-owned and admin-only routers.
 app.use("/api/v1/help-chats", memberHelpChatRoutes_1.helpChatAdminRoutes);
+app.use("/api/v1/help-topics", helpTopicAdminRoutes_1.helpTopicAdminRoutes);
 // Admin maintenance of the membership lookup lists. A separate base path from
 // /api/v1/members on purpose: that path is shared by the member-owned routers and an
 // admin-only router, and adding a third set of rules to that overlap is how the 403-on-

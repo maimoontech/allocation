@@ -24,6 +24,32 @@ const response_1 = require("../utils/response");
  */
 exports.memberHelpChatRoutes = (0, express_1.Router)();
 const MAX_QUESTION = 1000;
+/**
+ * The administrator-written topics, ready for the matcher (FR-110a).
+ *
+ * Read per question rather than cached: a topic added in the admin screen should answer the
+ * very next question, and this is one small indexed table.
+ *
+ * It fails SOFT. If the table cannot be read the built-in topics still answer, because a
+ * member asking for help is the worst moment to return an error about a help system.
+ */
+async function loadAdminTopics() {
+    try {
+        const [rows] = await pool_1.pool.query(`SELECT topic_key, label, keywords, answer
+       FROM help_topics
+       WHERE is_active = 1
+       ORDER BY topic_key`);
+        return rows.map((r) => ({
+            id: String(r.topic_key),
+            label: String(r.label),
+            keywords: (0, helpChatKnowledge_1.parseKeywords)(String(r.keywords ?? "")),
+            answer: String(r.answer)
+        }));
+    }
+    catch {
+        return [];
+    }
+}
 /** Ask a question. Returns the reply, and the id to attach a rating to. */
 exports.memberHelpChatRoutes.post("/me/help-chats", auth_1.requireAuth, (0, requireMember_1.requireMember)(), async (req, res) => {
     const memberId = req.user.memberId ?? req.user.id;
@@ -47,7 +73,7 @@ exports.memberHelpChatRoutes.post("/me/help-chats", auth_1.requireAuth, (0, requ
         const account = rows[0];
         if (!account)
             return (0, response_1.fail)(res, "Member not found", 404);
-        const { topic, reply } = (0, helpChatKnowledge_1.answerHelpQuestion)(question);
+        const { topic, reply } = (0, helpChatKnowledge_1.answerHelpQuestion)(question, await loadAdminTopics());
         const [result] = await pool_1.pool.query(`INSERT INTO member_help_chats
          (member_account_id, its_no, member_name, question, agent_reply, topic)
        VALUES (:member_account_id, :its_no, :member_name, :question, :agent_reply, :topic)`, {

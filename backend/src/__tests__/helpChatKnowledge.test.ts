@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HELP_TOPICS, answerHelpQuestion } from "../services/helpChatKnowledge";
+import { HELP_TOPICS, answerHelpQuestion, parseKeywords } from "../services/helpChatKnowledge";
 
 /**
  * The Need Help agent's answers (FR-110).
@@ -146,5 +146,100 @@ describe("the knowledge base itself", () => {
     for (const t of HELP_TOPICS) {
       expect(answerHelpQuestion(t.label).topic, t.id).not.toBeNull();
     }
+  });
+});
+
+/**
+ * Administrator-written topics, layered on the built-in ones (FR-110a).
+ *
+ * The override is the behaviour worth pinning: a topic sharing a key with a built-in has to
+ * REPLACE it, not sit beside it, or a member would get whichever of the two happened to
+ * score higher and nobody could tell which answer they had seen.
+ */
+describe("administrator-written topics", () => {
+  const custom = {
+    id: "jamaat_timings",
+    label: "Jamaat timings",
+    keywords: [["timings", 2] as [string, number], "namaz", "when"],
+    answer: "Timings are announced by your Jamaat and are not recorded in this form."
+  };
+
+  it("answers from a topic the built-ins do not cover", () => {
+    const answer = answerHelpQuestion("what are the timings?", [custom]);
+    expect(answer.topic).toBe("jamaat_timings");
+    expect(answer.reply).toContain("announced by your Jamaat");
+  });
+
+  it("leaves the built-in topics answering everything else", () => {
+    expect(answerHelpQuestion("why is my bmi blank?", [custom]).topic).toBe("health_bmi");
+  });
+
+  it("replaces a built-in when it reuses that key, rather than competing with it", () => {
+    const override = {
+      id: "health_bmi",
+      label: "Height, weight and BMI",
+      keywords: [["bmi", 2] as [string, number]],
+      answer: "Ask your Zonal Head about the health questions."
+    };
+
+    const answer = answerHelpQuestion("why is my bmi blank?", [override]);
+    expect(answer.topic).toBe("health_bmi");
+    expect(answer.reply).toBe(override.answer);
+    // The built-in wording must be gone, not merely outscored.
+    expect(answer.reply).not.toMatch(/feet and inches/i);
+  });
+
+  it("falls back to the built-in when the override is not supplied", () => {
+    // Deactivating a topic simply stops it being passed in, which must restore the original.
+    expect(answerHelpQuestion("why is my bmi blank?", []).reply).toMatch(/feet and inches/i);
+  });
+
+  it("lists the administrator's topics in the no-match reply", () => {
+    const answer = answerHelpQuestion("completely unrelated gibberish xyzzy", [custom]);
+    expect(answer.topic).toBeNull();
+    expect(answer.reply).toContain("Jamaat timings");
+  });
+
+  it("does not let an administrator's topic shrink the built-in list", () => {
+    const answer = answerHelpQuestion("completely unrelated gibberish xyzzy", [custom]);
+    for (const t of HELP_TOPICS) expect(answer.reply, t.id).toContain(t.label);
+  });
+});
+
+/**
+ * The keyword syntax an administrator types: comma separated, a trailing * doubling a word.
+ * It is the whole of what they have to learn, so it has to behave exactly as described.
+ */
+describe("parseKeywords", () => {
+  it("reads a plain comma-separated list", () => {
+    expect(parseKeywords("namaz, timings, when")).toEqual(["namaz", "timings", "when"]);
+  });
+
+  it("doubles a word marked with a trailing star", () => {
+    expect(parseKeywords("ashara*, attended")).toEqual([["ashara", 2], "attended"]);
+  });
+
+  it("tolerates stray spaces and trailing commas", () => {
+    expect(parseKeywords("  bmi* ,  height ,, ")).toEqual([["bmi", 2], "height"]);
+  });
+
+  it("returns nothing for an empty string", () => {
+    expect(parseKeywords("")).toEqual([]);
+    expect(parseKeywords("   ,  , ")).toEqual([]);
+  });
+
+  /** A lone "*" would otherwise become a zero-length keyword matching every question. */
+  it("drops a bare star", () => {
+    expect(parseKeywords("*")).toEqual([]);
+  });
+
+  it("produces keywords the matcher can actually use", () => {
+    const topic = {
+      id: "t",
+      label: "T",
+      keywords: parseKeywords("timings*"),
+      answer: "An answer long enough to be worth returning to the member."
+    };
+    expect(answerHelpQuestion("what are the timings", [topic]).topic).toBe("t");
   });
 });

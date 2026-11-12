@@ -3,13 +3,13 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 7d712f6a5e2f7bca)
+--   Sources : membership_schema.sql (sha256 bdae7b096176adf8)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
 --
 -- WHAT THIS DOES
---   Creates 25 new tables and seeds 10 of the 11 lookup lists with reviewed values.
+--   Creates 26 new tables and seeds 10 of the 11 lookup lists with reviewed values.
 --   The eleventh, aqa_moula_asharas, ships EMPTY on purpose — an administrator enters
 --   its values through the Dropdown Lists panel.
 --
@@ -870,6 +870,31 @@ CREATE TABLE IF NOT EXISTS member_ashara_attendances (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+-- FR-110a. Help topics an administrator writes, on top of the ones in code.
+--
+-- The built-in topics stay in `helpChatKnowledge.ts` where they are test-covered
+-- against the rules they restate. This table ADDS to them, and a row whose
+-- `topic_key` matches a built-in OVERRIDES it -- which is how an administrator
+-- rewords a built-in answer without a deploy, and how deactivating that row puts
+-- the original back.
+--
+-- `keywords` is stored as the administrator typed it, comma separated, with a
+-- trailing * marking a word that should count double. Parsing it on read rather
+-- than storing a parsed form keeps the edit box showing exactly what was entered.
+CREATE TABLE IF NOT EXISTS help_topics (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  topic_key VARCHAR(60) NOT NULL COMMENT 'Stored on each chat row. Matching a built-in id overrides it.',
+  label VARCHAR(150) NOT NULL COMMENT 'Shown in the "I can help with" list',
+  keywords VARCHAR(500) NOT NULL COMMENT 'Comma separated. A trailing * doubles the weight.',
+  answer TEXT NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_help_topics_key (topic_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
 -- FR-110. One row per answered question in the Need Help chat.
 --
 -- `its_no` and `member_name` are COPIED here rather than joined. The chat log is a
@@ -1218,7 +1243,7 @@ WHERE tamreen_method_id IS NOT NULL;
 -- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 25 new tables, and every existing count unchanged.
+--    Expect 26 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -1231,9 +1256,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
     'aqa_moula_asharas','member_profile_edits','member_password_resets',
-    'member_tamreen_methods','member_help_chats'
+    'member_tamreen_methods','member_help_chats','help_topics'
   );
--- Expected: 25
+-- Expected: 26
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION
@@ -1698,9 +1723,9 @@ WHERE TABLE_SCHEMA = DATABASE()
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
     'aqa_moula_asharas','member_profile_edits','member_password_resets',
-    'member_tamreen_methods','member_help_chats'
+    'member_tamreen_methods','member_help_chats','help_topics'
   );
--- Expected: 25
+-- Expected: 26
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will

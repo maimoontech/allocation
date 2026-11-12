@@ -152,6 +152,6 @@ const baseQueryWithReauth: BaseQueryFn<
 export const api = createApi({
   reducerPath: "api",
   baseQuery: baseQueryWithReauth,
-  tagTypes: ["Zones", "Mohallahs", "Parties", "Venues", "Miqaats", "Schedules", "Reports", "Ratings", "Members", "MemberLookups", "MemberPhoto", "MemberProfileAdmin", "HelpChats", "PartyMembers"],
+  tagTypes: ["Zones", "Mohallahs", "Parties", "Venues", "Miqaats", "Schedules", "Reports", "Ratings", "Members", "MemberLookups", "MemberPhoto", "MemberProfileAdmin", "HelpChats", "HelpTopics", "PartyMembers"],
   endpoints: () => ({})
 });

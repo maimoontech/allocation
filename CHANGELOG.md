@@ -1,5 +1,33 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-12 — Added: Admin → Help Topics, so the knowledge base is editable
+
+The Need Help agent's answers were a code file. They still are — and now an administrator can
+add to them from inside the app, with no redeploy.
+
+- **Both layers.** The 23 built-in topics stay in `helpChatKnowledge.ts`, where tests pin
+  them against the rules they restate. Topics written in the app are added on top.
+- **A written topic that reuses a built-in key replaces it.** That is the supported way to
+  reword a built-in answer, and turning the written topic off puts the original back. The
+  built-ins are shown on the page but not editable there: they describe rules the server
+  enforces, and an unreviewed edit would be a confident wrong answer about a real rule.
+- **Keywords are comma separated, with a trailing `*` doubling a word** — `ashara*, attended,
+  moze`. That is the whole syntax, and it is written next to the box.
+- **A topic whose keywords could never reach the threshold is refused on save**, naming why.
+  The matcher needs two points, so one ordinary keyword creates a topic no member can ever
+  reach — better to refuse it than to let someone write an answer nobody will see.
+- **Try a question** runs it against the knowledge base and shows which topic answers,
+  without recording a chat. Keyword matching goes wrong in ways that are invisible until a
+  member hits them, and checking it should not mean signing in as a member.
+- Each topic shows how often it was used and its average rating, so a badly worded answer is
+  visible rather than merely suspected.
+- If the topics table cannot be read the built-ins still answer. A member asking for help is
+  the worst possible moment to return an error about the help system.
+
+FR-110a added. 293 frontend tests and 34 knowledge-base tests pass; the new ones caught the
+"what can I ask" list leaving out exactly the topics an administrator had just written.
+
+
 ## 2026-11-12 — Added: the Need Help chat for members
 
 A **Need Help** button sits at the bottom right of every member screen. It opens a chat that

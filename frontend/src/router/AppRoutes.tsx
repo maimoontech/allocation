@@ -23,6 +23,7 @@ import { MembersPage } from "../pages/modules/MembersPage";
 import { MemberPhotoApprovalPage } from "../pages/modules/MemberPhotoApprovalPage";
 import { MemberProfileViewPage } from "../pages/modules/MemberProfileViewPage";
 import { HelpChatsPage } from "../pages/modules/HelpChatsPage";
+import { HelpTopicsPage } from "../pages/modules/HelpTopicsPage";
 import { MemberLookupsPage } from "../pages/modules/MemberLookupsPage";
 import { MemberLookupEditPage } from "../pages/modules/MemberLookupEditPage";
 
@@ -50,6 +51,8 @@ export function AppRoutes() {
           {/* FR-110. Admin-only: the log is read to find out which questions keep coming
               up and which answers score badly, which is a question about the form. */}
           <Route path="/help-chats" element={<HelpChatsPage />} />
+          {/* FR-110a. Where the agent's answers are written. */}
+          <Route path="/help-topics" element={<HelpTopicsPage />} />
           <Route path="/member-lookups" element={<MemberLookupsPage />} />
           <Route path="/member-lookups/:entity" element={<MemberLookupEditPage />} />
         </Route>

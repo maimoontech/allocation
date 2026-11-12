@@ -54,6 +54,31 @@ export async function ensureSchema() {
   await ensurePasswordResetAudit();
   await ensureTamreenMethods();
   await ensureHelpChats();
+  await ensureHelpTopics();
+}
+
+/**
+ * FR-110a. Help topics an administrator writes, on top of the built-in ones.
+ *
+ * A row whose `topic_key` matches a built-in overrides it; deactivating the row puts the
+ * built-in back. The table starts empty — the 23 built-ins stay in code, where they are
+ * pinned by tests against the rules they restate.
+ */
+async function ensureHelpTopics() {
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS help_topics (
+       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+       topic_key VARCHAR(60) NOT NULL,
+       label VARCHAR(150) NOT NULL,
+       keywords VARCHAR(500) NOT NULL,
+       answer TEXT NOT NULL,
+       is_active TINYINT(1) NOT NULL DEFAULT 1,
+       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+       PRIMARY KEY (id),
+       UNIQUE KEY uq_help_topics_key (topic_key)
+     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+  );
 }
 
 /**

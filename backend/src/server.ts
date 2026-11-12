@@ -18,6 +18,7 @@ import { memberAdminRoutes } from "./routes/memberAdminRoutes";
 import { memberLookupAdminRoutes } from "./routes/memberLookupAdminRoutes";
 import { memberLookupsRoutes } from "./routes/memberLookupsRoutes";
 import { helpChatAdminRoutes, memberHelpChatRoutes } from "./routes/memberHelpChatRoutes";
+import { helpTopicAdminRoutes } from "./routes/helpTopicAdminRoutes";
 import { memberProfileRoutes } from "./routes/memberProfileRoutes";
 import { memberPhotoRoutes } from "./routes/memberPhotoRoutes";
 import { memberPhotoApprovalRoutes } from "./routes/memberPhotoApprovalRoutes";
@@ -72,6 +73,7 @@ app.use("/api/v1/members", memberAdminRoutes);
 // Admin -> Help Chats. Its own base path rather than another rule on /api/v1/members,
 // which is already shared between member-owned and admin-only routers.
 app.use("/api/v1/help-chats", helpChatAdminRoutes);
+app.use("/api/v1/help-topics", helpTopicAdminRoutes);
 
 // Admin maintenance of the membership lookup lists. A separate base path from
 // /api/v1/members on purpose: that path is shared by the member-owned routers and an

@@ -22,6 +22,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { to: "/reports", label: "Reports" },
     { to: "/members", label: "Members" },
     { to: "/member-lookups", label: "Dropdown Lists" },
+    { to: "/help-topics", label: "Help Topics" },
     { to: "/help-chats", label: "Help Chats" },
     { to: "/member-photo-approvals", label: "Photo Approvals" },
     { to: "/import-export", label: "Import/Export" }

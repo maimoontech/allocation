@@ -2,7 +2,11 @@ import { Router } from "express";
 import { pool } from "../db/pool";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { requireMember } from "../middleware/requireMember";
-import { answerHelpQuestion } from "../services/helpChatKnowledge";
+import {
+  answerHelpQuestion,
+  parseKeywords,
+  type HelpTopic
+} from "../services/helpChatKnowledge";
 import { fail, ok } from "../utils/response";
 
 /**
@@ -24,6 +28,34 @@ import { fail, ok } from "../utils/response";
 export const memberHelpChatRoutes = Router();
 
 const MAX_QUESTION = 1000;
+
+/**
+ * The administrator-written topics, ready for the matcher (FR-110a).
+ *
+ * Read per question rather than cached: a topic added in the admin screen should answer the
+ * very next question, and this is one small indexed table.
+ *
+ * It fails SOFT. If the table cannot be read the built-in topics still answer, because a
+ * member asking for help is the worst moment to return an error about a help system.
+ */
+async function loadAdminTopics(): Promise<HelpTopic[]> {
+  try {
+    const [rows] = await pool.query<any[]>(
+      `SELECT topic_key, label, keywords, answer
+       FROM help_topics
+       WHERE is_active = 1
+       ORDER BY topic_key`
+    );
+    return rows.map((r) => ({
+      id: String(r.topic_key),
+      label: String(r.label),
+      keywords: parseKeywords(String(r.keywords ?? "")),
+      answer: String(r.answer)
+    }));
+  } catch {
+    return [];
+  }
+}
 
 /** Ask a question. Returns the reply, and the id to attach a rating to. */
 memberHelpChatRoutes.post("/me/help-chats", requireAuth, requireMember(), async (req, res) => {
@@ -52,7 +84,7 @@ memberHelpChatRoutes.post("/me/help-chats", requireAuth, requireMember(), async 
     const account = rows[0];
     if (!account) return fail(res, "Member not found", 404);
 
-    const { topic, reply } = answerHelpQuestion(question);
+    const { topic, reply } = answerHelpQuestion(question, await loadAdminTopics());
 
     const [result] = await pool.query<any>(
       `INSERT INTO member_help_chats
