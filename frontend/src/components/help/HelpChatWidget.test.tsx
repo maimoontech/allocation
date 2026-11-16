@@ -157,14 +157,14 @@ describe("HelpChatWidget", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "No" }));
 
-    expect(screen.getByText("Thanks from Anjuman e Zakereen Hussain AS.")).toBeInTheDocument();
+    expect(screen.getByText("Thank You. Anjuman e Zakereen Hussain AS.")).toBeInTheDocument();
 
     // The thank-you is readable before the window goes.
     await waitFor(
       () => expect(screen.queryByRole("dialog", { name: "Need Help" })).not.toBeInTheDocument(),
       { timeout: 4000 }
     );
-    expect(screen.getByRole("button", { name: "Need Help" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Need Help?" })).toBeInTheDocument();
   });
 
   it("starts fresh when reopened after closing", async () => {
@@ -173,7 +173,7 @@ describe("HelpChatWidget", () => {
     await waitFor(() => expect(screen.getByText("Do you need further help?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "No" }));
     await waitFor(
-      () => expect(screen.getByRole("button", { name: "Need Help" })).toBeInTheDocument(),
+      () => expect(screen.getByRole("button", { name: "Need Help?" })).toBeInTheDocument(),
       { timeout: 4000 }
     );
 

@@ -29,7 +29,7 @@ type Turn = {
   rating: number | null;
 };
 
-const CLOSING_MESSAGE = "Thanks from Anjuman e Zakereen Hussain AS.";
+const CLOSING_MESSAGE = "Thank you.  Anjuman e Zakereen Hussain AS.";
 
 export function HelpChatWidget() {
   const [open, setOpen] = useState(false);
@@ -116,11 +116,11 @@ export function HelpChatWidget() {
   return (
     <div
       role="dialog"
-      aria-label="Need Help"
+      aria-label="Need Help?"
       className="fixed bottom-4 right-4 z-50 flex max-h-[80vh] w-[min(24rem,calc(100vw-2rem))] flex-col rounded-input border border-border bg-white shadow-xl"
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <div className="text-sm font-semibold">Need Help</div>
+        <div className="text-sm font-semibold">Need Help?</div>
         <button
           type="button"
           onClick={() => {
