@@ -108,7 +108,7 @@ export function HelpChatWidget() {
         onClick={() => setOpen(true)}
         className="fixed bottom-4 right-4 z-50 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
       >
-        Need Help
+        Need Help?
       </button>
     );
   }
