@@ -86,6 +86,8 @@ const BASE: MemberProfile = {
   takes_ustad_assistance: null,
   uses_idaratuz_zakereen_books: null,
   khidmat_type: null,
+  sansta_id: null,
+  umoor_id: null,
   sansta_name: null,
   umoor_name: null,
   khidmat_designation: null,
@@ -103,6 +105,8 @@ const LOOKUPS: MemberLookups = {
   sharafs: [],
   halqas: [],
   mozes: [],
+  sanstas: [{ id: 81, name: "Burhani Sansta", is_draft: false }],
+  umoors: [{ id: 91, name: "Umoor e Dawat", is_draft: false }],
   aqa_moula_asharas: [],
   places: [],
   sanads: [{ id: 3, name: "Marhala Ula", is_draft: false }],
@@ -314,12 +318,12 @@ describe("Tab 11 — Tamreen", () => {
 });
 
 describe("Tab 12 — Other Sansta Khidmat", () => {
-  // FR-086.
+  // FR-086, FR-086a.
   it("follows the Khidmat type and clears the name that no longer applies", () => {
     const state = renderTab(Tab12Khidmat, {
       khidmat_type: "Both",
-      sansta_name: "A Sansta",
-      umoor_name: "An Umoor"
+      sansta_id: 81,
+      umoor_id: 91
     });
 
     expect(screen.getByLabelText(/^Sansta Name/)).toBeInTheDocument();
@@ -329,8 +333,89 @@ describe("Tab 12 — Other Sansta Khidmat", () => {
 
     expect(screen.queryByLabelText(/^Sansta Name/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/^Umoor Name/)).toBeInTheDocument();
-    expect(state.value.sansta_name).toBeNull();
-    expect(state.value.umoor_name).toBe("An Umoor");
+    expect(state.value.sansta_id).toBeNull();
+    expect(state.value.umoor_id).toBe(91);
+  });
+
+  /**
+   * FR-086a. Both names are chosen from lists an administrator maintains, not typed.
+   *
+   * The clearing tests matter most: a hidden field that is still saved is one nobody can
+   * see to correct, and the free text a member gave before these lists existed has to be
+   * cleared alongside the id or it would outlive the answer it belonged to.
+   */
+  describe("the Sansta and Umoor lists", () => {
+    it("offers Sansta as a dropdown of the administrator's values", () => {
+      renderTab(Tab12Khidmat, { khidmat_type: "Sansta" });
+
+      const select = screen.getByLabelText(/^Sansta Name/) as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      expect(
+        Array.from(select.options).map((o) => o.textContent)
+      ).toContain("Burhani Sansta");
+    });
+
+    it("offers Umoor as a dropdown of the administrator's values", () => {
+      renderTab(Tab12Khidmat, { khidmat_type: "Umoor" });
+
+      const select = screen.getByLabelText(/^Umoor Name/) as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      expect(Array.from(select.options).map((o) => o.textContent)).toContain("Umoor e Dawat");
+    });
+
+    it("shows both dropdowns when the type is Both", () => {
+      renderTab(Tab12Khidmat, { khidmat_type: "Both" });
+
+      expect(screen.getByLabelText(/^Sansta Name/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Umoor Name/)).toBeInTheDocument();
+    });
+
+    it("records the chosen value as an id", () => {
+      const state = renderTab(Tab12Khidmat, { khidmat_type: "Sansta" });
+
+      fireEvent.change(screen.getByLabelText(/^Sansta Name/), { target: { value: "81" } });
+
+      expect(state.value.sansta_id).toBe(81);
+    });
+
+    /** The free text has to go with the id, or it outlives the answer it belonged to. */
+    it("clears the old free-text name alongside the id", () => {
+      const state = renderTab(Tab12Khidmat, {
+        khidmat_type: "Both",
+        sansta_id: 81,
+        sansta_name: "Typed before the list existed",
+        umoor_id: 91
+      });
+
+      fireEvent.change(screen.getByLabelText(/^Khidmat Type/), { target: { value: "Umoor" } });
+
+      expect(state.value.sansta_id).toBeNull();
+      expect(state.value.sansta_name).toBeNull();
+    });
+
+    /**
+     * An answer given before the lists existed is shown rather than discarded. Nothing here
+     * can safely decide which list entry "Burhani" meant, so the member is asked to pick.
+     */
+    it("shows an earlier free-text answer until one is chosen from the list", () => {
+      renderTab(Tab12Khidmat, {
+        khidmat_type: "Sansta",
+        sansta_id: null,
+        sansta_name: "Burhani"
+      });
+
+      expect(screen.getByText(/Previously entered: Burhani/)).toBeInTheDocument();
+    });
+
+    it("stops showing it once a value is chosen", () => {
+      renderTab(Tab12Khidmat, {
+        khidmat_type: "Sansta",
+        sansta_id: 81,
+        sansta_name: "Burhani"
+      });
+
+      expect(screen.queryByText(/Previously entered/)).not.toBeInTheDocument();
+    });
   });
 
   it("shows neither name field until a type is chosen", () => {

@@ -45,6 +45,56 @@ async function ensureSchema() {
     await ensureHelpChats();
     await ensureHelpTopics();
     await ensureHizbParticipation();
+    await ensureSanstaUmoorLists();
+}
+/**
+ * FR-086a. The Sansta and Umoor lists, and the profile columns that point at them.
+ *
+ * Both ship empty — naming the organisation's own Sanstas and Umoor is not something this
+ * code can invent. The free-text `sansta_name` and `umoor_name` columns are kept and no
+ * longer written: there is no safe way to turn "Burhani" into a chosen id, because only the
+ * organisation knows whether that is the same as "Burhani Sansta".
+ */
+async function ensureSanstaUmoorLists() {
+    for (const [table, column] of [
+        ["sanstas", "sansta_name"],
+        ["umoors", "umoor_name"]
+    ]) {
+        await pool_1.pool.query(`CREATE TABLE IF NOT EXISTS ${table} (
+         id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+         ${column} VARCHAR(150) NOT NULL,
+         display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+         is_active TINYINT(1) NOT NULL DEFAULT 1,
+         is_draft TINYINT(1) NOT NULL DEFAULT 1,
+         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+         PRIMARY KEY (id),
+         UNIQUE KEY uq_${table}_name (${column})
+       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`);
+    }
+    for (const [column, after, target] of [
+        ["sansta_id", "khidmat_type", "sanstas"],
+        ["umoor_id", "sansta_id", "umoors"]
+    ]) {
+        const [rows] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'member_profiles'
+         AND COLUMN_NAME = :column`, { column });
+        if (Number(rows[0]?.cnt ?? 0) === 0) {
+            await pool_1.pool.query(`ALTER TABLE member_profiles ADD COLUMN ${column} INT UNSIGNED NULL AFTER ${after}`);
+        }
+        const name = `fk_member_profiles_${column}`;
+        const [fk] = await pool_1.pool.query(`SELECT COUNT(*) AS cnt
+       FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'member_profiles'
+         AND CONSTRAINT_NAME = :name`, { name });
+        if (Number(fk[0]?.cnt ?? 0) === 0) {
+            await pool_1.pool.query(`ALTER TABLE member_profiles
+         ADD CONSTRAINT ${name} FOREIGN KEY (${column}) REFERENCES ${target}(id) ON DELETE SET NULL`);
+        }
+    }
 }
 /**
  * FR-048b. Whether the member is in a Party or does Zikr alone.

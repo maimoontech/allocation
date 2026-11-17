@@ -44,6 +44,20 @@ const ENTITIES = {
     //
     // The only list whose names may repeat (FR-077c): one place can host Ashara in several
     // years, one entry each. The year is unique instead.
+    sanstas: {
+        table: "sanstas",
+        nameColumn: "sansta_name",
+        label: "Sanstas",
+        usedFor: "Member profile, Tab 12 — Other Sansta Khidmat, when the Khidmat type is Sansta or Both.",
+        references: [{ table: "member_profiles", column: "sansta_id", label: "member profiles" }]
+    },
+    umoors: {
+        table: "umoors",
+        nameColumn: "umoor_name",
+        label: "Umoor",
+        usedFor: "Member profile, Tab 12 — Other Sansta Khidmat, when the Khidmat type is Umoor or Both.",
+        references: [{ table: "member_profiles", column: "umoor_id", label: "member profiles" }]
+    },
     aqa_moula_asharas: {
         table: "aqa_moula_asharas",
         nameColumn: "aqa_moula_ashara_name",
@@ -339,7 +353,7 @@ exports.memberLookupAdminRoutes.delete("/:entity/:id", async (req, res) => {
     try {
         const inUse = await usageCount(entity, id);
         if (inUse > 0) {
-            // Refused for ALL eleven lists, not only the RESTRICT ones. See usageCount.
+            // Refused for ALL thirteen lists, not only the RESTRICT ones. See usageCount.
             return (0, response_1.fail)(res, `This value is used by ${inUse} member ${inUse === 1 ? "record" : "records"}. ` +
                 `Deleting it would change their answers. Set it to Inactive instead — it then ` +
                 `disappears from the form for new entries while existing answers are kept.`, 409, { in_use: inUse });

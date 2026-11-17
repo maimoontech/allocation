@@ -61,6 +61,8 @@ const LOOKUPS = {
   sharafs: [],
   halqas: [],
   mozes: [],
+  sanstas: [],
+  umoors: [],
   aqa_moula_asharas: [],
   places: [],
   sanads: [],

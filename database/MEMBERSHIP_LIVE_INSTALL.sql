@@ -3,13 +3,13 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 0d915ac802a9e7e9)
+--   Sources : membership_schema.sql (sha256 1c390f00208cc7cb)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
 --
 -- WHAT THIS DOES
---   Creates 26 new tables and seeds 10 of the 11 lookup lists with reviewed values.
+--   Creates 28 new tables and seeds 10 of the 11 lookup lists with reviewed values.
 --   The eleventh, aqa_moula_asharas, ships EMPTY on purpose — an administrator enters
 --   its values through the Dropdown Lists panel.
 --
@@ -333,6 +333,33 @@ CREATE TABLE IF NOT EXISTS sanads (
   UNIQUE KEY uq_sanads_name (sanad_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- FR-086a. The Sansta and Umoor names, which were free text until 2026-11-18.
+-- Both ship EMPTY: naming the organisation's own Sanstas and Umoor is not something
+-- this code can invent. An administrator fills them in Dropdown Lists.
+CREATE TABLE IF NOT EXISTS sanstas (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  sansta_name VARCHAR(150) NOT NULL,
+  display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_draft TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_sanstas_name (sansta_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS umoors (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  umoor_name VARCHAR(150) NOT NULL,
+  display_order SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  is_draft TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_umoors_name (umoor_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 CREATE TABLE IF NOT EXISTS marital_statuses (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   marital_status_name VARCHAR(150) NOT NULL,
@@ -546,6 +573,8 @@ CREATE TABLE IF NOT EXISTS member_profiles (
 
   -- Tab 12: Other Sansta Khidmat
   khidmat_type ENUM('Sansta','Umoor','Both') NULL,
+  sansta_id INT UNSIGNED NULL COMMENT 'FR-086a: chosen from the sanstas list.',
+  umoor_id INT UNSIGNED NULL COMMENT 'FR-086a: chosen from the umoors list.',
   sansta_name VARCHAR(150) NULL COMMENT 'FR-086: required when khidmat_type is Sansta or Both',
   umoor_name VARCHAR(150) NULL COMMENT 'FR-086: required when khidmat_type is Umoor or Both',
   khidmat_designation VARCHAR(150) NULL,
@@ -577,6 +606,10 @@ CREATE TABLE IF NOT EXISTS member_profiles (
     FOREIGN KEY (sanad_id) REFERENCES sanads(id) ON DELETE SET NULL,
   CONSTRAINT fk_member_profiles_halqa_id
     FOREIGN KEY (halqa_id) REFERENCES halqas(id) ON DELETE SET NULL,
+  CONSTRAINT fk_member_profiles_sansta_id
+    FOREIGN KEY (sansta_id) REFERENCES sanstas(id) ON DELETE SET NULL,
+  CONSTRAINT fk_member_profiles_umoor_id
+    FOREIGN KEY (umoor_id) REFERENCES umoors(id) ON DELETE SET NULL,
   CONSTRAINT fk_member_profiles_party_tamreen_frequency_id
     FOREIGN KEY (party_tamreen_frequency_id) REFERENCES tamreen_frequencies(id) ON DELETE SET NULL,
   CONSTRAINT fk_member_profiles_solo_tamreen_frequency_id
@@ -1272,9 +1305,59 @@ DROP PROCEDURE mm_backfill_hizb_participation;
 
 
 -- ----------------------------------------------------------------------------
+-- 4h. Backfill: member_profiles.sansta_id and umoor_id, added on 2026-11-18
+--
+--     The free-text sansta_name and umoor_name columns are KEPT and no longer
+--     written. They hold what members typed before the lists existed, and there is
+--     no safe way to turn free text into a chosen id: "Burhani" and "Burhani
+--     Sansta" may or may not be the same thing, and only the organisation knows.
+--     An administrator can enter the real names in Dropdown Lists, after which
+--     members pick from them.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_backfill_sansta_umoor;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_sansta_umoor()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'sansta_id') THEN
+    ALTER TABLE member_profiles ADD COLUMN sansta_id INT UNSIGNED NULL AFTER khidmat_type;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'umoor_id') THEN
+    ALTER TABLE member_profiles ADD COLUMN umoor_id INT UNSIGNED NULL AFTER sansta_id;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND CONSTRAINT_NAME = 'fk_member_profiles_sansta_id') THEN
+    ALTER TABLE member_profiles
+      ADD CONSTRAINT fk_member_profiles_sansta_id
+        FOREIGN KEY (sansta_id) REFERENCES sanstas(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND CONSTRAINT_NAME = 'fk_member_profiles_umoor_id') THEN
+    ALTER TABLE member_profiles
+      ADD CONSTRAINT fk_member_profiles_umoor_id
+        FOREIGN KEY (umoor_id) REFERENCES umoors(id) ON DELETE SET NULL;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_sansta_umoor();
+DROP PROCEDURE mm_backfill_sansta_umoor;
+
+
+-- ----------------------------------------------------------------------------
 -- 5. Post-run verification
 --
---    Expect 26 new tables, and every existing count unchanged.
+--    Expect 28 new tables, and every existing count unchanged.
 -- ----------------------------------------------------------------------------
 
 SELECT COUNT(*) AS new_tables_created
@@ -1287,9 +1370,10 @@ WHERE TABLE_SCHEMA = DATABASE()
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
     'aqa_moula_asharas','member_profile_edits','member_password_resets',
-    'member_tamreen_methods','member_help_chats','help_topics'
+    'member_tamreen_methods','member_help_chats','help_topics',
+    'sanstas','umoors'
   );
--- Expected: 26
+-- Expected: 28
 
 -- Confirms the generated column exists and is VIRTUAL.
 SELECT COLUMN_NAME, EXTRA, GENERATION_EXPRESSION
@@ -1754,9 +1838,10 @@ WHERE TABLE_SCHEMA = DATABASE()
     'titles','sharafs','halqas','mozes','places','sanads',
     'marital_statuses','skills','tamreen_frequencies','tamreen_methods',
     'aqa_moula_asharas','member_profile_edits','member_password_resets',
-    'member_tamreen_methods','member_help_chats','help_topics'
+    'member_tamreen_methods','member_help_chats','help_topics',
+    'sanstas','umoors'
   );
--- Expected: 26
+-- Expected: 28
 
 -- Every module table must be utf8mb4_general_ci. Anything listed here inherited the
 -- database default instead, and an its_no comparison against an existing table will

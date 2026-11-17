@@ -178,6 +178,10 @@ const LOOKUP_FKS: Record<string, { table: string; tab: number }> = {
   // lists, but the handling is identical — parsed, persisted, read back and checked to still
   // exist — so it belongs here rather than in a special case of its own.
   mohallah_id: { table: "mohallahs", tab: 1 },
+  // FR-086a. Chosen from lists an administrator maintains, replacing the free text that
+  // `sansta_name` and `umoor_name` still hold for answers given before those lists existed.
+  sansta_id: { table: "sanstas", tab: 12 },
+  umoor_id: { table: "umoors", tab: 12 },
   sanad_id: { table: "sanads", tab: 5 },
   halqa_id: { table: "halqas", tab: 10 },
   party_tamreen_frequency_id: { table: "tamreen_frequencies", tab: 11 },
@@ -205,6 +209,7 @@ const COLUMN_TAB: Record<string, number> = {
   party_tamreen_frequency_id: 11, solo_tamreen_frequency_id: 11, tamreen_method_id: 11,
   takes_ustad_assistance: 11, uses_idaratuz_zakereen_books: 11,
   khidmat_type: 12, sansta_name: 12, umoor_name: 12, khidmat_designation: 12,
+  sansta_id: 12, umoor_id: 12,
   khidmat_since_year: 12
 };
 
@@ -639,16 +644,38 @@ export async function saveMemberProfile(
     values.tamreen_absence_reason = null;
   }
 
-  // FR-086: which name fields apply follows the Khidmat type.
+  // FR-086, FR-086a: which name applies follows the Khidmat type, and each is now chosen
+  // from a list rather than typed. The answer the type makes meaningless is cleared, both
+  // the id and the free text a member may have entered before the lists existed.
   if (values.khidmat_type === "Sansta") {
-    if (!values.sansta_name) add("sansta_name", "Enter the Sansta name.", 12);
+    values.umoor_id = null;
     values.umoor_name = null;
   } else if (values.khidmat_type === "Umoor") {
-    if (!values.umoor_name) add("umoor_name", "Enter the Umoor name.", 12);
+    values.sansta_id = null;
     values.sansta_name = null;
-  } else if (values.khidmat_type === "Both") {
-    if (!values.sansta_name) add("sansta_name", "Enter the Sansta name.", 12);
-    if (!values.umoor_name) add("umoor_name", "Enter the Umoor name.", 12);
+  }
+
+  if (values.khidmat_type != null) {
+    const wantsSansta = values.khidmat_type === "Sansta" || values.khidmat_type === "Both";
+    const wantsUmoor = values.khidmat_type === "Umoor" || values.khidmat_type === "Both";
+
+    // Required ONLY once the list has something to choose from.
+    //
+    // These lists ship empty, and FR-095 says an empty list must not stop the rest of the
+    // profile being saved. Demanding a selection from an empty dropdown would trap a member
+    // who picked a Khidmat type on a tab they could then never save. So the requirement
+    // waits for the list to exist — and the free text they may already have counts, so
+    // nobody is asked to re-enter an answer they have already given.
+    if (wantsSansta && !values.sansta_id && !values.sansta_name) {
+      if (await lookupHasValues("sanstas")) {
+        add("sansta_id", "Select the Sansta.", 12);
+      }
+    }
+    if (wantsUmoor && !values.umoor_id && !values.umoor_name) {
+      if (await lookupHasValues("umoors")) {
+        add("umoor_id", "Select the Umoor.", 12);
+      }
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -1151,6 +1178,27 @@ async function resolveAqaMoulaPlaces(ashara: AsharaEntry[]) {
 // ---------------------------------------------------------------------------
 // Referential integrity
 // ---------------------------------------------------------------------------
+
+/**
+ * Whether a lookup list has anything a member could choose (FR-086a).
+ *
+ * Used to decide whether a selection can be REQUIRED. An empty list must not block a save
+ * (FR-095), so the requirement only applies once the organisation has filled it in.
+ *
+ * The table name comes from this file's own literals, never from input.
+ */
+async function lookupHasValues(table: string): Promise<boolean> {
+  try {
+    const [rows] = await pool.query<any[]>(
+      `SELECT 1 FROM ${table} WHERE is_active = 1 LIMIT 1`
+    );
+    return rows.length > 0;
+  } catch {
+    // A list that cannot be read is treated as empty: failing to save is a worse outcome
+    // than accepting a profile with one field unanswered.
+    return false;
+  }
+}
 
 async function existingIds(table: string, ids: number[]): Promise<Set<number>> {
   if (ids.length === 0) return new Set();

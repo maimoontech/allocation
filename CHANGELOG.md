@@ -1,5 +1,31 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-18 — Changed: Sansta and Umoor names are dropdowns
+
+Tab 12's two name fields were free text. They are now chosen from **two new lists in Admin →
+Dropdown Lists** — Sanstas and Umoor — bringing the total to thirteen.
+
+Which appears is unchanged: Sansta shows one, Umoor the other, **Both shows both**.
+
+Three decisions worth stating:
+
+- **Both lists ship empty.** Naming the organisation's own Sanstas and Umoor is not something
+  this code can invent, so it follows the same pattern as Titles, Sharaf and the rest.
+- **A selection is required only once its list has values.** Demanding one from an empty
+  dropdown would trap a member who picked a Khidmat type on a tab they could then never save
+  — and FR-095 already says an empty list must not block the rest of the profile. The
+  requirement starts applying the moment you add the first value.
+- **Old typed answers are kept and shown, not deleted.** A member who entered "Burhani"
+  before the lists existed still sees it, with a note to choose it from the list. Nothing
+  here can safely decide whether "Burhani" meant "Burhani Sansta" — only you know that, so
+  nothing guesses.
+
+Changing the Khidmat type clears the id *and* the old free text together, so a hidden answer
+cannot outlive the question it belonged to.
+
+FR-086a added.
+
+
 ## 2026-11-17 — Added: Party or Solo on the Hizb tab
 
 Once a Zone is chosen, Tab 3 asks whether the member is in a **Party** or is **Solo**.

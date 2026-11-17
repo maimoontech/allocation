@@ -85,6 +85,8 @@ const BASE = {
   takes_ustad_assistance: null,
   uses_idaratuz_zakereen_books: null,
   khidmat_type: null,
+  sansta_id: null,
+  umoor_id: null,
   sansta_name: null,
   umoor_name: null,
   khidmat_designation: null,
@@ -105,6 +107,8 @@ const LOOKUPS: MemberLookups = {
   sharafs: [{ id: 21, name: "Khidmat Sharaf", is_draft: true }],
   halqas: [],
   mozes: [{ id: 31, name: "Karachi", is_draft: true }],
+  sanstas: [],
+  umoors: [],
   aqa_moula_asharas: [{ id: 61, name: "Colombo", is_draft: true, hijri_year: 1446 }],
   places: [
     { id: 41, name: "Nairobi", is_draft: true },

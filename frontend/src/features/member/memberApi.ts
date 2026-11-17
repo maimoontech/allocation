@@ -63,6 +63,9 @@ export type MemberLookups = {
   sharafs: LookupValue[];
   halqas: LookupValue[];
   mozes: LookupValue[];
+  /** FR-086a. Tab 12's Sansta and Umoor names, chosen rather than typed. */
+  sanstas: LookupValue[];
+  umoors: LookupValue[];
   /** Where Aqa Moula TUS held Ashara Mubaraka. Separate from `mozes` — see Tab 9. */
   aqa_moula_asharas: AqaMoulaPlace[];
   places: LookupValue[];
@@ -180,6 +183,9 @@ export type MemberProfile = {
   uses_idaratuz_zakereen_books: boolean | null;
 
   khidmat_type: string | null;
+  /** FR-086a. The chosen Sansta; `sansta_name` is the free text given before the list existed. */
+  sansta_id: number | null;
+  umoor_id: number | null;
   sansta_name: string | null;
   umoor_name: string | null;
   khidmat_designation: string | null;

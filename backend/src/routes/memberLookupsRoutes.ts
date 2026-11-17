@@ -61,7 +61,9 @@ const LOOKUP_TABLES = {
   skills: "skill_name",
   tamreen_frequencies: "tamreen_frequency_name",
   tamreen_methods: "tamreen_method_name",
-  aqa_moula_asharas: "aqa_moula_ashara_name"
+  aqa_moula_asharas: "aqa_moula_ashara_name",
+  sanstas: "sansta_name",
+  umoors: "umoor_name"
 } as const;
 
 memberLookupsRoutes.get("/", async (_req, res) => {
