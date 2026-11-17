@@ -161,6 +161,7 @@ const PLAUSIBLE_RANGES: Record<string, { min: number; max: number; unit: string 
 const ENUM_COLUMNS: Record<string, readonly string[]> = {
   first_prefix: ["None", "Sheikh", "Mulla"],
   father_prefix: ["None", "Sheikh", "Mulla"],
+  hizb_participation: ["Party", "Solo"],
   hizb_role: ["Leader", "Side Lead", "Member"],
   occupation_type: ["Job", "Business"],
   education_level: ["Primary", "Middle", "Secondary", "Intermediate", "Bachelors", "Masters", "PhD"],
@@ -191,7 +192,8 @@ const COLUMN_TAB: Record<string, number> = {
   mohallah_id: 1, phone_no: 1,
   mobile_no_1: 1, mobile_no_2: 1, whatsapp_no_1: 1, whatsapp_no_2: 1, email: 1,
   prefix_year: 2,
-  zone_id: 3, party_id: 3, hizb_role: 3, zikr_e_hussain_since_year: 3,
+  zone_id: 3, party_id: 3, hizb_participation: 3, hizb_role: 3,
+  zikr_e_hussain_since_year: 3,
   registered_with_idaratuz_zakereen: 3, five_kalam_uploaded_when: 3,
   occupation_type: 4, organisation_name: 4, designation: 4, occupation_since_year: 4,
   work_address: 4, work_phone_no: 4,
@@ -613,6 +615,14 @@ export async function saveMemberProfile(
 
   // FR-052: Designation belongs to a Job.
   if (values.occupation_type === "Business") values.designation = null;
+
+  // FR-048b. Solo means the member does Zikr alone: there is no Party to belong to, and
+  // the Role is Leader by definition. Both are set HERE rather than trusted from the client,
+  // so a stale form or an older build cannot store a Solo member inside a Party.
+  if (values.hizb_participation === "Solo") {
+    values.party_id = null;
+    values.hizb_role = "Leader";
+  }
 
   // FR-059: a Sanad is required when the member claims one.
   if (values.has_hifz_sanad === 1 && !values.sanad_id) {

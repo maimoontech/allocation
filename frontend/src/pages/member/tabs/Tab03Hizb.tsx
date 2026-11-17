@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Input } from "../../../components/ui/Input";
+import { RadioGroup } from "../../../components/ui/RadioGroup";
 import { Select } from "../../../components/ui/Select";
 import { YesNoField } from "../../../components/ui/YesNoField";
 import { byName, lookupOptions, toNullableId, yearOptions } from "./shared";
@@ -15,6 +16,20 @@ import type { TabProps } from "./shared";
  * accepts. Today that makes the range 1375–1448 exactly as asked.
  */
 const ZIKR_YEAR_MIN = 1375;
+
+/**
+ * FR-048b. What the member does, asked once a Zone is chosen.
+ *
+ * Solo is not "no Party" — it is a positive answer meaning they do Zikr alone, which is why
+ * it is stored rather than inferred from an empty Party. A profile with no Party is just as
+ * likely to belong to somebody who has not reached that field yet.
+ */
+const PARTICIPATION_OPTIONS = [
+  { value: "Party", label: "Party" },
+  { value: "Solo", label: "Solo" }
+];
+
+const SOLO_ROLE = "Leader";
 
 const ROLE_OPTIONS = [
   { value: "", label: "Select..." },
@@ -85,6 +100,25 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
     [partiesInZone, value.zone_id]
   );
 
+  const isSolo = value.hizb_participation === "Solo";
+
+  /**
+   * Solo fixes both of the fields below it: there is no Party, and the Role is Leader.
+   *
+   * Set in the SAME update rather than left to the controls, which are about to be disabled
+   * — a disabled control fires no change, so anything left behind would simply be saved.
+   * Moving back to Party clears the Role instead of keeping "Leader": that value was forced
+   * by Solo, and carrying it over would record a Party Leader nobody chose to be.
+   */
+  function onParticipationChange(next: string) {
+    onChange(
+      "__fields__",
+      next === "Solo"
+        ? { hizb_participation: "Solo", party_id: null, hizb_role: SOLO_ROLE }
+        : { hizb_participation: next, hizb_role: null }
+    );
+  }
+
   function onZoneChange(raw: string) {
     const zoneId = raw === "" ? null : Number(raw);
 
@@ -117,25 +151,52 @@ export function Tab03Hizb({ value, lookups, errorFor, onChange, disabled }: TabP
           disabled={disabled}
         />
 
-        <Select
-          label="Party"
-          value={value.party_id == null ? "" : String(value.party_id)}
-          onChange={(e) =>
-            onChange("party_id", toNullableId(e.target.value))
-          }
-          options={partyOptions}
-          error={errorFor("party_id")}
-          disabled={disabled || value.zone_id == null}
-        />
+        {/* Only once a Zone is chosen: the question is which of that Zone's Hizbs they are
+            in, so asking it before the Zone has no meaning to answer against. */}
+        {value.zone_id != null ? (
+          <RadioGroup
+            label="Party or Solo"
+            name="hizb_participation"
+            options={PARTICIPATION_OPTIONS}
+            value={value.hizb_participation ?? null}
+            onChange={onParticipationChange}
+            error={errorFor("hizb_participation")}
+            helperText="Choose Solo if you do Zikr e Hussain on your own rather than with a Hizb."
+            disabled={disabled}
+          />
+        ) : null}
 
-        <Select
-          label="Role"
-          value={value.hizb_role ?? ""}
-          onChange={(e) => onChange("hizb_role", e.target.value === "" ? null : e.target.value)}
-          options={ROLE_OPTIONS}
-          error={errorFor("hizb_role")}
-          disabled={disabled}
-        />
+        {/* The note sits under the control rather than in it: `Select` carries no helper
+            text, and a locked field with no reason given reads as a fault. */}
+        <div>
+          <Select
+            label="Party"
+            value={value.party_id == null ? "" : String(value.party_id)}
+            onChange={(e) => onChange("party_id", toNullableId(e.target.value))}
+            options={partyOptions}
+            error={errorFor("party_id")}
+            disabled={disabled || value.zone_id == null || isSolo}
+          />
+          {isSolo ? (
+            <div className="mt-1 text-xs text-textMuted">Not applicable to a Solo member.</div>
+          ) : null}
+        </div>
+
+        <div>
+          <Select
+            label="Role"
+            value={value.hizb_role ?? ""}
+            onChange={(e) => onChange("hizb_role", e.target.value === "" ? null : e.target.value)}
+            options={ROLE_OPTIONS}
+            error={errorFor("hizb_role")}
+            disabled={disabled || isSolo}
+          />
+          {isSolo ? (
+            <div className="mt-1 text-xs text-textMuted">
+              Leader, because you do Zikr on your own.
+            </div>
+          ) : null}
+        </div>
 
         <Select
           label="Since when have you been doing Zikr e Hussain AS? (AH)"

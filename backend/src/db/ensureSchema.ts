@@ -55,6 +55,29 @@ export async function ensureSchema() {
   await ensureTamreenMethods();
   await ensureHelpChats();
   await ensureHelpTopics();
+  await ensureHizbParticipation();
+}
+
+/**
+ * FR-048b. Whether the member is in a Party or does Zikr alone.
+ *
+ * Existing rows stay NULL rather than being guessed at. A profile with no party looks like
+ * Solo, but is just as likely to belong to someone who had not reached that field — and
+ * writing Solo would also force their Role to Leader.
+ */
+async function ensureHizbParticipation() {
+  const [rows] = await pool.query<any[]>(
+    `SELECT COUNT(*) AS cnt
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND COLUMN_NAME = 'hizb_participation'`
+  );
+  if (Number(rows[0]?.cnt ?? 0) === 0) {
+    await pool.query(
+      "ALTER TABLE member_profiles ADD COLUMN hizb_participation ENUM('Party','Solo') NULL AFTER party_id"
+    );
+  }
 }
 
 /**

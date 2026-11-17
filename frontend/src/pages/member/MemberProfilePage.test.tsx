@@ -41,6 +41,7 @@ const PROFILE = {
   prefix_year: null,
   zone_id: null,
   party_id: null,
+  hizb_participation: null,
   hizb_role: null,
   zikr_e_hussain_since_year: null,
   registered_with_idaratuz_zakereen: null,
@@ -301,7 +302,7 @@ describe("MemberProfilePage", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
     await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
-    fireEvent.change(screen.getByLabelText("Party"), { target: { value: "10" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Party" }), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
 
     await waitFor(() => expect(saveBodies).toHaveLength(2));
@@ -511,6 +512,112 @@ describe("MemberProfilePage", () => {
     });
   });
 
+  /**
+   * FR-048b — Party or Solo, asked once a Zone is chosen.
+   *
+   * Solo is a positive answer, not the absence of a Party: it fixes the Role to Leader and
+   * leaves no Party at all. The tests that matter are the ones about what Solo WRITES, since
+   * a disabled control fires no change and anything left behind would simply be saved.
+   */
+  describe("Tab 3 — Party or Solo", () => {
+    async function openHizb() {
+      renderWithProviders(<MemberProfilePage />);
+      await waitFor(() => expect(screen.getAllByRole("tab")).toHaveLength(12));
+      fireEvent.click(screen.getByRole("tab", { name: /Hizb/ }));
+      await waitFor(() => expect(screen.getByLabelText("Zone")).toBeInTheDocument());
+    }
+
+    const choice = () => screen.queryByRole("group", { name: /Party or Solo/ });
+
+    it("does not ask until a Zone is chosen", async () => {
+      await openHizb();
+
+      expect(choice()).not.toBeInTheDocument();
+    });
+
+    it("asks as soon as a Zone is chosen", async () => {
+      await openHizb();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      expect(choice()).toBeInTheDocument();
+      expect(within(choice()!).getByLabelText("Party")).toBeInTheDocument();
+      expect(within(choice()!).getByLabelText("Solo")).toBeInTheDocument();
+    });
+
+    it("leaves Party and Role working when Party is chosen", async () => {
+      await openHizb();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      fireEvent.click(within(choice()!).getByLabelText("Party"));
+
+      expect(screen.getByRole("combobox", { name: "Party" })).toBeEnabled();
+      expect(screen.getByLabelText("Role")).toBeEnabled();
+    });
+
+    it("locks Party and Role when Solo is chosen", async () => {
+      await openHizb();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      fireEvent.click(within(choice()!).getByLabelText("Solo"));
+
+      expect(screen.getByRole("combobox", { name: "Party" })).toBeDisabled();
+      expect(screen.getByLabelText("Role")).toBeDisabled();
+    });
+
+    it("sets the Role to Leader on Solo", async () => {
+      await openHizb();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      fireEvent.click(within(choice()!).getByLabelText("Solo"));
+
+      expect((screen.getByLabelText("Role") as HTMLSelectElement).value).toBe("Leader");
+    });
+
+    /** A disabled Party select fires nothing, so a Party chosen first must be cleared here. */
+    it("drops a Party already chosen when Solo is selected", async () => {
+      await openHizb();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+      fireEvent.click(within(choice()!).getByLabelText("Party"));
+      fireEvent.change(screen.getByRole("combobox", { name: "Party" }), { target: { value: "10" } });
+      expect((screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement).value).toBe("10");
+
+      fireEvent.click(within(choice()!).getByLabelText("Solo"));
+
+      expect((screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement).value).toBe("");
+    });
+
+    /**
+     * Going back to Party must not keep "Leader". That value was forced by Solo, and
+     * carrying it over would record a Party Leader the member never chose to be.
+     */
+    it("clears the forced Leader when returning to Party", async () => {
+      await openHizb();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+      fireEvent.click(within(choice()!).getByLabelText("Solo"));
+      expect((screen.getByLabelText("Role") as HTMLSelectElement).value).toBe("Leader");
+
+      fireEvent.click(within(choice()!).getByLabelText("Party"));
+
+      expect((screen.getByLabelText("Role") as HTMLSelectElement).value).toBe("");
+      expect(screen.getByLabelText("Role")).toBeEnabled();
+    });
+
+    it("saves Solo with no Party and the Leader role", async () => {
+      await openHizb();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+      fireEvent.click(within(choice()!).getByLabelText("Solo"));
+      fireEvent.click(screen.getByRole("button", { name: /Save Profile/i }));
+
+      await waitFor(() => expect(saveBodies).toHaveLength(1));
+      expect(saveBodies[0]).toMatchObject({
+        hizb_participation: "Solo",
+        party_id: null,
+        hizb_role: "Leader"
+      });
+    });
+  });
+
   describe("Tab 3 dependent dropdown", () => {
     async function openHizb() {
       renderWithProviders(<MemberProfilePage />);
@@ -521,7 +628,7 @@ describe("MemberProfilePage", () => {
 
     it("disables Party until a Zone is chosen", async () => {
       await openHizb();
-      expect(screen.getByLabelText("Party")).toBeDisabled();
+      expect(screen.getByRole("combobox", { name: "Party" })).toBeDisabled();
     });
 
     it("offers only the parties in the chosen Zone", async () => {
@@ -529,7 +636,7 @@ describe("MemberProfilePage", () => {
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
 
-      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const party = screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement;
       const labels = Array.from(party.options).map((o) => o.textContent);
       expect(labels).toContain("Zulu Hizb In One");
       expect(labels).not.toContain("Hizb In Two");
@@ -544,13 +651,13 @@ describe("MemberProfilePage", () => {
       await openHizb();
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
-      fireEvent.change(screen.getByLabelText("Party"), { target: { value: "10" } });
-      expect((screen.getByLabelText("Party") as HTMLSelectElement).value).toBe("10");
+      fireEvent.change(screen.getByRole("combobox", { name: "Party" }), { target: { value: "10" } });
+      expect((screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement).value).toBe("10");
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "2" } });
 
       await waitFor(() =>
-        expect((screen.getByLabelText("Party") as HTMLSelectElement).value).toBe("")
+        expect((screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement).value).toBe("")
       );
     });
 
@@ -571,7 +678,7 @@ describe("MemberProfilePage", () => {
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
 
-      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const party = screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement;
       const values = Array.from(party.options).map((o) => o.value);
       expect(values).toContain("11");
     });
@@ -584,7 +691,7 @@ describe("MemberProfilePage", () => {
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
 
-      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const party = screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement;
       const byValue = (v: string) =>
         Array.from(party.options).find((o) => o.value === v)?.textContent ?? "";
 
@@ -607,7 +714,7 @@ describe("MemberProfilePage", () => {
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
 
-      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const party = screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement;
       // [0] is the placeholder. Alphabetical puts the inactive "Alpha Hizb Retired" first.
       const values = Array.from(party.options).map((o) => o.value).slice(1);
       expect(values).toEqual(["11", "10"]);
@@ -621,7 +728,7 @@ describe("MemberProfilePage", () => {
 
       fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "2" } });
 
-      const party = screen.getByLabelText("Party") as HTMLSelectElement;
+      const party = screen.getByRole("combobox", { name: "Party" }) as HTMLSelectElement;
       const values = Array.from(party.options).map((o) => o.value);
       expect(values).toContain("20");
       expect(values).not.toContain("11");

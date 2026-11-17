@@ -134,6 +134,8 @@ export type MemberProfile = {
 
   zone_id: number | null;
   party_id: number | null;
+  /** FR-048b. "Party" or "Solo". NULL until answered — not the same as Solo. */
+  hizb_participation: string | null;
   hizb_role: string | null;
   /** FR-049a. Hijri, 1375 AH to the current Hijri year — a lower floor than the other years. */
   zikr_e_hussain_since_year: number | null;

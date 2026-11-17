@@ -50,6 +50,7 @@ const BASE: MemberProfile = {
   prefix_year: null,
   zone_id: null,
   party_id: null,
+  hizb_participation: null,
   hizb_role: null,
   zikr_e_hussain_since_year: null,
   registered_with_idaratuz_zakereen: null,

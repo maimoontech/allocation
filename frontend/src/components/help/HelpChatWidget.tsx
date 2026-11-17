@@ -29,7 +29,7 @@ type Turn = {
   rating: number | null;
 };
 
-const CLOSING_MESSAGE = "Thank you.  Anjuman e Zakereen Hussain AS.";
+const CLOSING_MESSAGE = "Thank you. Anjuman e Zakereen Hussain AS.";
 
 export function HelpChatWidget() {
   const [open, setOpen] = useState(false);

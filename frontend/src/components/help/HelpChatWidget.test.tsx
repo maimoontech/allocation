@@ -59,7 +59,7 @@ afterEach(() => {
 
 function openChat() {
   renderWithProviders(<HelpChatWidget />);
-  fireEvent.click(screen.getByRole("button", { name: "Need Help" }));
+  fireEvent.click(screen.getByRole("button", { name: "Need Help?" }));
 }
 
 async function ask(question = "which zone do I pick?") {
@@ -73,14 +73,14 @@ describe("HelpChatWidget", () => {
   it("shows a Need Help button and nothing else until it is clicked", () => {
     renderWithProviders(<HelpChatWidget />);
 
-    expect(screen.getByRole("button", { name: "Need Help" })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Need Help" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Need Help?" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Need Help?" })).not.toBeInTheDocument();
   });
 
   it("opens the chat window on click", () => {
     openChat();
 
-    expect(screen.getByRole("dialog", { name: "Need Help" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Need Help?" })).toBeInTheDocument();
     expect(screen.getByLabelText("Your question")).toBeInTheDocument();
   });
 
@@ -157,11 +157,11 @@ describe("HelpChatWidget", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "No" }));
 
-    expect(screen.getByText("Thank You. Anjuman e Zakereen Hussain AS.")).toBeInTheDocument();
+    expect(screen.getByText("Thank you. Anjuman e Zakereen Hussain AS.")).toBeInTheDocument();
 
     // The thank-you is readable before the window goes.
     await waitFor(
-      () => expect(screen.queryByRole("dialog", { name: "Need Help" })).not.toBeInTheDocument(),
+      () => expect(screen.queryByRole("dialog", { name: "Need Help?" })).not.toBeInTheDocument(),
       { timeout: 4000 }
     );
     expect(screen.getByRole("button", { name: "Need Help?" })).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe("HelpChatWidget", () => {
       { timeout: 4000 }
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Need Help" }));
+    fireEvent.click(screen.getByRole("button", { name: "Need Help?" }));
 
     expect(screen.queryByText(ANSWER)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Your question")).toBeInTheDocument();

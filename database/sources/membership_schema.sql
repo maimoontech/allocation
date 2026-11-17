@@ -353,7 +353,8 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   -- Tab 3: Hizb
   zone_id INT UNSIGNED NULL COMMENT 'FR-047',
   party_id INT UNSIGNED NULL COMMENT 'FR-048; must belong to zone_id, checked in the application',
-  hizb_role ENUM('Leader','Side Lead','Member') NULL COMMENT 'FR-049',
+  hizb_participation ENUM('Party','Solo') NULL COMMENT 'FR-048b: whether the member is in a Party or does Zikr alone. NULL until answered, which is not the same as Solo.',
+  hizb_role ENUM('Leader','Side Lead','Member') NULL COMMENT 'FR-049. Forced to Leader and locked when hizb_participation is Solo.',
   zikr_e_hussain_since_year SMALLINT UNSIGNED NULL COMMENT 'FR-049a: Hijri year, 1375 AH to the current Hijri year. Floor is lower than the other profile years on purpose - this one reaches back further than a title or a sharaf.',
   registered_with_idaratuz_zakereen TINYINT(1) NULL COMMENT 'FR-049b: Yes/No. NULLABLE, so "not answered yet" is distinct from "no" - a checkbox would collapse the two.',
   five_kalam_uploaded_when VARCHAR(150) NULL COMMENT 'FR-049c: free text. The question asks WHEN, but the answer is whatever the member can recall, which is not reliably a date.',
@@ -1102,6 +1103,36 @@ INSERT IGNORE INTO member_tamreen_methods (member_account_id, tamreen_method_id)
 SELECT member_account_id, tamreen_method_id
 FROM member_profiles
 WHERE tamreen_method_id IS NOT NULL;
+
+
+-- ----------------------------------------------------------------------------
+-- 4g. Backfill: member_profiles.hizb_participation, added on 2026-11-17
+--
+--     Same reason as the backfills above: production already has member_profiles,
+--     so CREATE TABLE IF NOT EXISTS skips it and the column would never arrive.
+--
+--     Existing rows are left NULL rather than guessed at. A member with a party
+--     looks like "Party" and one without looks like "Solo", but the second is just
+--     as likely to be somebody who had not reached that field yet - and writing
+--     Solo into their profile would also force their Role to Leader.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_backfill_hizb_participation;
+
+DELIMITER $$
+CREATE PROCEDURE mm_backfill_hizb_participation()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'hizb_participation') THEN
+    ALTER TABLE member_profiles
+      ADD COLUMN hizb_participation ENUM('Party','Solo') NULL AFTER party_id;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_backfill_hizb_participation();
+DROP PROCEDURE mm_backfill_hizb_participation;
 
 
 -- ----------------------------------------------------------------------------

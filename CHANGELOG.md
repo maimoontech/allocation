@@ -1,5 +1,31 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-17 — Added: Party or Solo on the Hizb tab
+
+Once a Zone is chosen, Tab 3 asks whether the member is in a **Party** or is **Solo**.
+
+- **Party** leaves everything exactly as it was — the Party list still filters by Zone and
+  the Role is still chosen freely. Nothing about that behaviour changed.
+- **Solo** locks both: no Party, and the Role fixed to **Leader**.
+
+Three details that are not obvious:
+
+- **Solo writes those values, it does not merely grey the fields.** A disabled control fires
+  no change, so a Party chosen a moment earlier would otherwise have been saved against a
+  Solo member. The server applies the same rule again, so a stale form or an older build
+  cannot store a Solo member inside a Party.
+- **Returning to Party clears the forced Leader.** That value came from Solo, and carrying
+  it over would record a Party Leader the member never chose to be.
+- **Solo is stored, not inferred.** "No Party" is not the same as "does Zikr alone" — it is
+  just as likely to be somebody who has not reached that field. Existing profiles are left
+  unanswered rather than guessed at, which also avoids writing Leader into them.
+
+Each locked field says why it is locked, since a greyed-out control with no explanation
+reads as a fault.
+
+FR-048b added.
+
+
 ## 2026-11-12 — Added: Admin → Help Topics, so the knowledge base is editable
 
 The Need Help agent's answers were a code file. They still are — and now an administrator can
