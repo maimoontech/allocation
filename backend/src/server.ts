@@ -15,6 +15,7 @@ import { reportsRoutes } from "./routes/reportsRoutes";
 import { ratingsRoutes } from "./routes/ratingsRoutes";
 import { importExportRoutes } from "./routes/importExportRoutes";
 import { memberAdminRoutes } from "./routes/memberAdminRoutes";
+import { memberDashboardRoutes } from "./routes/memberDashboardRoutes";
 import { memberLookupAdminRoutes } from "./routes/memberLookupAdminRoutes";
 import { memberLookupsRoutes } from "./routes/memberLookupsRoutes";
 import { helpChatAdminRoutes, memberHelpChatRoutes } from "./routes/memberHelpChatRoutes";
@@ -81,6 +82,9 @@ app.use("/api/v1/help-topics", helpTopicAdminRoutes);
 // your-own-profile bug would come back.
 app.use("/api/v1/member-lookups", memberLookupAdminRoutes);
 app.use("/api/v1/member-photo-approvals", memberPhotoApprovalRoutes);
+// FR-112. Counts only, admin only, and on its own base path for the same reason as the two
+// routers above it.
+app.use("/api/v1/member-dashboard", memberDashboardRoutes);
 // The party's view of its own members. Its own base path, so the party-only guard cannot
 // reach any other role's routes.
 app.use("/api/v1/party-members", partyMemberRoutes);

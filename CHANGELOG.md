@@ -1,5 +1,47 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-18 — Added: Member dashboard for the administrator
+
+The Admin **Dashboard** now reports two things about the membership as a whole.
+
+**Who has got into their account.** Three figures, not one: how many have **signed in at
+least once**, how many have **set their own password**, and how many have **never signed in**.
+Those first two look like the same number and are not — every account is issued a one-time
+password, so a member can sign in, meet the forced password change and stop there. The gap
+between them is called out in its own line, because those members are the only group on the
+page somebody can actually help today.
+
+**How much of the form is filled in.** An average percentage across active members, then how
+many have answered everything, how many have started, how many have not, and the same
+breakdown per tab.
+
+Three decisions worth stating:
+
+- **"Complete" had to be defined, so the definition is printed on the page.** The profile has
+  no mandatory fields — that is deliberate, and FR-095 promises it — so there was no existing
+  answer to "has this member finished?". The measure is questions **answered** over questions
+  **asked**.
+- **A question counts only where the form actually asks it.** Someone in business is never
+  shown Designation; someone who is not a regular donor is never asked their last donation
+  date. Holding those against them would make 100% unreachable, and a figure nobody can reach
+  is a figure nobody trusts. Every shape of member is tested to confirm 100% is attainable.
+- **Sharaf, Maqamaat Muqaddasah, Ashara Mubaraka, Titles, Skills and Tamreen methods are
+  excluded.** Each is a list, and an empty list cannot be told apart from an unanswered one.
+  A member with no Sharaf has nothing to enter and is not incomplete.
+
+Two notes on what it does *not* do. **No member is named and no answer is read** — the query
+asks the database whether each box has something in it, never what, so no health value is
+ever selected (FR-065, FR-066, FR-101). And it is **administrator-only**: the figures are
+organisation-wide, and a member who has not reached Tab 3 has no zone, so a Zonal Head's
+version would leave out exactly the members it was opened to find.
+
+Deactivated accounts are counted in the account totals but excluded from the completion
+figure — a withdrawn member keeps their data (FR-007) and will never fill in the rest of it.
+
+No schema change. FR-112 added, amending the "Reporting, searching or analysis across member
+profiles" exclusion for aggregate counts only.
+
+
 ## 2026-11-18 — Changed: Sansta and Umoor names are dropdowns
 
 Tab 12's two name fields were free text. They are now chosen from **two new lists in Admin →

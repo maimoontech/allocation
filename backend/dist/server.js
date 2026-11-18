@@ -20,6 +20,7 @@ const reportsRoutes_1 = require("./routes/reportsRoutes");
 const ratingsRoutes_1 = require("./routes/ratingsRoutes");
 const importExportRoutes_1 = require("./routes/importExportRoutes");
 const memberAdminRoutes_1 = require("./routes/memberAdminRoutes");
+const memberDashboardRoutes_1 = require("./routes/memberDashboardRoutes");
 const memberLookupAdminRoutes_1 = require("./routes/memberLookupAdminRoutes");
 const memberLookupsRoutes_1 = require("./routes/memberLookupsRoutes");
 const memberHelpChatRoutes_1 = require("./routes/memberHelpChatRoutes");
@@ -77,6 +78,9 @@ app.use("/api/v1/help-topics", helpTopicAdminRoutes_1.helpTopicAdminRoutes);
 // your-own-profile bug would come back.
 app.use("/api/v1/member-lookups", memberLookupAdminRoutes_1.memberLookupAdminRoutes);
 app.use("/api/v1/member-photo-approvals", memberPhotoApprovalRoutes_1.memberPhotoApprovalRoutes);
+// FR-112. Counts only, admin only, and on its own base path for the same reason as the two
+// routers above it.
+app.use("/api/v1/member-dashboard", memberDashboardRoutes_1.memberDashboardRoutes);
 // The party's view of its own members. Its own base path, so the party-only guard cannot
 // reach any other role's routes.
 app.use("/api/v1/party-members", partyMemberRoutes_1.partyMemberRoutes);
