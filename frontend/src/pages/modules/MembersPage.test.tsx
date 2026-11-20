@@ -168,7 +168,7 @@ beforeEach(() => {
         return new Response(
           JSON.stringify({
             success: true,
-            data: { items: ITEMS, total: ITEMS.length, page: 1, page_size: 25 }
+            data: { items: ITEMS, total: ITEMS.length, page: 1, page_size: 25, sort: "its_no" }
           }),
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
@@ -215,6 +215,128 @@ describe("MembersPage", () => {
     expect(screen.getByText("F")).toBeInTheDocument();
     expect(requested.some((url) => url.includes("/members/11/photo"))).toBe(true);
     expect(requested.some((url) => url.includes("/members/12/photo"))).toBe(false);
+  });
+});
+
+/**
+ * FR-006b. Searching by Party, and ordering the list.
+ *
+ * Both are sent to the SERVER, which is the point worth testing. Sorting or filtering the 25
+ * rows already in the browser would silently reorder one page of a list that has many — the
+ * operator would see "Party A–Z" and get the A-to-Z of whichever members happened to be on
+ * page 1. Every assertion below is therefore about the request, not the rendered order.
+ */
+describe("MembersPage — searching and sorting", () => {
+  /** The URLs asked for since the page settled, so the first load is not mistaken for a change. */
+  function listCalls() {
+    return requested.filter((u) => u.includes("/members?") || u.endsWith("/members"));
+  }
+
+  it("says in the search box that a Party name can be typed into it", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    expect(screen.getByLabelText("Search")).toHaveAttribute(
+      "placeholder",
+      "ITS No, name or Party"
+    );
+  });
+
+  it("sends what was typed to the server, which matches it against the Party too", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "Burhani" } });
+
+    await waitFor(() => expect(listCalls().some((u) => u.includes("q=Burhani"))).toBe(true));
+  });
+
+  it("orders by ITS number until asked otherwise", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    expect(screen.getByLabelText("Sort by")).toHaveValue("its_no");
+    expect(listCalls().some((u) => u.includes("sort=its_no"))).toBe(true);
+  });
+
+  it("offers the six orders, Party among them", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    const select = screen.getByLabelText("Sort by") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+      "ITS No",
+      "Name (A–Z)",
+      "Party (A–Z)",
+      "Zone (A–Z)",
+      "Recently signed in",
+      "Newest account first"
+    ]);
+  });
+
+  it("asks the server for the Party order", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "party" } });
+
+    await waitFor(() => expect(listCalls().some((u) => u.includes("sort=party"))).toBe(true));
+  });
+
+  it("asks the server for each of the other orders too", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    for (const key of ["name", "zone", "recent_login", "newest"]) {
+      fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: key } });
+      await waitFor(() => expect(listCalls().some((u) => u.includes(`sort=${key}`))).toBe(true));
+    }
+  });
+
+  /**
+   * Page 3 of an ITS-number order holds different members from page 3 of a Party order, so
+   * keeping the page would drop the operator somewhere arbitrary in the new ordering.
+   */
+  it("returns to the first page when the order changes", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "party" } });
+
+    await waitFor(() =>
+      expect(listCalls().some((u) => u.includes("sort=party") && u.includes("page=1"))).toBe(
+        true
+      )
+    );
+  });
+
+  it("says where the members with no Party ended up", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    expect(screen.queryByText(/are listed\s+last/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "party" } });
+
+    expect(screen.getByText(/Members who have not chosen a Party/)).toBeInTheDocument();
+  });
+
+  it("says the same for Zone, naming Zone rather than Party", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "zone" } });
+
+    expect(screen.getByText(/Members who have not chosen a Zone/)).toBeInTheDocument();
+  });
+
+  it("says nothing about blanks for the orders where they do not bunch up", async () => {
+    renderWithProviders(<MembersPage />);
+    await screen.findByText("Burhani Party");
+
+    fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "name" } });
+
+    expect(screen.queryByText(/Members who have not chosen/)).not.toBeInTheDocument();
   });
 });
 

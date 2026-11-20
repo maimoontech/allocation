@@ -13,7 +13,8 @@ import {
   useResetMemberPasswordMutation,
   useSetMemberActiveMutation,
   type CreatedMemberAccount,
-  type MemberAccount
+  type MemberAccount,
+  type MemberSort
 } from "../../features/member/memberAdminApi";
 
 /**
@@ -36,6 +37,24 @@ const activeFilterOptions = [
   { value: "all", label: "All accounts" },
   { value: "active", label: "Active only" },
   { value: "inactive", label: "Inactive only" }
+];
+
+/**
+ * FR-006b. Keys, matching the server's whitelist — the SQL stays on the server, because an
+ * ORDER BY cannot be a bound parameter and so must never be assembled from anything a
+ * browser sent.
+ *
+ * Members with no Zone or Party sort LAST in those two orders, not first. The server does
+ * that, and it matters: MySQL puts NULL first ascending, so sorting by Party would otherwise
+ * open the list with everyone who has not chosen one.
+ */
+const sortOptions: Array<{ value: MemberSort; label: string }> = [
+  { value: "its_no", label: "ITS No" },
+  { value: "name", label: "Name (A–Z)" },
+  { value: "party", label: "Party (A–Z)" },
+  { value: "zone", label: "Zone (A–Z)" },
+  { value: "recent_login", label: "Recently signed in" },
+  { value: "newest", label: "Newest account first" }
 ];
 
 /**
@@ -347,6 +366,7 @@ export function MembersPage() {
 
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
+  const [sort, setSort] = useState<MemberSort>("its_no");
   const [page, setPage] = useState(1);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -358,10 +378,11 @@ export function MembersPage() {
     () => ({
       q: search.trim() || undefined,
       is_active: activeFilter === "all" ? undefined : activeFilter === "active",
+      sort,
       page,
       page_size: PAGE_SIZE
     }),
-    [search, activeFilter, page]
+    [search, activeFilter, sort, page]
   );
 
   const { data, isLoading, isFetching, error } = useGetMemberAccountsQuery(queryArg);
@@ -467,10 +488,13 @@ export function MembersPage() {
             cannot be filled in from here.
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {/* FR-006b. One box for all four, not a second one for the Party: an operator
+                looking for a Hizb should not have to work out which field to type it into,
+                and "Hizb al Hussain" is never going to be mistaken for an ITS number. */}
             <Input
               label="Search"
-              placeholder="ITS No or name"
+              placeholder="ITS No, name or Party"
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -486,7 +510,25 @@ export function MembersPage() {
               }}
               options={activeFilterOptions}
             />
+            <Select
+              label="Sort by"
+              value={sort}
+              // Back to page 1: page 3 of an ITS-number order is a different set of members
+              // from page 3 of a Party order, so keeping the page would land the operator
+              // somewhere arbitrary in the new ordering.
+              onChange={(e) => {
+                setSort(e.target.value as MemberSort);
+                setPage(1);
+              }}
+              options={sortOptions}
+            />
           </div>
+          {sort === "party" || sort === "zone" ? (
+            <div className="text-xs text-textMuted">
+              Members who have not chosen a {sort === "party" ? "Party" : "Zone"} are listed
+              last, on the final {total > PAGE_SIZE ? "pages" : "page"}.
+            </div>
+          ) : null}
         </div>
       </Card>
 

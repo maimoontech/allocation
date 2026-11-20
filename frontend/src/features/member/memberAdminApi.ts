@@ -37,7 +37,23 @@ export type MemberAccountPage = {
   total: number;
   page: number;
   page_size: number;
+  /** The order the server actually used, which is not always the one asked for. */
+  sort: MemberSort;
 };
+
+/**
+ * The orders the list may be returned in (FR-006b).
+ *
+ * Keys, not SQL. The server holds the whitelist of expressions, because an ORDER BY cannot be
+ * a bound parameter and so must never be built from anything a browser sent.
+ */
+export type MemberSort =
+  | "its_no"
+  | "name"
+  | "party"
+  | "zone"
+  | "recent_login"
+  | "newest";
 
 /** The three fields an Admin or Zonal Head supplies to create an account. */
 export type CreateMemberRequest = {
@@ -65,8 +81,10 @@ export type CreatedMemberAccount = {
 export type AdminMemberProfile = MemberProfile & { can_edit: boolean };
 
 export type ListMembersRequest = {
+  /** Matches the ITS number, either name, or the member's Party (FR-006b). */
   q?: string;
   is_active?: boolean;
+  sort?: MemberSort;
   page?: number;
   page_size?: number;
 };
@@ -78,6 +96,7 @@ export const memberAdminApi = api.injectEndpoints({
         const params = new URLSearchParams();
         if (arg?.q) params.set("q", arg.q);
         if (arg?.is_active !== undefined) params.set("is_active", String(arg.is_active));
+        if (arg?.sort) params.set("sort", arg.sort);
         if (arg?.page) params.set("page", String(arg.page));
         if (arg?.page_size) params.set("page_size", String(arg.page_size));
         const qs = params.toString();

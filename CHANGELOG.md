@@ -1,5 +1,46 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-20 — Added: Dashboard filters, and Party search and sorting in Members
+
+**Dashboard: Zone and Mohallah dropdowns.** Every figure on the member dashboard can now be
+narrowed to one zone, one mohallah, or both.
+
+- **The two are independent, so neither list narrows the other.** Zone is the member's Hizb,
+  from the **Hizb** tab. Mohallah is where they live, from the **Personal** tab. A member can
+  do Zikr in one zone and live in a Mohallah belonging to another, so filtering the Mohallah
+  list by the chosen Zone would have hidden combinations that genuinely occur. Each Mohallah
+  is labelled with its own zone instead, since two zones may hold a Mohallah of the same name.
+- **Each dropdown also offers "not chosen yet".** That is the only way to reach the two
+  groups a plain zone filter hides: the account with no profile at all, and the member who
+  filled in Tab 1 and stopped before Tab 3. Those are the members the figures exist to find,
+  and without this option they appear only in the unfiltered total, where nobody would look.
+- **A filter that matches nobody says so.** Every figure reading zero is indistinguishable
+  from a membership that has done nothing, so the page names which it is.
+
+**Members: Party search and sorting.** The search box now also matches the member's **Party**
+— one box, not a second one, because "Hizb al Hussain" is never going to be mistaken for an
+ITS number. A **Sort by** control offers ITS No, Name, Party, Zone, Recently signed in and
+Newest account first.
+
+Three details that are not obvious:
+
+- **Both happen on the server.** Sorting the 25 rows already in the browser would mean an
+  operator asking for "Party A–Z" got the A-to-Z of whichever members happened to be on page
+  one — of a list that has many pages.
+- **Members with no Party or Zone sort last, not first.** MySQL puts blanks first when
+  sorting upwards, so the Party order would otherwise have opened with everyone who has not
+  chosen one. The page says where they went.
+- **Every order has a tie-break on the ITS number.** Without one, two members in the same
+  Party come back in whatever order the engine picked that time, and paging through the list
+  skips and repeats rows.
+
+One bug caught while building this: the member list's COUNT query shared its WHERE with the
+list query but had a shorter FROM, so adding the Party to the search broke the count and the
+whole endpoint answered 500. The joins now mirror each other, with a note saying why, and a
+test asserts the total comes back — a test on the rows alone would have passed.
+
+No schema change. FR-006b and FR-112a added.
+
 ## 2026-11-18 — Added: Member dashboard for the administrator
 
 The Admin **Dashboard** now reports two things about the membership as a whole.

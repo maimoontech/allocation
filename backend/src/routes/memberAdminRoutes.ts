@@ -44,6 +44,45 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_MEMBER_NAME = 150;
 
 /**
+ * The orders this list may be returned in (FR-006b).
+ *
+ * A WHITELIST, and the only reason it is a whitelist is that an ORDER BY cannot be a bound
+ * parameter: the text goes into the statement verbatim, so the text must never come from the
+ * caller. An unrecognised value falls back to `its_no` rather than being refused, because a
+ * stale bookmark is not worth an error page.
+ *
+ * Two details that are easy to get wrong and are deliberate here:
+ *
+ *   NULLS LAST. MySQL sorts NULL first ascending, so sorting by Party would open the list
+ *   with every member who has not chosen one - burying the thing the operator asked to see.
+ *   The leading `(... IS NULL)` term pushes the blanks to the end in both directions.
+ *
+ *   A TIE-BREAK on `its_no` in every order. Without one, two members in the same Party come
+ *   back in whatever order the engine chose that time, which makes paging through the list
+ *   skip and repeat rows between pages.
+ */
+const NAME_FOR_SORT = `COALESCE(NULLIF(TRIM(mp.name), ''), NULLIF(TRIM(ma.member_name), ''))`;
+
+const SORT_ORDERS: Record<string, string> = {
+  its_no: "ma.its_no ASC",
+  // The member's own first name, falling back to the roster name on the account. NOT the
+  // composed full name: that begins with the prefix, so it would sort every Mulla before
+  // every Sheikh and look like no sort at all.
+  name: `(${NAME_FOR_SORT} IS NULL), ${NAME_FOR_SORT} ASC, mp.surname ASC, ma.its_no ASC`,
+  party: "(p.party_name IS NULL), p.party_name ASC, ma.its_no ASC",
+  zone: "(z.zone_name IS NULL), z.zone_name ASC, ma.its_no ASC",
+  recent_login: "(ma.last_login_at IS NULL), ma.last_login_at DESC, ma.its_no ASC",
+  newest: "ma.created_at DESC, ma.its_no ASC"
+};
+
+export const MEMBER_SORT_KEYS = Object.keys(SORT_ORDERS);
+
+function sortKeyFor(raw: unknown): string {
+  const key = String(raw ?? "").trim();
+  return key in SORT_ORDERS ? key : "its_no";
+}
+
+/**
  * The zone this request is confined to, or null for an administrator, who is not confined.
  *
  * `false` means the caller is a Zonal Head whose token carries no usable zone. That is a
@@ -81,13 +120,17 @@ memberAdminRoutes.get("/", async (req, res) => {
   }
 
   if (q) {
-    // Matches the ITS number, the roster name, or the full name stored on the profile.
+    // Matches the ITS number, the roster name, the full name stored on the profile, or the
+    // member's PARTY (FR-006b) — one box rather than a second one, because "Hizb al Hussain"
+    // and "10012345" are never going to be confused for each other, and an operator looking
+    // for a Party should not have to notice which field to type it into.
     // `LIKE` with a leading wildcard cannot use the index, which is fine at this table's
     // size and keeps the search forgiving.
     conditions.push(
       `(ma.its_no LIKE :q
         OR ma.member_name LIKE :q
-        OR CONCAT_WS(' ', mp.first_prefix, mp.name, mp.father_prefix, mp.father_name, mp.surname) LIKE :q)`
+        OR CONCAT_WS(' ', mp.first_prefix, mp.name, mp.father_prefix, mp.father_name, mp.surname) LIKE :q
+        OR p.party_name LIKE :q)`
     );
     params.q = `%${q}%`;
   }
@@ -99,12 +142,24 @@ memberAdminRoutes.get("/", async (req, res) => {
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  // From the whitelist above, never from the caller's text: an ORDER BY cannot be bound.
+  // An unrecognised key resolves to `its_no` and is reported as such in the response, so the
+  // page shows the order it actually got rather than the one it asked for.
+  const sortKey = sortKeyFor(req.query.sort);
+  const orderBy = SORT_ORDERS[sortKey];
 
   try {
+    // The joins MIRROR the list query below, including the two this count does not read.
+    // `where` is shared between the two statements, so a condition that is valid in one must
+    // be valid in the other: adding `p.party_name` to the search broke this count until the
+    // parties join came with it, and the next column somebody searches on would break it
+    // again. Both are LEFT JOINs on unique keys, so neither changes the count.
     const [countRows] = await pool.query<any[]>(
       `SELECT COUNT(*) AS total
        FROM member_accounts ma
        LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
+       LEFT JOIN zones z ON z.id = mp.zone_id
+       LEFT JOIN parties p ON p.id = mp.party_id
        ${where}`,
       params
     );
@@ -137,7 +192,7 @@ memberAdminRoutes.get("/", async (req, res) => {
        LEFT JOIN zones z ON z.id = mp.zone_id
        LEFT JOIN parties p ON p.id = mp.party_id
        ${where}
-       ORDER BY ma.its_no
+       ORDER BY ${orderBy}
        LIMIT :limit OFFSET :offset`,
       { ...params, limit: pageSize, offset: (page - 1) * pageSize }
     );
@@ -169,7 +224,8 @@ memberAdminRoutes.get("/", async (req, res) => {
         })),
         total,
         page,
-        page_size: pageSize
+        page_size: pageSize,
+        sort: sortKey
       },
       "OK"
     );

@@ -244,6 +244,105 @@ describe("admin member administration", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.page).toBeGreaterThanOrEqual(1);
     });
+
+    /**
+     * FR-006b. The Party is searchable through the same box as the ITS number and the names.
+     *
+     * The regression this guards is not the search itself — it is the COUNT. The count query
+     * shares its WHERE with the list query but had its own, shorter, FROM, so the moment
+     * `p.party_name` entered the search the count failed with an unknown column and the
+     * whole endpoint answered 500. A test on the items alone would have passed.
+     */
+    it("filters by party name", async () => {
+      const res = await request(app)
+        .get(`/api/v1/members?q=${encodeURIComponent(partyName)}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.items.some((m: any) => m.id === postedId)).toBe(true);
+      expect(res.body.data.items.every((m: any) => m.party_name === partyName)).toBe(true);
+      // The count came back, which is the half that used to break.
+      expect(res.body.data.total).toBeGreaterThanOrEqual(1);
+    });
+
+    describe("sorting (FR-006b)", () => {
+      async function listSorted(sort: string) {
+        const res = await request(app)
+          .get(`/api/v1/members?sort=${sort}&page_size=200`)
+          .set("Authorization", `Bearer ${adminToken}`);
+        expect(res.status).toBe(200);
+        return res.body.data;
+      }
+
+      it("sorts by ITS number when nothing is asked for", async () => {
+        const data = await listSorted("");
+        const its = data.items.map((m: any) => m.its_no);
+
+        expect(data.sort).toBe("its_no");
+        expect(its).toEqual([...its].sort());
+      });
+
+      /**
+       * Every order must be ACCEPTED and REPORTED. The report matters because an
+       * unrecognised key silently falls back, and a page that showed "Party (A–Z)" while the
+       * server had sorted by ITS number would be lying quietly.
+       */
+      it("accepts and reports each of the six orders", async () => {
+        for (const key of ["its_no", "name", "party", "zone", "recent_login", "newest"]) {
+          expect((await listSorted(key)).sort).toBe(key);
+        }
+      });
+
+      it("falls back to ITS number for an unknown order rather than failing", async () => {
+        const data = await listSorted("party_name; DROP TABLE member_accounts");
+
+        expect(data.sort).toBe("its_no");
+        expect(data.items.length).toBeGreaterThan(0);
+      });
+
+      /**
+       * NULLS LAST, in both of the orders where blanks exist. MySQL sorts NULL FIRST
+       * ascending, so without the leading `IS NULL` term asking for the Party order would
+       * open the list with every member who has not chosen one — burying the thing that was
+       * actually asked for.
+       */
+      it("puts members with no Party last, not first", async () => {
+        const items = (await listSorted("party")).items;
+        const named = items.map((m: any) => m.party_name !== null);
+
+        expect(named).toContain(true);
+        expect(named).toContain(false);
+        // No named Party appears after a blank one.
+        expect(named.lastIndexOf(true)).toBeLessThan(named.indexOf(false));
+      });
+
+      it("puts members with no Zone last, not first", async () => {
+        const items = (await listSorted("zone")).items;
+        const named = items.map((m: any) => m.zone_name !== null);
+
+        expect(named).toContain(true);
+        expect(named).toContain(false);
+        expect(named.lastIndexOf(true)).toBeLessThan(named.indexOf(false));
+      });
+
+      it("puts members who have never signed in last", async () => {
+        const items = (await listSorted("recent_login")).items;
+        const signedIn = items.map((m: any) => m.last_login_at !== null);
+
+        expect(signedIn).toContain(false);
+        if (signedIn.includes(true)) {
+          expect(signedIn.lastIndexOf(true)).toBeLessThan(signedIn.indexOf(false));
+        }
+      });
+
+      /** A tie-break in every order, or paging skips and repeats rows between pages. */
+      it("returns the same rows for the same page when values tie", async () => {
+        const first = await listSorted("party");
+        const again = await listSorted("party");
+
+        expect(again.items.map((m: any) => m.id)).toEqual(first.items.map((m: any) => m.id));
+      });
+    });
   });
 
   describe("GET /members/:id/photo", () => {

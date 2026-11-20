@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { MembersOverview } from "./MembersOverview";
 import { renderWithProviders } from "../../test-utils";
 import type { MemberDashboard } from "../../features/member/memberDashboardApi";
@@ -48,8 +48,19 @@ const DASHBOARD: MemberDashboard = {
       { tab: 12, label: "Other Sansta Khidmat", asked: 520, answered: 57, percent: 11 }
     ]
   },
+  filter: { zone_id: null, mohallah_id: null },
   generated_at: "2026-11-18T09:00:00.000Z"
 };
+
+const ZONES = [
+  { id: 2, zone_name: "South", coordinator_name: "A", contact_number: null, whatsapp_number: null, last_login_at: null, created_at: "", updated_at: "" },
+  { id: 1, zone_name: "North", coordinator_name: "B", contact_number: null, whatsapp_number: null, last_login_at: null, created_at: "", updated_at: "" }
+];
+
+const MOHALLAHS = [
+  { id: 9, zone_id: 1, zone_name: "North", mohallah_name: "Saifee", coordinator_name: "C", contact_number: null, whatsapp_number: null, last_login_at: null, created_at: "" },
+  { id: 8, zone_id: 2, zone_name: "South", mohallah_name: "Burhani", coordinator_name: "D", contact_number: null, whatsapp_number: null, last_login_at: null, created_at: "" }
+];
 
 let failure: { status: number; message: string } | null = null;
 let requested: string[] = [];
@@ -76,6 +87,8 @@ beforeEach(() => {
         if (failure) return envelope(null, failure.status, failure.message);
         return envelope(DASHBOARD);
       }
+      if (url.includes("/zones")) return envelope(ZONES);
+      if (url.includes("/mohallahs")) return envelope(MOHALLAHS);
       return envelope({});
     })
   );
@@ -145,7 +158,17 @@ describe("MembersOverview", () => {
       ...DASHBOARD,
       access: { ...DASHBOARD.access, signed_in_not_changed: 0 }
     };
-    vi.stubGlobal("fetch", vi.fn(async () => envelope(none)));
+    // Still URL-aware: a stub that answers every request with the dashboard would hand the
+    // zone dropdown an object where it expects a list.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes("/zones")) return envelope(ZONES);
+        if (url.includes("/mohallahs")) return envelope(MOHALLAHS);
+        return envelope(none);
+      })
+    );
 
     await renderOverview();
 
@@ -189,12 +212,166 @@ describe("MembersOverview", () => {
     await renderOverview();
 
     expect(screen.getByText("By tab")).toBeInTheDocument();
-    expect(screen.getByText("Personal")).toBeInTheDocument();
-    expect(screen.getByText("78%")).toBeInTheDocument();
-    expect(screen.getByText("Other Sansta Khidmat")).toBeInTheDocument();
+    // Scoped to the list: "Personal" is also the name of a tab referred to in the prose
+    // above, and an unscoped query matches both.
+    const list = within(screen.getByRole("list", { name: "Completion by tab" }));
+    expect(list.getByText("Personal")).toBeInTheDocument();
+    expect(list.getByText("78%")).toBeInTheDocument();
+    expect(list.getByText("Other Sansta Khidmat")).toBeInTheDocument();
     // Tabs 7, 8 and 9 are lists, and an empty list is not an unanswered one.
-    expect(screen.queryByText("Sharaf")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ashara Mubaraka")).not.toBeInTheDocument();
+    expect(list.queryByText("Sharaf")).not.toBeInTheDocument();
+    expect(list.queryByText("Ashara Mubaraka")).not.toBeInTheDocument();
+  });
+
+  /**
+   * FR-112a. The filters.
+   *
+   * Two things are worth pinning down. That "not chosen yet" is offered at all — it is the
+   * only way to reach the members a plain zone filter hides, and those are the ones the
+   * figures exist to find. And that the Mohallah list is NOT narrowed by the chosen Zone:
+   * Zone is the member's Hizb and Mohallah is where they live, so narrowing one by the other
+   * would hide combinations that genuinely occur.
+   */
+  describe("the Zone and Mohallah filters", () => {
+    it("offers every zone, alphabetically, with an All and a not-chosen option", async () => {
+      await renderOverview();
+
+      const select = screen.getByLabelText("Zone") as HTMLSelectElement;
+      expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+        "All zones",
+        "Zone not chosen yet",
+        "North",
+        "South"
+      ]);
+    });
+
+    it("offers every mohallah with its zone named, alphabetically", async () => {
+      await renderOverview();
+
+      const select = screen.getByLabelText("Mohallah") as HTMLSelectElement;
+      expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+        "All mohallahs",
+        "Mohallah not chosen yet",
+        "Burhani (South)",
+        "Saifee (North)"
+      ]);
+    });
+
+    it("asks the server for nothing extra until a filter is chosen", async () => {
+      await renderOverview();
+
+      const dashboardCalls = requested.filter((u) => u.includes("/member-dashboard"));
+      expect(dashboardCalls).toHaveLength(1);
+      expect(dashboardCalls[0]).not.toContain("zone_id");
+      expect(dashboardCalls[0]).not.toContain("mohallah_id");
+    });
+
+    it("sends the chosen zone to the server", async () => {
+      await renderOverview();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      await waitFor(() =>
+        expect(requested.some((u) => u.includes("zone_id=1"))).toBe(true)
+      );
+    });
+
+    it("sends the chosen mohallah to the server", async () => {
+      await renderOverview();
+
+      fireEvent.change(screen.getByLabelText("Mohallah"), { target: { value: "8" } });
+
+      await waitFor(() =>
+        expect(requested.some((u) => u.includes("mohallah_id=8"))).toBe(true)
+      );
+    });
+
+    it("sends both together, because they are independent answers", async () => {
+      await renderOverview();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "2" } });
+      fireEvent.change(screen.getByLabelText("Mohallah"), { target: { value: "9" } });
+
+      await waitFor(() =>
+        expect(
+          requested.some((u) => u.includes("zone_id=2") && u.includes("mohallah_id=9"))
+        ).toBe(true)
+      );
+    });
+
+    /** The members a plain zone filter would hide: no zone chosen, or no profile at all. */
+    it("can ask for the members who have chosen no zone", async () => {
+      await renderOverview();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "none" } });
+
+      await waitFor(() =>
+        expect(requested.some((u) => u.includes("zone_id=none"))).toBe(true)
+      );
+    });
+
+    it("does not narrow the mohallah list when a zone is chosen", async () => {
+      await renderOverview();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      // All of them still, including the one belonging to the other zone.
+      const select = screen.getByLabelText("Mohallah") as HTMLSelectElement;
+      expect(Array.from(select.options).map((o) => o.textContent)).toContain("Burhani (South)");
+    });
+
+    it("says that the figures are filtered, and to what", async () => {
+      await renderOverview();
+      expect(screen.queryByText(/Every figure below counts only/)).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "1" } });
+
+      // Named inside the banner, not anywhere on the page: "North" is also a dropdown option.
+      await waitFor(() =>
+        expect(screen.getByText(/Every figure below counts only/).textContent).toMatch(
+          /North/
+        )
+      );
+    });
+
+    /** Every figure reading zero looks like a membership that has done nothing. */
+    it("says when a filter matches nobody rather than showing a page of zeroes", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = input instanceof Request ? input.url : String(input);
+          if (url.includes("/zones")) return envelope(ZONES);
+          if (url.includes("/mohallahs")) return envelope(MOHALLAHS);
+          if (url.includes("zone_id=2")) {
+            return envelope({
+              ...DASHBOARD,
+              access: { ...DASHBOARD.access, total: 0, active: 0, inactive: 0 }
+            });
+          }
+          return envelope(DASHBOARD);
+        })
+      );
+
+      await renderOverview();
+      fireEvent.change(screen.getByLabelText("Zone"), { target: { value: "2" } });
+
+      await waitFor(() =>
+        expect(screen.getByText(/No member accounts match/)).toBeInTheDocument()
+      );
+      expect(screen.queryByText("Average profile filled in")).not.toBeInTheDocument();
+    });
+
+    /** A failure that cleared the filters would make the operator pick them again to retry. */
+    it("keeps the filters on screen when the request fails", async () => {
+      failure = { status: 500, message: "Failed to load the member dashboard" };
+      renderWithProviders(<MembersOverview />);
+
+      await waitFor(() =>
+        expect(screen.getByText("Failed to load the member dashboard")).toBeInTheDocument()
+      );
+      expect(screen.getByLabelText("Zone")).toBeInTheDocument();
+      expect(screen.getByLabelText("Mohallah")).toBeInTheDocument();
+    });
   });
 
   it("explains a failure and offers to try again", async () => {

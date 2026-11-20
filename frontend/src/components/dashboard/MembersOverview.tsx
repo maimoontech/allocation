@@ -1,7 +1,14 @@
+import { useMemo, useState } from "react";
 import { Card } from "../ui/Card";
+import { Select } from "../ui/Select";
 import { apiErrorMessage } from "../../features/api/apiErrorMessage";
 import { useGetMemberDashboardQuery } from "../../features/member/memberDashboardApi";
-import type { MemberFormTabStats } from "../../features/member/memberDashboardApi";
+import type {
+  MemberDashboardFilter,
+  MemberFormTabStats
+} from "../../features/member/memberDashboardApi";
+import { useGetZonesQuery } from "../../features/zones/zonesApi";
+import { useGetMohallahsQuery } from "../../features/mohallahs/mohallahsApi";
 
 /**
  * The administrator's member dashboard (FR-112): who has got into their account, and how
@@ -63,7 +70,10 @@ function toneFor(percent: number) {
 
 function TabRow({ tab }: { tab: MemberFormTabStats }) {
   return (
-    <div className="grid grid-cols-[9rem_1fr_3rem] items-center gap-3 sm:grid-cols-[12rem_1fr_3.5rem]">
+    <div
+      role="listitem"
+      className="grid grid-cols-[9rem_1fr_3rem] items-center gap-3 sm:grid-cols-[12rem_1fr_3.5rem]"
+    >
       <div className="truncate text-sm">{tab.label}</div>
       <Bar percent={tab.percent} tone={toneFor(tab.percent)} />
       <div className="text-right text-sm font-semibold tabular-nums">{tab.percent}%</div>
@@ -73,34 +83,164 @@ function TabRow({ tab }: { tab: MemberFormTabStats }) {
 
 const n = (value: number) => value.toLocaleString();
 
-export function MembersOverview() {
-  const { data, isLoading, isError, error, refetch } = useGetMemberDashboardQuery();
+/** "all" means do not filter; "none" filters FOR the members who have not answered. */
+const ALL = "all";
+const NOT_CHOSEN = "none";
 
+function toFilterValue(raw: string): number | "none" | undefined {
+  if (raw === ALL) return undefined;
+  if (raw === NOT_CHOSEN) return NOT_CHOSEN;
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+export function MembersOverview() {
+  const [zoneChoice, setZoneChoice] = useState<string>(ALL);
+  const [mohallahChoice, setMohallahChoice] = useState<string>(ALL);
+
+  const { data: zones } = useGetZonesQuery();
+  // Every Mohallah, NOT only those of the chosen Zone. The two are different facts about a
+  // member: Zone is their Hizb (Tab 3), Mohallah is where they live (Tab 1). A member may do
+  // Zikr in one zone and live in a Mohallah belonging to another, so narrowing this list by
+  // the chosen Zone would hide combinations that genuinely exist.
+  const { data: mohallahs } = useGetMohallahsQuery();
+
+  const filter: MemberDashboardFilter = useMemo(() => {
+    const next: MemberDashboardFilter = {};
+    const zone = toFilterValue(zoneChoice);
+    const mohallah = toFilterValue(mohallahChoice);
+    if (zone !== undefined) next.zone_id = zone;
+    if (mohallah !== undefined) next.mohallah_id = mohallah;
+    return next;
+  }, [zoneChoice, mohallahChoice]);
+
+  const zoneOptions = useMemo(
+    () => [
+      { value: ALL, label: "All zones" },
+      { value: NOT_CHOSEN, label: "Zone not chosen yet" },
+      ...(zones ?? [])
+        .map((z) => ({ value: String(z.id), label: z.zone_name }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+    ],
+    [zones]
+  );
+
+  const mohallahOptions = useMemo(
+    () => [
+      { value: ALL, label: "All mohallahs" },
+      { value: NOT_CHOSEN, label: "Mohallah not chosen yet" },
+      ...(mohallahs ?? [])
+        // The zone is in the label because two zones may hold a Mohallah of the same name,
+        // and because it is the only way to tell them apart in a flat list.
+        .map((m) => ({
+          value: String(m.id),
+          label: m.zone_name ? `${m.mohallah_name} (${m.zone_name})` : m.mohallah_name
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+    ],
+    [mohallahs]
+  );
+
+  const { data, isLoading, isError, error, refetch } = useGetMemberDashboardQuery(filter);
+
+  const isFiltered = zoneChoice !== ALL || mohallahChoice !== ALL;
+  const filterLabel = [
+    zoneChoice === ALL
+      ? null
+      : zoneOptions.find((o) => o.value === zoneChoice)?.label ?? "a zone",
+    mohallahChoice === ALL
+      ? null
+      : mohallahOptions.find((o) => o.value === mohallahChoice)?.label ?? "a mohallah"
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const filters = (
+    <Card>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select
+          label="Zone"
+          value={zoneChoice}
+          onChange={(e) => setZoneChoice(e.target.value)}
+          options={zoneOptions}
+        />
+        <Select
+          label="Mohallah"
+          value={mohallahChoice}
+          onChange={(e) => setMohallahChoice(e.target.value)}
+          options={mohallahOptions}
+        />
+      </div>
+      <div className="mt-2 text-xs text-textMuted">
+        Zone is the member&apos;s Hizb, from the <strong>Hizb</strong> tab. Mohallah is where
+        they live, from the <strong>Personal</strong> tab. They are separate answers, so a
+        member can appear under one zone and a Mohallah belonging to another. Choosing{" "}
+        <strong>not chosen yet</strong> counts the members who have left that answer blank —
+        including accounts with no profile at all, who are invisible to every other filter.
+      </div>
+    </Card>
+  );
+
+  // The filters stay on screen through loading and failure. Losing them would mean a failed
+  // request also threw away the choice that made it, and the operator would have to pick
+  // both again before they could even retry.
   if (isLoading) {
     return (
-      <Card>
-        <div className="text-sm text-textMuted">Counting members...</div>
-      </Card>
+      <div className="space-y-4">
+        {filters}
+        <Card>
+          <div className="text-sm text-textMuted">Counting members...</div>
+        </Card>
+      </div>
     );
   }
 
   if (isError || !data) {
     return (
-      <Card>
-        <div className="text-sm font-semibold text-danger">
-          {apiErrorMessage(error, "Could not load the member figures.")}
-        </div>
-        <button type="button" onClick={() => refetch()} className="mt-2 text-sm underline">
-          Try again
-        </button>
-      </Card>
+      <div className="space-y-4">
+        {filters}
+        <Card>
+          <div className="text-sm font-semibold text-danger">
+            {apiErrorMessage(error, "Could not load the member figures.")}
+          </div>
+          <button type="button" onClick={() => refetch()} className="mt-2 text-sm underline">
+            Try again
+          </button>
+        </Card>
+      </div>
     );
   }
 
   const { access, form } = data;
 
+  // A filter that matches nobody makes every figure below read zero, which looks exactly
+  // like a membership that has done nothing. Say which it is.
+  if (isFiltered && access.total === 0) {
+    return (
+      <div className="space-y-4">
+        {filters}
+        <Card>
+          <div className="text-sm">
+            No member accounts match <span className="font-semibold">{filterLabel}</span>.
+            Every figure would read zero, which is why none is shown.
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {filters}
+
+      {isFiltered ? (
+        <div className="rounded-input border border-primary bg-primary/5 p-3 text-sm">
+          Every figure below counts only{" "}
+          <span className="font-semibold">{filterLabel}</span> — {n(access.total)}{" "}
+          {access.total === 1 ? "account" : "accounts"}.
+        </div>
+      ) : null}
+
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-lg font-bold">Member accounts</h2>
@@ -202,7 +342,9 @@ export function MembersOverview() {
 
         <Card>
           <div className="mb-3 text-sm font-semibold">By tab</div>
-          <div className="space-y-2">
+          {/* Labelled so a test — and a screen reader — can tell these tab names apart from
+              the same words used in the prose above. */}
+          <div className="space-y-2" role="list" aria-label="Completion by tab">
             {form.tabs.map((tab) => (
               <TabRow key={tab.tab} tab={tab} />
             ))}

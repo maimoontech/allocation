@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { readMemberDashboard } from "../services/memberDashboardService";
+import { readMemberDashboard, type DashboardFilter } from "../services/memberDashboardService";
 import { fail, ok } from "../utils/response";
 
 /**
@@ -23,9 +23,43 @@ export const memberDashboardRoutes = Router();
 
 memberDashboardRoutes.use(requireAuth, requireRole(["admin"]));
 
-memberDashboardRoutes.get("/", async (_req, res) => {
+/**
+ * One filter, read from the query string.
+ *
+ * Three answers, and they are three different things: absent (do not filter), the literal
+ * `none` (the members who have NOT answered this), or an id. Anything else is refused by
+ * name rather than quietly ignored - a mistyped filter that returns the unfiltered figures
+ * is a wrong number nobody questions.
+ */
+function readFilter(
+  raw: unknown,
+  label: string
+): { value: number | "none" | undefined } | { error: string } {
+  if (raw === undefined || raw === null || raw === "" || raw === "all") {
+    return { value: undefined };
+  }
+  if (raw === "none") return { value: "none" };
+
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) {
+    return { error: `${label} must be an id, "none" or left out.` };
+  }
+  return { value: id };
+}
+
+memberDashboardRoutes.get("/", async (req, res) => {
+  const zone = readFilter(req.query.zone_id, "zone_id");
+  if ("error" in zone) return fail(res, zone.error, 400);
+
+  const mohallah = readFilter(req.query.mohallah_id, "mohallah_id");
+  if ("error" in mohallah) return fail(res, mohallah.error, 400);
+
+  const filter: DashboardFilter = {};
+  if (zone.value !== undefined) filter.zone_id = zone.value;
+  if (mohallah.value !== undefined) filter.mohallah_id = mohallah.value;
+
   try {
-    const dashboard = await readMemberDashboard();
+    const dashboard = await readMemberDashboard(filter);
     return ok(res, dashboard, "OK");
   } catch {
     return fail(res, "Failed to load the member dashboard", 500);

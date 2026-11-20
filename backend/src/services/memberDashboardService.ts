@@ -115,9 +115,30 @@ export type FormStats = {
   tabs: Array<{ tab: number; label: string; asked: number; answered: number; percent: number }>;
 };
 
+/**
+ * Which members to count.
+ *
+ * `"none"` is not a missing filter - it is a filter FOR the members who have not answered
+ * that question. It exists because the two populations a plain zone filter hides are the two
+ * worth finding: a member with no profile row at all, and a member who has filled in Tab 1
+ * but never reached Tab 3. Without it they would be visible only in the unfiltered total,
+ * where nobody would think to look for them.
+ *
+ * Zone and Mohallah are INDEPENDENT. Zone is the member's Hizb, from Tab 3; Mohallah is
+ * where they live, from Tab 1. A member may well do Zikr in one zone and live in a Mohallah
+ * belonging to another, so the two filters are combined with AND and neither constrains the
+ * other's choices.
+ */
+export type DashboardFilter = {
+  zone_id?: number | "none";
+  mohallah_id?: number | "none";
+};
+
 export type MemberDashboard = {
   access: AccessStats;
   form: FormStats;
+  /** Echoed back, so the page can state what it counted rather than assume. */
+  filter: { zone_id: number | "none" | null; mohallah_id: number | "none" | null };
   generated_at: string;
 };
 
@@ -132,7 +153,8 @@ function toTriState(value: unknown): 0 | 1 | null {
 }
 
 /**
- * The whole query, built once at module load and exported so it can be read on its own.
+ * The query, without its WHERE clause, built once at module load and exported so it can be
+ * read on its own.
  *
  * One pass over the accounts. LEFT JOINs throughout, because an account with no profile row
  * yet is exactly the case this dashboard exists to count: it is 0% complete, not absent.
@@ -148,8 +170,37 @@ FROM member_accounts ma
 LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
 LEFT JOIN member_photos ph ON ph.member_account_id = ma.id`;
 
-export async function readMemberDashboard(): Promise<MemberDashboard> {
-  const [rows] = await pool.query<any[]>(DASHBOARD_QUERY);
+/**
+ * Turns one filter into a condition and its parameter.
+ *
+ * `"none"` becomes `IS NULL`, which on a LEFT JOINed profile also matches an account with no
+ * profile row at all - which is the honest answer to "who has not chosen a zone".
+ */
+function filterCondition(
+  column: "zone_id" | "mohallah_id",
+  value: number | "none" | undefined,
+  // `any` to match `pool.query`'s own parameter type, as every other route in this codebase
+  // does. Only integers are ever put in it, two lines below.
+  params: any
+): string | null {
+  if (value === undefined) return null;
+  if (value === "none") return `mp.${column} IS NULL`;
+  params[`f_${column}`] = value;
+  return `mp.${column} = :f_${column}`;
+}
+
+export async function readMemberDashboard(
+  filter: DashboardFilter = {}
+): Promise<MemberDashboard> {
+  const params: any = {};
+  const conditions = [
+    filterCondition("zone_id", filter.zone_id, params),
+    filterCondition("mohallah_id", filter.mohallah_id, params)
+  ].filter((c): c is string => c !== null);
+
+  const where = conditions.length ? `\nWHERE ${conditions.join("\n  AND ")}` : "";
+
+  const [rows] = await pool.query<any[]>(`${DASHBOARD_QUERY}${where}`, params);
 
   const access: AccessStats = {
     total: rows.length,
@@ -257,5 +308,13 @@ export async function readMemberDashboard(): Promise<MemberDashboard> {
     })
   };
 
-  return { access, form, generated_at: new Date().toISOString() };
+  return {
+    access,
+    form,
+    filter: {
+      zone_id: filter.zone_id ?? null,
+      mohallah_id: filter.mohallah_id ?? null
+    },
+    generated_at: new Date().toISOString()
+  };
 }

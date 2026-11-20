@@ -92,7 +92,8 @@ function toTriState(value) {
     return Number(value) === 1 ? 1 : 0;
 }
 /**
- * The whole query, built once at module load and exported so it can be read on its own.
+ * The query, without its WHERE clause, built once at module load and exported so it can be
+ * read on its own.
  *
  * One pass over the accounts. LEFT JOINs throughout, because an account with no profile row
  * yet is exactly the case this dashboard exists to count: it is 0% complete, not absent.
@@ -107,8 +108,31 @@ exports.DASHBOARD_QUERY = `SELECT ma.is_active,
 FROM member_accounts ma
 LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
 LEFT JOIN member_photos ph ON ph.member_account_id = ma.id`;
-async function readMemberDashboard() {
-    const [rows] = await pool_1.pool.query(exports.DASHBOARD_QUERY);
+/**
+ * Turns one filter into a condition and its parameter.
+ *
+ * `"none"` becomes `IS NULL`, which on a LEFT JOINed profile also matches an account with no
+ * profile row at all - which is the honest answer to "who has not chosen a zone".
+ */
+function filterCondition(column, value, 
+// `any` to match `pool.query`'s own parameter type, as every other route in this codebase
+// does. Only integers are ever put in it, two lines below.
+params) {
+    if (value === undefined)
+        return null;
+    if (value === "none")
+        return `mp.${column} IS NULL`;
+    params[`f_${column}`] = value;
+    return `mp.${column} = :f_${column}`;
+}
+async function readMemberDashboard(filter = {}) {
+    const params = {};
+    const conditions = [
+        filterCondition("zone_id", filter.zone_id, params),
+        filterCondition("mohallah_id", filter.mohallah_id, params)
+    ].filter((c) => c !== null);
+    const where = conditions.length ? `\nWHERE ${conditions.join("\n  AND ")}` : "";
+    const [rows] = await pool_1.pool.query(`${exports.DASHBOARD_QUERY}${where}`, params);
     const access = {
         total: rows.length,
         active: 0,
@@ -209,5 +233,13 @@ async function readMemberDashboard() {
             };
         })
     };
-    return { access, form, generated_at: new Date().toISOString() };
+    return {
+        access,
+        form,
+        filter: {
+            zone_id: filter.zone_id ?? null,
+            mohallah_id: filter.mohallah_id ?? null
+        },
+        generated_at: new Date().toISOString()
+    };
 }
