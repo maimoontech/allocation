@@ -387,7 +387,7 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   five_kalam_uploaded_when VARCHAR(150) NULL COMMENT 'FR-049c: free text. The question asks WHEN, but the answer is whatever the member can recall, which is not reliably a date.',
 
   -- Tab 4: Occupation
-  occupation_type ENUM('Job','Business') NULL,
+  occupation_type ENUM('Job','Business','Student') NULL COMMENT 'FR-050a: Student added 2026-11-21. A Student is asked for Skills only; the employment fields below do not apply to them.',
   organisation_name VARCHAR(150) NULL COMMENT 'FR-051: one column; the label changes with the type, not the storage',
   designation VARCHAR(150) NULL COMMENT 'FR-052: only meaningful when occupation_type = Job',
   occupation_since_year SMALLINT UNSIGNED NULL,
@@ -1216,6 +1216,45 @@ DELIMITER ;
 
 CALL mm_backfill_sansta_umoor();
 DROP PROCEDURE mm_backfill_sansta_umoor;
+
+
+-- ----------------------------------------------------------------------------
+-- 4i. Widen: member_profiles.occupation_type gains 'Student', 2026-11-21
+--
+--     The CREATE TABLE in section 3 declares all three values, so a fresh
+--     database needs nothing here. An EXISTING one does, and this is the case
+--     that would be missed by the pattern every other backfill in this file
+--     uses: those ask whether a COLUMN EXISTS, and occupation_type has existed
+--     since the module shipped. The question that has to be asked is what its
+--     TYPE currently is.
+--
+--     Without this, saving a Student fails inside MySQL with a truncation error
+--     that names a column the member cannot see and cannot act on.
+--
+--     WIDENING ONLY. 'Job' and 'Business' keep their places and 'Student' is
+--     added after them, so every stored value stays inside the new set and no
+--     row is rewritten. Removing or reordering a member of an ENUM silently
+--     coerces the rows that no longer match to '', which is why this is phrased
+--     strictly as an addition.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_widen_occupation_type;
+
+DELIMITER $$
+CREATE PROCEDURE mm_widen_occupation_type()
+BEGIN
+  IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+               AND COLUMN_NAME = 'occupation_type'
+               AND COLUMN_TYPE NOT LIKE '%Student%') THEN
+    ALTER TABLE member_profiles
+      MODIFY COLUMN occupation_type ENUM('Job','Business','Student') NULL;
+  END IF;
+END$$
+DELIMITER ;
+
+CALL mm_widen_occupation_type();
+DROP PROCEDURE mm_widen_occupation_type;
 
 
 -- ----------------------------------------------------------------------------

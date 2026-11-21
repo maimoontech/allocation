@@ -1,5 +1,45 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-21 — Added: Student as an occupation type
+
+Tab 4 now offers **Job, Business or Student**. Choosing Student leaves **Skills** as the one
+field on that tab the member can use.
+
+Four decisions worth stating:
+
+- **The employment fields are switched off, not removed.** Deleting five controls empties
+  most of the tab, and a member who has just chosen Student would have no way to tell whether
+  the form narrowed itself deliberately or broke. They stay in place, greyed, each with a
+  line saying "Not applicable to a Student" — the same approach the Solo rule on the Hizb tab
+  already uses. Skills is then visibly the thing to fill in.
+- **Choosing Student also clears those answers, on the server as well as in the browser.** A
+  disabled control fires no change event, so once greyed the browser can never clear them. A
+  member who worked and then went back to study would otherwise keep a stored employer and
+  work address behind fields they can no longer reach, with nothing on screen able to shift
+  it. The server applies the same rule, so a stale form or an older build cannot store them
+  either.
+- **The clearing happens before those fields are validated.** Otherwise a Student whose form
+  still carried an old Since Year would be handed an error about a disabled field that was
+  going to be discarded anyway — nothing to correct, and no way to correct it.
+- **A Student's employment fields are excluded from the dashboard's completion figure.**
+  Counting a question the form does not ask would have held an employer and a work address
+  against them and put 100% permanently out of reach. A Student's Tab 4 is one question: the
+  type itself.
+
+**Schema change.** `member_profiles.occupation_type` gains `'Student'`. Note that this is the
+one case the usual backfill pattern would have missed: every other check in the schema script
+asks whether a *column exists*, and `occupation_type` has existed since the module shipped —
+so the question had to be what its *type* currently is. Without that, saving a Student would
+fail inside MySQL with a truncation error naming a column the member cannot see. The widening
+is strictly an **addition**: Job and Business keep their places, because removing or
+reordering a member of an ENUM silently coerces every row that no longer matches to the empty
+string.
+
+Applied at boot by `ensureSchema()`, and present in `MEMBERSHIP_LIVE_INSTALL.sql` as section
+4i, so a redeploy is enough.
+
+FR-050 amended, FR-050a added.
+
 ## 2026-11-20 — Added: Dashboard filters, and Party search and sorting in Members
 
 **Dashboard: Zone and Mohallah dropdowns.** Every figure on the member dashboard can now be

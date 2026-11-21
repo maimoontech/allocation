@@ -702,6 +702,81 @@ describe("member profile", () => {
         expect((await getProfile(token)).body.data.designation).toBeNull();
       });
 
+      /**
+       * FR-050a. A Student has no employer, so every employment answer goes.
+       *
+       * Done on the SERVER, not left to the browser: those fields are disabled once Student
+       * is chosen, and a disabled control fires no change event. A member who worked and
+       * then went back to study would otherwise keep a stored employer and work address
+       * behind fields they can no longer reach, and nothing on their screen could clear it.
+       */
+      it("clears every employment answer when the occupation is Student", async () => {
+        await putProfile(token, {
+          occupation_type: "Job",
+          organisation_name: "Burhani Traders",
+          designation: "Manager",
+          occupation_since_year: 2015,
+          work_address: "12 Saifee Street",
+          work_phone_no: "+92 300 1234567"
+        });
+
+        // Sent again, as a stale form or an older build would: the server must refuse to
+        // store them regardless of what the browser says.
+        const res = await putProfile(token, {
+          occupation_type: "Student",
+          organisation_name: "Burhani Traders",
+          designation: "Manager",
+          occupation_since_year: 2015,
+          work_address: "12 Saifee Street",
+          work_phone_no: "+92 300 1234567"
+        });
+        expect(res.status).toBe(200);
+
+        const saved = (await getProfile(token)).body.data;
+        expect(saved.occupation_type).toBe("Student");
+        expect(saved.organisation_name).toBeNull();
+        expect(saved.designation).toBeNull();
+        expect(saved.occupation_since_year).toBeNull();
+        expect(saved.work_address).toBeNull();
+        expect(saved.work_phone_no).toBeNull();
+      });
+
+      /** The one Tab 4 field a Student IS asked for. */
+      it("keeps the Skills a Student has chosen", async () => {
+        await putProfile(token, {
+          occupation_type: "Student",
+          skill_ids: [seeded.skillId]
+        });
+
+        expect((await getProfile(token)).body.data.skill_ids).toEqual([seeded.skillId]);
+      });
+
+      /**
+       * A field about to be cleared must not be validated first. Without the clearing
+       * happening before the year checks, this payload answers 400 about a field that is
+       * disabled on the member's screen and that the server was going to discard anyway —
+       * an error with nothing to correct and no way to correct it.
+       */
+      it("does not complain about an employment year it is about to discard", async () => {
+        const res = await putProfile(token, {
+          occupation_type: "Student",
+          occupation_since_year: new Date().getFullYear() + 5
+        });
+
+        expect(res.status).toBe(200);
+        expect((await getProfile(token)).body.data.occupation_since_year).toBeNull();
+      });
+
+      it("still refuses a future employment year for a Job", async () => {
+        const res = await putProfile(token, {
+          occupation_type: "Job",
+          occupation_since_year: new Date().getFullYear() + 5
+        });
+
+        expect(res.status).toBe(400);
+        expect(errorFields(res)).toContain("occupation_since_year");
+      });
+
       // FR-086
       it.each([
         ["Sansta", ["sansta_name"]],

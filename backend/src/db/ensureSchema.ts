@@ -57,6 +57,7 @@ export async function ensureSchema() {
   await ensureHelpTopics();
   await ensureHizbParticipation();
   await ensureSanstaUmoorLists();
+  await ensureStudentOccupationType();
 }
 
 /**
@@ -130,6 +131,45 @@ async function ensureSanstaUmoorLists() {
  * Solo, but is just as likely to belong to someone who had not reached that field — and
  * writing Solo would also force their Role to Leader.
  */
+/**
+ * FR-050a. 'Student' joins Job and Business as an occupation type.
+ *
+ * WHY THIS IS A COLUMN_TYPE CHECK AND NOT A COLUMN_NAME ONE
+ *   Every other ensure in this file asks whether a column EXISTS. `occupation_type` has
+ *   existed since the module shipped, so that question answers "yes" and the ALTER never
+ *   runs — the enum would stay two values wide and every attempt to save a Student would be
+ *   refused by MySQL with a truncation error the member could do nothing about. The question
+ *   that has to be asked here is what the column's type currently IS.
+ *
+ * WIDENING ONLY, SO IT CANNOT LOSE DATA
+ *   The ALTER adds a member to the end of the enum and keeps the existing two in their
+ *   existing order. Nothing stored can fall outside the new set, so no row needs rewriting
+ *   and no value can be silently coerced to ''. (Removing or reordering a member would do
+ *   exactly that, which is why this is phrased as an addition.)
+ *
+ * Idempotent, like everything else here: the LIKE guard makes a second boot a no-op.
+ */
+async function ensureStudentOccupationType() {
+  const [rows] = await pool.query<any[]>(
+    `SELECT COLUMN_TYPE AS columnType
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'member_profiles'
+       AND COLUMN_NAME = 'occupation_type'
+     LIMIT 1`
+  );
+
+  const columnType = String(rows[0]?.columnType ?? "");
+  // No such column means no such table yet; the CREATE TABLE in the schema script already
+  // declares all three values, so there is nothing to widen.
+  if (!columnType) return;
+  if (columnType.includes("Student")) return;
+
+  await pool.query(
+    "ALTER TABLE member_profiles MODIFY COLUMN occupation_type ENUM('Job','Business','Student') NULL"
+  );
+}
+
 async function ensureHizbParticipation() {
   const [rows] = await pool.query<any[]>(
     `SELECT COUNT(*) AS cnt

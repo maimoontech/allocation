@@ -174,6 +174,118 @@ describe("Tab 4 — Occupation", () => {
     fireEvent.click(screen.getByLabelText("Job"));
     expect(screen.getByLabelText(/^Company Name/)).toBeInTheDocument();
   });
+
+  /**
+   * FR-050a. Student is the third occupation type, and the only field it leaves asked is
+   * Skills.
+   *
+   * The clearing tests are the ones that matter. A disabled control fires no change event,
+   * so once these fields are greyed the browser can never clear them on the member's
+   * behalf — which means they have to be cleared in the SAME update that disables them, or
+   * a member who worked and then went back to study keeps a stored employer behind a field
+   * they can no longer reach.
+   */
+  describe("Student", () => {
+    /**
+     * The employment fields other than the organisation name, whose label follows the
+     * occupation type and so cannot be written once here.
+     */
+    const EMPLOYMENT_LABELS = [/^Since Year/, /^Phone No\./, /^Address/];
+
+    it("is offered alongside Job and Business", () => {
+      renderTab(Tab04Occupation, {});
+
+      expect(screen.getByLabelText("Job")).toBeInTheDocument();
+      expect(screen.getByLabelText("Business")).toBeInTheDocument();
+      expect(screen.getByLabelText("Student")).toBeInTheDocument();
+    });
+
+    it("leaves Skills the one field still enabled", () => {
+      renderTab(Tab04Occupation, { occupation_type: "Student" });
+
+      expect(screen.getByLabelText(/^Company Name/)).toBeDisabled();
+      for (const label of EMPLOYMENT_LABELS) {
+        expect(screen.getByLabelText(label)).toBeDisabled();
+      }
+      // Designation is a Job-only field, so a Student is not shown it at all.
+      expect(screen.queryByLabelText(/^Designation/)).not.toBeInTheDocument();
+
+      // Skills is a checkbox list, so the controls are the option itself and its search box.
+      expect(screen.getByLabelText(/Teaching/)).toBeEnabled();
+      expect(screen.getByLabelText("Search Skills")).toBeEnabled();
+    });
+
+    it("keeps the employment fields enabled for a Job and a Business", () => {
+      renderTab(Tab04Occupation, { occupation_type: "Job" });
+      expect(screen.getByLabelText(/^Company Name/)).toBeEnabled();
+      for (const label of EMPLOYMENT_LABELS) {
+        expect(screen.getByLabelText(label)).toBeEnabled();
+      }
+
+      fireEvent.click(screen.getByLabelText("Business"));
+      // The name field is the same control under a different label.
+      expect(screen.getByLabelText(/^Business Name/)).toBeEnabled();
+      for (const label of EMPLOYMENT_LABELS) {
+        expect(screen.getByLabelText(label)).toBeEnabled();
+      }
+    });
+
+    it("clears every employment answer in the one update that disables them", () => {
+      const state = renderTab(Tab04Occupation, {
+        occupation_type: "Job",
+        organisation_name: "Burhani Traders",
+        designation: "Manager",
+        occupation_since_year: 2015,
+        work_address: "12 Saifee Street",
+        work_phone_no: "+92 300 1234567"
+      });
+
+      fireEvent.click(screen.getByLabelText("Student"));
+
+      expect(state.value.occupation_type).toBe("Student");
+      expect(state.value.organisation_name).toBeNull();
+      expect(state.value.designation).toBeNull();
+      expect(state.value.occupation_since_year).toBeNull();
+      expect(state.value.work_address).toBeNull();
+      expect(state.value.work_phone_no).toBeNull();
+    });
+
+    /** Skills is the field the type exists to leave alone. */
+    it("does not touch the Skills already chosen", () => {
+      const state = renderTab(Tab04Occupation, {
+        occupation_type: "Job",
+        skill_ids: [2, 5]
+      });
+
+      fireEvent.click(screen.getByLabelText("Student"));
+
+      expect(state.value.skill_ids).toEqual([2, 5]);
+    });
+
+    it("says why the fields are switched off, rather than leaving them looking broken", () => {
+      renderTab(Tab04Occupation, { occupation_type: "Student" });
+
+      expect(screen.getByText("You have chosen Student.")).toBeInTheDocument();
+      expect(
+        screen.getByText(/Only Skills below is asked on this tab/)
+      ).toBeInTheDocument();
+      // One under each field that has been switched off, so a greyed control never sits
+      // there unexplained.
+      expect(screen.getAllByText("Not applicable to a Student.")).toHaveLength(4);
+    });
+
+    it("switches them back on when the member leaves Student", () => {
+      renderTab(Tab04Occupation, { occupation_type: "Student" });
+      expect(screen.getByLabelText(/^Company Name/)).toBeDisabled();
+
+      fireEvent.click(screen.getByLabelText("Job"));
+
+      for (const label of EMPLOYMENT_LABELS) {
+        expect(screen.getByLabelText(label)).toBeEnabled();
+      }
+      expect(screen.queryByText("Not applicable to a Student.")).not.toBeInTheDocument();
+    });
+  });
 });
 
 describe("Tab 5 — Education / Hifz", () => {

@@ -55,6 +55,14 @@ exports.TAB_LABELS = {
 };
 const yes = (v) => v === 1;
 /**
+ * FR-050a. The employment questions on Tab 4, which a Student is not asked.
+ *
+ * Note that an UNANSWERED occupation type still counts as asked. The fields are on screen
+ * and enabled until the member chooses Student, so they are being asked at that moment, and
+ * treating "not yet answered" as "exempt" would flatter every untouched profile.
+ */
+const notStudent = (r) => r.occupation_type !== "Student";
+/**
  * Every question the form asks, in tab order.
  *
  * Adding a field to a tab means adding it here too. A question missing from this list makes
@@ -93,12 +101,17 @@ exports.QUESTIONS = [
     { key: "registered_with_idaratuz_zakereen", tab: 3 },
     { key: "five_kalam_uploaded_when", tab: 3 },
     // ---- Tab 4, Occupation. Skills are a list and are not counted. ----
+    //
+    // FR-050a. A Student is asked for Skills and nothing else on this tab, and Skills is a
+    // list. So a Student's Tab 4 is ONE question: the type itself. Leaving the employment
+    // fields in their denominator would hold an employer and a work address against someone
+    // the form never asks for either, and put 100% out of their reach for good.
     { key: "occupation_type", tab: 4 },
-    { key: "organisation_name", tab: 4 },
+    { key: "organisation_name", tab: 4, asked: notStudent },
     { key: "designation", tab: 4, asked: (r) => r.occupation_type === "Job" },
-    { key: "occupation_since_year", tab: 4 },
-    { key: "work_phone_no", tab: 4 },
-    { key: "work_address", tab: 4 },
+    { key: "occupation_since_year", tab: 4, asked: notStudent },
+    { key: "work_phone_no", tab: 4, asked: notStudent },
+    { key: "work_address", tab: 4, asked: notStudent },
     // ---- Tab 5, Education / Hifz ----
     { key: "education_level", tab: 5 },
     { key: "major_subjects", tab: 5 },

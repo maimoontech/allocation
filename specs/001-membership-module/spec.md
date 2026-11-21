@@ -274,7 +274,8 @@ expected values.
 
 #### Tab 4 — Occupation
 
-- **FR-050**: Tab 4 MUST offer Occupation Type as a choice between Job and Business.
+- **FR-050** *(amended 2026-11-21; previously "a choice between Job and Business")*: Tab 4 MUST offer Occupation Type as a choice between Job, Business and Student.
+- **FR-050a** *(authorised 2026-11-21)*: When Occupation Type is **Student**, **Skills MUST be the only field on Tab 4 the member can use.** The employment fields — company or business name, Designation, Since Year, work telephone and work address — MUST be switched off, and each MUST say why rather than sit greyed and unexplained. Choosing Student MUST also **clear** every one of those answers, on the server as well as in the browser: a disabled control fires no change event, so a member who worked and then returned to study would otherwise keep a stored employer and work address behind fields they can no longer reach, with nothing on screen able to clear it. Clearing MUST happen **before** those fields are validated, so a Student is never shown an error about a field that is disabled and about to be discarded. The completion measure (FR-112) MUST NOT count the employment fields for a Student, since a question the form does not ask must not be held against the member and would otherwise put 100% permanently out of their reach. The stored `occupation_type` enumeration MUST be widened by **addition only**, keeping Job and Business in place: removing or reordering a member of a MySQL ENUM silently coerces every row that no longer matches to the empty string.
 - **FR-051**: Tab 4 MUST capture a company or business name, labelled to match the chosen Occupation Type.
 - **FR-052**: Tab 4 MUST request Designation only when Occupation Type is Job.
 - **FR-053**: Tab 4 MUST capture the year the job or business began, and MUST reject a year in the future or earlier than the member's year of birth.

@@ -116,7 +116,9 @@ const ENUM_COLUMNS = {
     father_prefix: ["None", "Sheikh", "Mulla"],
     hizb_participation: ["Party", "Solo"],
     hizb_role: ["Leader", "Side Lead", "Member"],
-    occupation_type: ["Job", "Business"],
+    // FR-050a. 'Student' added 2026-11-21. A Student is asked for Skills and nothing else on
+    // Tab 4, which `applyOccupationRules` enforces.
+    occupation_type: ["Job", "Business", "Student"],
     education_level: ["Primary", "Middle", "Secondary", "Intermediate", "Bachelors", "Masters", "PhD"],
     education_status: ["Complete", "Ongoing"],
     blood_group: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
@@ -489,6 +491,33 @@ async function saveMemberProfile(memberAccountId, payload) {
     if (values.hifz_last_update && String(values.hifz_last_update) > todayIso) {
         add("hifz_last_update", "Last update cannot be in the future.");
     }
+    /**
+     * Tab 4's conditional rules, applied HERE — before the date and year checks below — and
+     * not with the other conditionals further down.
+     *
+     * The ordering is the whole point. These rules CLEAR fields, and a field that is about to
+     * be discarded must not first be validated: a Student whose form still carried a stale
+     * `occupation_since_year` in the future would otherwise be handed an error about a field
+     * that is disabled on their screen and that the server was going to throw away anyway.
+     * Nothing to correct, and no way to correct it.
+     *
+     * FR-050a. A Student has no employer, no designation, no work address and no work
+     * telephone. Clearing them is not tidiness: without it a member who worked and then went
+     * back to study would keep a stored employer behind a disabled field, and a disabled
+     * control fires no change event, so the browser could never clear it on their behalf.
+     *
+     * FR-052. Designation belongs to a Job, so Business clears it too.
+     */
+    if (values.occupation_type === "Student") {
+        values.organisation_name = null;
+        values.designation = null;
+        values.occupation_since_year = null;
+        values.work_address = null;
+        values.work_phone_no = null;
+    }
+    else if (values.occupation_type === "Business") {
+        values.designation = null;
+    }
     // The year a job or a khidmat began cannot precede the member's birth, which is the kind
     // of mistake a per-field range check alone would let through.
     const birthYear = values.dob_gregorian
@@ -523,9 +552,8 @@ async function saveMemberProfile(memberAccountId, payload) {
     // Conditional rules. Each clears the fields its answer makes meaningless, so a hidden
     // field cannot keep a contradictory value (story 5 scenario 6).
     // -------------------------------------------------------------------------
-    // FR-052: Designation belongs to a Job.
-    if (values.occupation_type === "Business")
-        values.designation = null;
+    // Tab 4's rules (FR-050a, FR-052) are applied EARLIER, above the date and year checks, so
+    // that a field being cleared is never validated first. See the comment there.
     // FR-048b. Solo means the member does Zikr alone: there is no Party to belong to, and
     // the Role is Leader by definition. Both are set HERE rather than trusted from the client,
     // so a stale form or an older build cannot store a Solo member inside a Party.

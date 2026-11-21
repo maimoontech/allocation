@@ -74,6 +74,38 @@ describe("profileCompletion", () => {
       );
     });
 
+    /**
+     * FR-050a. A Student is asked for Skills and nothing else on Tab 4, and Skills is a list
+     * and so is not counted. Their Tab 4 is therefore ONE question: the type itself.
+     *
+     * Getting this wrong would be invisible and permanent — an employer and a work address
+     * held against someone the form never asks for either, putting 100% out of their reach
+     * for good.
+     */
+    it("asks a Student for nothing on Tab 4 beyond the type itself", () => {
+      const student = profileCompletion({ ...blank(), occupation_type: "Student" });
+      const tab4 = student.tabs.find((t) => t.tab === 4)!;
+
+      expect(tab4.asked).toBe(1);
+    });
+
+    it("asks everyone else the employment questions", () => {
+      for (const type of ["Job", "Business", null]) {
+        const row = profileCompletion({ ...blank(), occupation_type: type });
+        const tab4 = row.tabs.find((t) => t.tab === 4)!;
+
+        // Five at least: the type, the organisation, the year, the work phone and address.
+        expect(tab4.asked).toBeGreaterThanOrEqual(5);
+      }
+    });
+
+    /** Unanswered is not exempt: the fields are on screen and enabled until Student is picked. */
+    it("does not exempt a member who has simply not answered yet", () => {
+      expect(askedWith({ occupation_type: null })).toBeGreaterThan(
+        askedWith({ occupation_type: "Student" })
+      );
+    });
+
     it("asks a regular donor for a donation date", () => {
       expect(askedWith({ is_regular_donor: 1 })).toBe(askedWith({ is_regular_donor: 0 }) + 1);
     });
@@ -138,6 +170,21 @@ describe("profileCompletion", () => {
       expect(result.percent).toBe(100);
       // Every conditional applies, so this member is asked the most the form can ask.
       expect(result.asked).toBeGreaterThan(profileCompletion(blank()).asked);
+    });
+
+    /** FR-050a. If a Student cannot reach 100%, the exemption above is not working. */
+    it("for a Student, who is asked for Skills and nothing else on Tab 4", () => {
+      const row = blank();
+      row.present.zone_id = 1;
+      row.hizb_participation = "Solo";
+      row.occupation_type = "Student";
+      row.has_hifz_sanad = 0;
+      row.is_regular_donor = 0;
+      row.attends_karachi_tamreen = 1;
+      row.khidmat_type = "Sansta";
+
+      const result = profileCompletion(answerEverythingAsked(row));
+      expect(result.percent).toBe(100);
     });
 
     it("for a Solo member in business, no Sanad, no donations, attending, Umoor only", () => {
