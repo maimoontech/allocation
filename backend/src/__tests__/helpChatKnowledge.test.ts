@@ -36,6 +36,37 @@ describe("the help agent answers the form's own rules", () => {
     expect(text).toContain("Zikr e Hussain");
   });
 
+  /**
+   * FR-050a. The question this topic exists for is "what do I put if I am a student?", and a
+   * wrong answer here is the expensive kind: the member fills in an employer, cannot see why
+   * it will not stay, and telephones somebody. So the answer has to say that the employment
+   * boxes are switched off AND that what was in them is cleared.
+   */
+  it("says a Student is asked for Skills only, and that the rest is cleared", () => {
+    const question = "what do I put in occupation if I am a student?";
+    expect(topic(question)).toBe("occupation");
+
+    const text = reply(question);
+    expect(text).toMatch(/Student/);
+    expect(text).toMatch(/Skills and nothing else/i);
+    // The clearing is the part a member cannot discover for themselves.
+    expect(text).toMatch(/cleared/i);
+  });
+
+  /** Since Year is the one year box on this tab that is NOT Hijri, which is worth saying. */
+  it("gives the occupation Since Year as Gregorian from 1950, not a Hijri range", () => {
+    const text = reply("what since year do I put for my job?");
+    expect(text).toContain("1950");
+    expect(text).toMatch(/Gregorian/i);
+    expect(text).not.toContain("1401");
+  });
+
+  it("says Designation belongs to a Job and not to Business", () => {
+    const text = reply("I run a business, where is the designation box?");
+    expect(topic("I run a business, where is the designation box?")).toBe("occupation");
+    expect(text).toMatch(/Business Name/);
+  });
+
   it("describes the password rule as 8 characters, and three classes under 12", () => {
     const text = reply("what password do I need?");
     expect(text).toContain("8");

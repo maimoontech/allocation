@@ -181,6 +181,33 @@ exports.HELP_TOPICS = [
             "possible for a person, which usually means a digit went astray."
     },
     {
+        id: "occupation",
+        label: "Occupation — Job, Business or Student",
+        keywords: [
+            ["occupation", 2],
+            ["student", 2],
+            ["skills", 2],
+            ["job", 2],
+            ["business", 2],
+            "company",
+            "employer",
+            "studying",
+            "profession",
+            "work",
+            "designation"
+        ],
+        answer: "The Occupation tab starts with Occupation Type — Job, Business or Student — and the " +
+            "rest of the tab follows that answer. A Job asks for your Company Name and your " +
+            "Designation. Business asks the same, with the box labelled Business Name, and no " +
+            "Designation. A Student is asked for Skills and nothing else: the Company, Since " +
+            "Year, Phone No. and Address boxes are switched off, and anything already entered in " +
+            "them is cleared, so choose Student only if that is your situation now. Since Year is " +
+            "an ordinary Gregorian year from 1950 onwards, not a Hijri one, and it cannot be in " +
+            "the future or earlier than the year you were born. The Phone No. and Address on this " +
+            "tab are your place of work, not your home. Skills takes more than one answer and is " +
+            "asked of everybody, Student or not, so tick every one that applies."
+    },
+    {
         id: "education",
         label: "Education and Hifz",
         keywords: [["education", 2], ["hifz", 2], ["sanad", 2], "degree", "surah", "ayat", "ayyah"],

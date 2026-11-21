@@ -1,5 +1,27 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-21 — Added: a Need Help topic for the Occupation tab
+
+The Need Help agent had nothing to say about Tab 4, so "what do I put if I am a student?" —
+the obvious question the day Student appeared — reached the no-match reply. It now has an
+answer covering the whole tab: which boxes each occupation type asks for, that Designation
+belongs to a Job alone and Business only relabels the company box, that a Student is asked
+for Skills and nothing else **and that what was already in the other boxes is cleared**, that
+Since Year is Gregorian from 1950 rather than Hijri like most of the other year boxes, that
+the Phone No. and Address are the member's place of work, and that Skills takes more than one
+answer and is asked of everybody.
+
+The clearing is the sentence that matters. It is the one part of the rule a member cannot
+discover from the screen: they would fill in an employer, watch it disappear, and telephone
+somebody. The tests pin it, along with the 1950 and the Gregorian, for the reason the rest of
+this knowledge base is pinned — a help answer that has drifted from the code is worse than no
+answer, because the member trusts it.
+
+Built in rather than written through Admin → Help Topics, which is deliberate: it restates
+rules the server enforces, so it belongs beside them and under test. It stays overridable —
+an administrator topic keyed `occupation` replaces it without a deploy, and deactivating that
+topic restores this wording (FR-110a).
+
 ## 2026-11-21 — Added: Student as an occupation type
 
 Tab 4 now offers **Job, Business or Student**. Choosing Student leaves **Skills** as the one
