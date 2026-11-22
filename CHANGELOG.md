@@ -1,5 +1,40 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-22 — Fixed, properly: no SQL comments inside a query, ever
+
+The member list still answered ER_PARSE_ERROR after the previous fix. The previous fix treated
+the symptom: it removed the apostrophe from the SQL comment and left the comment there.
+
+The hazard is **the comment**. The pool runs with `namedPlaceholders`, so every query passes
+through a tokeniser on its way out, and that tokeniser does not know what an SQL comment is —
+it reads the prose as SQL. Two different failures came out of the same seventeen lines:
+
+1. An apostrophe in the prose read as the start of a string literal, swallowed the rest of
+   the statement, and left `:limit` and `:offset` in the text as literal characters.
+2. Then, while explaining failure 1, the comment itself said `:limit` and `:offset` — so the
+   tokeniser found **four** placeholders in a statement that has two. Whether that is harmless
+   depends on whether the formatter downstream happens to skip comment text, which is a
+   property of a patch version rather than a guarantee.
+
+So the comment is gone from the SQL and the explanation is in TypeScript above the query,
+where every other query in this codebase already keeps it. The statement now yields exactly
+two placeholders and formats with none left over.
+
+**The guard was rewritten to match.** It no longer bans apostrophes in SQL comments; it bans
+SQL comments inside query literals outright, across all 183 SQL literals in `src`, and
+separately asserts that each of the 93 queries carrying `:name` tokenises and formats with
+nothing left behind. The blunt rule is the right rule: an explanation about a query is for
+people to read, and TypeScript is where people read it.
+
+**An honest note on confidence.** The exact parse error could not be reproduced locally: with
+the mysql2 and named-placeholders versions installed here, even the previous query formatted
+into valid SQL, because this formatter does skip comments. The deployed pair evidently does
+not behave the same way. What is certain is that the previous statement produced four
+placeholders for two clauses, that this depends on library internals, and that the current
+statement produces two for two. If the error survives this deploy, the next step is a small
+admin-only endpoint that returns the generated SQL text — which carries no member data,
+because the values are never in it.
+
 ## 2026-11-22 — Fixed: the member list would not load. One apostrophe, in a comment
 
 The Members page answered "Could not load member accounts." as soon as the previous change

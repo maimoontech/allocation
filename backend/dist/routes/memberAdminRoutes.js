@@ -154,6 +154,36 @@ exports.memberAdminRoutes.get("/", async (req, res, next) => {
        LEFT JOIN parties p ON p.id = mp.party_id
        ${where}`, params);
         const total = Number(countRows[0]?.total ?? 0);
+        /**
+         * NOTHING BUT SQL GOES INSIDE THIS TEMPLATE LITERAL. No `--` comment, however useful.
+         *
+         * Every other query in this codebase already follows that rule; this one did not, and it
+         * took the member list down twice in a day. The pool runs with `namedPlaceholders`, so
+         * each query passes through a tokeniser on its way out, and that tokeniser does not know
+         * what an SQL comment is. Two separate failures came of it:
+         *
+         *   1. An apostrophe in the prose - "the other's reason" - read as the start of a string
+         *      literal, swallowed the remainder of the statement, and left `:limit` and `:offset`
+         *      in the text. MySQL answered ER_PARSE_ERROR.
+         *   2. Writing `:limit` in the prose, while explaining the first failure, made the
+         *      tokeniser find FOUR placeholders where the statement has two. Whether that is
+         *      harmless depends on whether the formatter downstream happens to skip comments,
+         *      which is a property of a patch version rather than a guarantee. If it does not,
+         *      the values land in the wrong clauses.
+         *
+         * So the hazard is the comment, not the apostrophe and not the colon. Explanations about
+         * a query belong here, in TypeScript, where they are read by people and by nothing else.
+         *
+         * WHAT THE COMPLETION FRAGMENT ADDS (FR-112b)
+         *   Presence, 1 or 0 per field, never a value. Those columns are consumed in this file
+         *   and left out of the response: what goes back is the percentage computed from them.
+         *   The fragment requires the aliases `mp` and `ph`, and both are LEFT JOINed below, so
+         *   an account with no profile row scores 0% instead of dropping out of the list.
+         *
+         *   `first_prefix` is therefore selected twice - once above as a name part, once in the
+         *   fragment as a discriminant. MySQL allows it and both are the same value; dropping
+         *   either would tie the response to the other one's reason for being there.
+         */
         const [rows] = await pool_1.pool.query(`SELECT ma.id,
               ma.its_no,
               ma.member_name,
@@ -174,23 +204,6 @@ exports.memberAdminRoutes.get("/", async (req, res, next) => {
               mp.mobile_no_2,
               ma.last_login_at,
               ma.created_at,
-              -- FR-112b. Presence, 1 or 0 per field, never a value. These columns are
-              -- consumed in this file and do NOT appear in the response: what goes back is
-              -- the percentage computed from them. The fragment requires the aliases mp and
-              -- ph, and both are LEFT JOINed just below, so an account with no profile row
-              -- scores 0% rather than dropping out of the list.
-              --
-              -- first_prefix is therefore selected twice, once above as a name part and once
-              -- here as a discriminant. MySQL allows it, both are the same value, and
-              -- dropping either one would tie the response to the other reason for being
-              -- there.
-              --
-              -- NO APOSTROPHES AND NO BACKTICKS IN THIS COMMENT. The pool runs with
-              -- namedPlaceholders, so every query is tokenised before it is sent, and that
-              -- tokeniser does not know that -- starts a comment: one apostrophe in here
-              -- reads as the start of a string literal, swallows the rest of the statement,
-              -- and leaves :limit and :offset unconverted. MySQL then rejects the lot. A
-              -- backtick would end this template literal and break the build instead.
               ${memberCompletionQuery_1.COMPLETION_SELECT}
        FROM member_accounts ma
        LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id

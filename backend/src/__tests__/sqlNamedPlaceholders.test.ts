@@ -61,10 +61,15 @@ function sourceFiles(dir: string): string[] {
  * A template literal cannot contain a backtick, so splitting on backticks is sound. Chunks
  * that are not SQL, or carry no `:name`, are not this rule's business and are dropped.
  */
-function queryLiterals(source: string): string[] {
+function sqlLiterals(source: string): string[] {
   return [...source.matchAll(/`([^`]*)`/g)]
     .map((match) => match[1])
-    .filter((chunk) => SQL_VERBS.test(chunk) && /:[a-z_][a-z0-9_]*/i.test(chunk));
+    .filter((chunk) => SQL_VERBS.test(chunk));
+}
+
+/** Of those, the ones carrying `:name` placeholders, which is what the tokeniser rewrites. */
+function queryLiterals(source: string): string[] {
+  return sqlLiterals(source).filter((chunk) => /:[a-z_][a-z0-9_]*/i.test(chunk));
 }
 
 /** `${...}` holes become a harmless literal, so the tokeniser sees a whole statement. */
@@ -73,17 +78,26 @@ function fillHoles(sql: string): string {
 }
 
 const FILES = sourceFiles(SRC);
-const QUERIES = FILES.flatMap((file) =>
-  queryLiterals(fs.readFileSync(file, "utf8")).map((sql) => ({
-    file: path.relative(SRC, file),
-    sql
-  }))
-);
+
+function collect(pick: (source: string) => string[]) {
+  return FILES.flatMap((file) =>
+    pick(fs.readFileSync(file, "utf8")).map((sql) => ({
+      file: path.relative(SRC, file),
+      sql
+    }))
+  );
+}
+
+/** Queries carrying `:name`, for the tokenising check. */
+const QUERIES = collect(queryLiterals);
+/** Every SQL literal, for the no-comments rule - a comment is a hazard in any of them. */
+const ALL_QUERIES = collect(sqlLiterals);
 
 describe("named-placeholder queries", () => {
   it("finds the queries to check, so this file cannot pass by scanning nothing", () => {
     expect(FILES.length).toBeGreaterThan(10);
     expect(QUERIES.length).toBeGreaterThan(20);
+    expect(ALL_QUERIES.length).toBeGreaterThanOrEqual(QUERIES.length);
   });
 
   /**
@@ -107,24 +121,31 @@ describe("named-placeholder queries", () => {
   });
 
   /**
-   * The rule stated as a rule, so a failure names the cause rather than the symptom.
+   * No `--` comment inside a query at all. The rule is deliberately blunt.
    *
-   * An apostrophe in an SQL comment is always a hazard, even when it happens to pair with a
-   * later quote and leave no `:name` behind: everything between them is then read as a
-   * string, and what the tokeniser does with the rest is luck.
+   * The first attempt at this rule banned apostrophes in SQL comments, which was treating a
+   * symptom. The hazard is the comment: the tokeniser does not know what one is, so anything
+   * written inside it is read as SQL. An apostrophe becomes an unterminated string. A `:word`
+   * becomes a placeholder, which makes the count of placeholders disagree with the count of
+   * clauses that need one - harmless only if the formatter downstream happens to skip
+   * comments, which is a property of a patch version and not a promise.
+   *
+   * Every other query in this codebase already keeps its explanation in TypeScript. This test
+   * makes that the rule rather than the habit. A comment ABOUT a query is for people to read,
+   * and TypeScript is where people read it.
    */
-  it("has no apostrophe inside an SQL comment", () => {
-    for (const { file, sql } of QUERIES) {
-      for (const line of sql.split("\n")) {
-        const comment = line.indexOf("--");
-        if (comment === -1) continue;
+  it("has no SQL comment inside a query", () => {
+    for (const { file, sql } of ALL_QUERIES) {
+      const offenders = sql
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => /(^|\s)--(\s|$)/.test(line));
 
-        const text = line.slice(comment);
-        expect(
-          text.includes("'"),
-          `${file}: apostrophe in an SQL comment, which the named-placeholder tokeniser reads as a string: ${text.trim()}`
-        ).toBe(false);
-      }
+      expect(
+        offenders,
+        `${file}: move this out of the SQL and into a TypeScript comment above the query - ` +
+          `the named-placeholder tokeniser reads comment text as SQL`
+      ).toEqual([]);
     }
   });
 });
