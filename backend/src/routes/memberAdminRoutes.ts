@@ -102,7 +102,7 @@ function requestZoneScope(user: { role: string; zoneId?: number }): number | nul
   return Number.isInteger(zoneId) && zoneId > 0 ? zoneId : false;
 }
 
-memberAdminRoutes.get("/", async (req, res) => {
+memberAdminRoutes.get("/", async (req, res, next) => {
   const scope = requestZoneScope(req.user!);
   if (scope === false) return fail(res, "Forbidden", 403);
 
@@ -197,13 +197,19 @@ memberAdminRoutes.get("/", async (req, res) => {
               -- consumed in this file and do NOT appear in the response: what goes back is
               -- the percentage computed from them. The fragment requires the aliases mp and
               -- ph, and both are LEFT JOINed just below, so an account with no profile row
-              -- scores 0% rather than dropping out of the list. (No backticks in here: this
-              -- is inside a template literal, and one would end the string.)
+              -- scores 0% rather than dropping out of the list.
               --
               -- first_prefix is therefore selected twice, once above as a name part and once
-              -- here as a discriminant. MySQL allows it and both are the same value, and
-              -- dropping either one would couple the response to the other's reason for
-              -- existing.
+              -- here as a discriminant. MySQL allows it, both are the same value, and
+              -- dropping either one would tie the response to the other reason for being
+              -- there.
+              --
+              -- NO APOSTROPHES AND NO BACKTICKS IN THIS COMMENT. The pool runs with
+              -- namedPlaceholders, so every query is tokenised before it is sent, and that
+              -- tokeniser does not know that -- starts a comment: one apostrophe in here
+              -- reads as the start of a string literal, swallows the rest of the statement,
+              -- and leaves :limit and :offset unconverted. MySQL then rejects the lot. A
+              -- backtick would end this template literal and break the build instead.
               ${COMPLETION_SELECT}
        FROM member_accounts ma
        LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
@@ -264,8 +270,17 @@ memberAdminRoutes.get("/", async (req, res) => {
       },
       "OK"
     );
-  } catch {
-    return fail(res, "Failed to list members", 500);
+  } catch (err) {
+    // Handed to the terminal error boundary rather than swallowed here.
+    //
+    // This catch used to answer "Failed to list members" and discard the error. It cost a
+    // real diagnosis: the list started failing after a change to this query, and the only
+    // evidence anywhere was a message that said no more than the browser already showed.
+    // The boundary writes the one line this application permits itself - a reference, the
+    // method, the path, the driver error code and the error class, never the message and
+    // never `err.sql` (FR-066, see `utils/errorRef.ts`) - and returns that reference to the
+    // caller, so a report of "it will not load" can be matched to a specific failure.
+    return next(err);
   }
 });
 

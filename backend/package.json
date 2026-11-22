@@ -28,6 +28,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.9.1",
     "@types/supertest": "^7.2.1",
+    "named-placeholders": "^1.1.6",
     "supertest": "^7.3.1",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",

@@ -1,5 +1,42 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-22 — Fixed: the member list would not load. One apostrophe, in a comment
+
+The Members page answered "Could not load member accounts." as soon as the previous change
+went out. The cause was a single apostrophe — in an SQL **comment** I had just written.
+
+The pool runs with `namedPlaceholders: true`, so mysql2 rewrites every `:name` into `?`
+before anything is sent. The tokeniser that does it understands quoted strings but does not
+know that `--` starts a comment. So the apostrophe in "the other's reason for existing" read
+as the opening of a string literal, swallowed the rest of the statement, and left `:limit`
+and `:offset` in the query as literal text. MySQL rejected it, the route returned 500, and
+the page said what it says when the list will not load.
+
+Nothing about this is visible in review. The SQL is valid, the comment is accurate English,
+the TypeScript compiles, every test passes, and the fault appears only when a real query
+reaches a real server.
+
+**The guard.** `sqlNamedPlaceholders.test.ts` now walks every `.ts` file under `src`, picks
+out the template literals that look like a query carrying named placeholders — 93 of them —
+and runs each through the same tokeniser mysql2 uses, asserting that no `:name` survives. It
+also states the rule directly: no apostrophe inside an SQL comment. The check was verified
+against the actual bug: re-inserting that one apostrophe leaves `:limit` and `:offset`
+unconverted, which is precisely the failure that shipped. No other query in the codebase has
+the problem.
+
+`named-placeholders` is now declared in devDependencies. It arrives as a dependency of mysql2
+regardless, but a test that leaned on that would break the day mysql2 changed how it rewrites
+placeholders — and the whole point is to use the exact code that rewrites them rather than a
+copy of its rules.
+
+**The reason this took a diagnosis at all.** The list route caught the error and answered
+"Failed to list members", discarding it. The only evidence available anywhere was a message
+that said no more than the browser already showed. It now hands the error to the terminal
+error boundary, which writes the one line this application permits itself — a reference, the
+method, the path, the driver error code and the error class, never the message and never
+`err.sql` (FR-066) — and returns that reference to the caller. A report of "it will not
+load" can now be matched to a specific failure.
+
 ## 2026-11-22 — Added: profile-filling percentage per member, and a Members export
 
 Two additions to the Members list, which both an administrator and a Zonal Head use.
