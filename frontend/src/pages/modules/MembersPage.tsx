@@ -10,12 +10,15 @@ import {
   useCreateMemberAccountMutation,
   useGetMemberAccountsQuery,
   useGetMemberPhotoQuery,
+  useLazyGetMemberAccountsQuery,
   useResetMemberPasswordMutation,
   useSetMemberActiveMutation,
   type CreatedMemberAccount,
   type MemberAccount,
   type MemberSort
 } from "../../features/member/memberAdminApi";
+import { downloadExcelTable } from "../../utils/excelExport";
+import { buildMembersExportTable, membersExportMetaLines } from "./membersExport";
 
 /**
  * Administrator and Zonal Head view of member ACCOUNTS (FR-006, FR-007).
@@ -32,6 +35,17 @@ import {
 
 const PAGE_SIZE = 25;
 
+/**
+ * The export walks the list endpoint page by page (FR-006c).
+ *
+ * 200 is the server's own maximum page size, so this is the fewest round trips the API
+ * allows. The ceiling is a guard, not a policy: without one, a mis-set filter on a roster of
+ * tens of thousands would hold the browser open on a loop of requests nobody asked for. When
+ * it bites, the file and the page both say so — a short file that claims to be complete is
+ * the one outcome worth ruling out.
+ */
+const EXPORT_PAGE_SIZE = 200;
+const MAX_EXPORT_ROWS = 5000;
 
 const activeFilterOptions = [
   { value: "all", label: "All accounts" },
@@ -113,6 +127,47 @@ function MemberThumb({ member }: { member: MemberAccount }) {
 
 function contactNumber(primary: string | null, secondary: string | null) {
   return primary || secondary || "—";
+}
+
+/**
+ * How much of their own form this member has filled in (FR-112b).
+ *
+ * THE NUMBER IS THE ANSWER; THE BAR IS FOR SCANNING
+ *   The percentage is text, so it is readable by a screen reader, copyable, and legible to
+ *   anyone who cannot distinguish the colours. The bar is there because the question an
+ *   operator actually has is "who is behind?", and twenty-five two-digit numbers in a column
+ *   do not answer that at a glance. It is `aria-hidden` for the same reason: it repeats the
+ *   number rather than adding to it.
+ *
+ * WHY THE FRACTION IS SPELLED OUT UNDERNEATH
+ *   The denominator is not the same for every member — it counts only the questions that
+ *   member was asked, so a Student and a shopkeeper are measured out of different totals
+ *   (FR-112). A bare percentage invites "out of what?", and the answer is per member, which
+ *   is exactly the kind of thing nobody guesses correctly.
+ *
+ * THRESHOLDS
+ *   Deliberately coarse: under a third is behind, a third to two thirds is in progress, above
+ *   that is close. Finer bands would imply a precision the measure does not have.
+ */
+function CompletionCell({ member }: { member: MemberAccount }) {
+  const percent = Math.max(0, Math.min(100, member.completion_percent));
+  const tone =
+    percent >= 67 ? "bg-primary" : percent >= 34 ? "bg-warning" : "bg-danger";
+
+  return (
+    <div className="min-w-[5.5rem]">
+      <div className="font-semibold">{percent}%</div>
+      <div
+        className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface"
+        aria-hidden="true"
+      >
+        <div className={`h-full ${tone}`} style={{ width: `${percent}%` }} />
+      </div>
+      <div className="mt-1 whitespace-nowrap text-xs text-textMuted">
+        {member.completion_answered} of {member.completion_asked}
+      </div>
+    </div>
+  );
 }
 
 const EMPTY_FORM = { its_no: "", member_name: "", password: "" };
@@ -387,10 +442,88 @@ export function MembersPage() {
 
   const { data, isLoading, isFetching, error } = useGetMemberAccountsQuery(queryArg);
   const [setMemberActive, setActiveState] = useSetMemberActiveMutation();
+  const [fetchMembersPage] = useLazyGetMemberAccountsQuery();
+
+  const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  /**
+   * FR-006c. Downloads every member matching the CURRENT search, status and order.
+   *
+   * Every row, not the twenty-five on screen. It walks the same endpoint the grid uses
+   * rather than calling a second export route, which is what guarantees the file and the
+   * grid hold the same members: one search, one filter, one order, one zone scope and one
+   * completion measure, all decided on the server.
+   *
+   * The loop stops on three conditions, and all three are needed. Reaching the server's own
+   * `total` is the normal one. An empty page is the guard against a `total` that moved while
+   * the export was running — someone else creating or deactivating an account mid-export
+   * would otherwise leave this asking for page after page forever. The row ceiling is the
+   * guard against a filter nobody meant to set.
+   */
+  async function onExport() {
+    setExportError(null);
+    setExportNote(null);
+    setExporting(true);
+
+    try {
+      const collected: MemberAccount[] = [];
+      let matching = total;
+
+      for (let pageNumber = 1; ; pageNumber += 1) {
+        const batch = await fetchMembersPage({
+          ...queryArg,
+          page: pageNumber,
+          page_size: EXPORT_PAGE_SIZE
+        }).unwrap();
+
+        matching = batch.total;
+        collected.push(...batch.items);
+
+        if (batch.items.length === 0) break;
+        if (collected.length >= batch.total) break;
+        if (collected.length >= MAX_EXPORT_ROWS) break;
+      }
+
+      const rows = collected.slice(0, MAX_EXPORT_ROWS);
+
+      if (rows.length === 0) {
+        setExportError("There are no members to export. Clear the search or the filter first.");
+        return;
+      }
+
+      downloadExcelTable({
+        title: "Members",
+        filenameBase: "members",
+        metaLines: membersExportMetaLines({
+          exported: rows.length,
+          total: Math.max(matching, rows.length),
+          search: search.trim(),
+          status:
+            activeFilterOptions.find((option) => option.value === activeFilter)?.label ??
+            activeFilter,
+          sort,
+          isZonalHead: isZonalHead
+        }),
+        table: buildMembersExportTable(rows)
+      });
+
+      setExportNote(
+        rows.length < matching
+          ? `Exported the first ${rows.length} of ${matching} matching accounts. Narrow the search to export the rest.`
+          : `Exported ${rows.length} account${rows.length === 1 ? "" : "s"}.`
+      );
+    } catch {
+      setExportError("Could not build the export. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function onToggle(member: MemberAccount) {
     setActionError(null);
@@ -411,6 +544,15 @@ export function MembersPage() {
           <div className="text-sm text-textMuted">
             {isLoading ? "Loading..." : `${total} account${total === 1 ? "" : "s"}`}
           </div>
+          {/* Disabled while there is nothing to export, rather than hidden: a button that
+              comes and goes is harder to find again than one that is visibly unavailable. */}
+          <Button
+            variant="secondary"
+            onClick={onExport}
+            disabled={exporting || isLoading || total === 0}
+          >
+            {exporting ? "Preparing..." : "Export to Excel"}
+          </Button>
           {!showAddForm ? (
             <Button onClick={() => setShowAddForm(true)}>Add member</Button>
           ) : null}
@@ -488,6 +630,18 @@ export function MembersPage() {
             cannot be filled in from here.
           </div>
 
+          {/* FR-112 requires the definition to sit beside the figure on the dashboard, and the
+              reason holds here too: a percentage whose denominator varies per member will be
+              misread unless it says so. */}
+          <div className="rounded-input border border-border bg-surface p-2 text-xs text-textMuted">
+            <strong>Profile</strong> is how much of their own twelve-tab form the member has
+            filled in, counting only the questions that member was asked — so a Student is not
+            marked down for the employment fields the form never shows them. The repeating
+            lists (Titles, Sharaf, Skills, Maqamaat, Ashara, Tamreen methods) are not counted,
+            because having none to record is not the same as leaving them blank. It shows how
+            far along they are and not what they wrote: their answers stay private to them.
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {/* FR-006b. One box for all four, not a second one for the Party: an operator
                 looking for a Hizb should not have to work out which field to type it into,
@@ -550,6 +704,25 @@ export function MembersPage() {
         </div>
       ) : null}
 
+      {exportError ? (
+        <div
+          role="alert"
+          className="rounded-input border border-danger bg-danger/5 p-2 text-sm text-danger"
+        >
+          {exportError}
+        </div>
+      ) : null}
+
+      {exportNote ? (
+        <div className="rounded-input border border-primary bg-primary/5 p-2 text-sm">
+          {exportNote}{" "}
+          <span className="text-textMuted">
+            The file contains the columns on this page plus account status and last sign-in. It
+            carries no health values, no other profile answers and no photographs.
+          </span>
+        </div>
+      ) : null}
+
       <Card>
         {isLoading ? (
           <div className="p-2 text-sm text-textMuted">Loading accounts...</div>
@@ -561,12 +734,16 @@ export function MembersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-left text-sm">
+            <table className="w-full min-w-[58rem] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs uppercase text-textMuted">
                   <th className="px-2 py-2">Picture</th>
                   <th className="px-2 py-2">ITS No</th>
                   <th className="px-2 py-2">Name</th>
+                  {/* FR-112b. Beside the name rather than at the end of the row: the question
+                      it answers is "who is behind?", and a column you have to scroll to
+                      answers it for nobody. */}
+                  <th className="px-2 py-2">Profile</th>
                   <th className="px-2 py-2">Zone</th>
                   <th className="px-2 py-2">Party</th>
                   <th className="px-2 py-2">WhatsApp No.</th>
@@ -582,6 +759,9 @@ export function MembersPage() {
                     </td>
                     <td className="px-2 py-2 font-semibold">{member.its_no}</td>
                     <td className="px-2 py-2">{memberFullName(member) || member.member_name || "—"}</td>
+                    <td className="px-2 py-2">
+                      <CompletionCell member={member} />
+                    </td>
                     <td className="px-2 py-2">{member.zone_name || "—"}</td>
                     <td className="px-2 py-2">{member.party_name || "—"}</td>
                     <td className="px-2 py-2">

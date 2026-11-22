@@ -51,7 +51,11 @@ const ITEMS = [
     mobile_no_1: null,
     mobile_no_2: "0300 7654321",
     last_login_at: "2026-11-01T10:15:00.000Z",
-    created_at: "2026-10-30T13:00:53.000Z"
+    created_at: "2026-10-30T13:00:53.000Z",
+    // FR-112b. Supplied by the server, computed from presence rather than from any answer.
+    completion_percent: 76,
+    completion_answered: 32,
+    completion_asked: 42
   },
   {
     id: 12,
@@ -73,9 +77,38 @@ const ITEMS = [
     mobile_no_1: null,
     mobile_no_2: null,
     last_login_at: null,
-    created_at: "2026-10-30T13:00:53.000Z"
+    created_at: "2026-10-30T13:00:53.000Z",
+    // A member with no profile row at all scores 0% against a real denominator, not 0 of 0.
+    completion_percent: 0,
+    completion_answered: 0,
+    completion_asked: 40
   }
 ];
+
+/**
+ * The roster the mocked list endpoint serves. A test replaces it to exercise paging.
+ *
+ * A synthetic roster is the only way to test the export's page loop honestly: with two
+ * members every stopping condition is satisfied by the first response, so a loop that never
+ * asked for a second page would pass.
+ */
+let roster: any[] = ITEMS;
+
+function makeRoster(count: number) {
+  return Array.from({ length: count }, (_unused, index) => ({
+    ...ITEMS[0],
+    id: 1000 + index,
+    its_no: String(40500000 + index),
+    name: `Member${index}`,
+    completion_percent: index % 101,
+    completion_answered: index % 43,
+    completion_asked: 42
+  }));
+}
+
+/** Every file the page handed to the browser: the name it chose and the bytes behind it. */
+let downloads: Array<{ filename: string; blob: Blob | null }> = [];
+let lastBlob: Blob | null = null;
 
 let requested: string[] = [];
 /** Bodies of every POST /members, so a test can assert what was actually sent. */
@@ -90,10 +123,24 @@ beforeEach(() => {
   posted = [];
   createFailure = null;
   resetFailure = null;
+  roster = ITEMS;
+  downloads = [];
+  lastBlob = null;
 
   Object.assign(URL, {
-    createObjectURL: vi.fn(() => "blob:member-photo"),
+    createObjectURL: vi.fn((blob: Blob) => {
+      lastBlob = blob;
+      return "blob:member-photo";
+    }),
     revokeObjectURL: vi.fn()
+  });
+
+  // The download is an anchor click. Recording it here is how a test sees the file at all:
+  // the element is appended and removed inside one synchronous call.
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+    this: HTMLAnchorElement
+  ) {
+    downloads.push({ filename: this.download, blob: lastBlob });
   });
 
   vi.stubGlobal(
@@ -165,10 +212,23 @@ beforeEach(() => {
       }
 
       if (url.includes("/members")) {
+        // Paged like the real endpoint, so the export's loop is exercised rather than
+        // handed everything in one response however it asked.
+        const query = new URL(url, "http://localhost").searchParams;
+        const pageSize = Number(query.get("page_size") ?? 25) || 25;
+        const page = Number(query.get("page") ?? 1) || 1;
+        const start = (page - 1) * pageSize;
+
         return new Response(
           JSON.stringify({
             success: true,
-            data: { items: ITEMS, total: ITEMS.length, page: 1, page_size: 25, sort: "its_no" }
+            data: {
+              items: roster.slice(start, start + pageSize),
+              total: roster.length,
+              page,
+              page_size: pageSize,
+              sort: query.get("sort") ?? "its_no"
+            }
           }),
           { status: 200, headers: { "Content-Type": "application/json" } }
         );
@@ -536,5 +596,158 @@ describe("MembersPage — resetting a password", () => {
 
     expect(screen.queryByLabelText(/^New Password/)).not.toBeInTheDocument();
     expect(posted.some((p) => p.resetUrl)).toBe(false);
+  });
+});
+
+/**
+ * The profile-filling percentage in each row (FR-112b).
+ *
+ * The figure comes from the SERVER, computed by the same code that produces the dashboard
+ * average, so these tests check that the row SHOWS it faithfully rather than recomputing it.
+ * The fraction matters as much as the percentage: the denominator differs per member, and a
+ * bare percentage would be read as a share of one fixed total.
+ */
+describe("profile completion in the row (FR-112b)", () => {
+  it("shows each member's own percentage", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+
+    expect(await screen.findByText("76%")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+  });
+
+  it("spells out the fraction, because the denominator is per member", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+
+    expect(await screen.findByText("32 of 42")).toBeInTheDocument();
+    // Not "0 of 0": a member with no profile row is still asked the unconditional questions.
+    expect(screen.getByText("0 of 40")).toBeInTheDocument();
+  });
+
+  it("states what the figure counts, beside the figure", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+
+    const note = await screen.findByText(/only the questions that member was asked/i);
+    expect(note.textContent).toMatch(/Student/);
+    expect(note.textContent).toMatch(/not what they wrote/i);
+  });
+
+  it("shows it to a Zonal Head too, for the members in their zone", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("zonal_head", 3) });
+
+    expect(await screen.findByText("76%")).toBeInTheDocument();
+  });
+});
+
+/**
+ * Export to Excel (FR-006c).
+ *
+ * THE ASSERTION THAT MATTERS is that the file holds every matching member rather than the
+ * page on screen. An export that quietly contained twenty-five of three hundred rows would
+ * look entirely correct to whoever opened it.
+ */
+describe("export to Excel (FR-006c)", () => {
+  function exportButton() {
+    return screen.getByRole("button", { name: /Export to Excel/i });
+  }
+
+  it("downloads a file named for the page and the moment", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+    await screen.findByText("40480241");
+
+    fireEvent.click(exportButton());
+
+    await waitFor(() => expect(downloads.length).toBe(1));
+    expect(downloads[0].filename).toMatch(/^members_\d{8}_\d{6}\.xls$/);
+  });
+
+  it("asks for full pages, not the twenty-five on screen", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+    await screen.findByText("40480241");
+
+    fireEvent.click(exportButton());
+
+    await waitFor(() => expect(downloads.length).toBe(1));
+    expect(requested.some((url) => url.includes("page_size=200"))).toBe(true);
+  });
+
+  /** The whole point of the feature: 250 members, one file, 250 rows. */
+  it("walks every page of a roster larger than one request", async () => {
+    roster = makeRoster(250);
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+    await screen.findByText("40500000");
+
+    fireEvent.click(exportButton());
+
+    await waitFor(() => expect(downloads.length).toBe(1));
+
+    const pageRequests = requested.filter((url) => url.includes("page_size=200"));
+    expect(pageRequests.some((url) => url.includes("page=1"))).toBe(true);
+    expect(pageRequests.some((url) => url.includes("page=2"))).toBe(true);
+    // Two pages cover 250 rows; a third would mean the loop missed its own stop condition.
+    expect(pageRequests.some((url) => url.includes("page=3"))).toBe(false);
+
+    const html = await downloads[0].blob!.text();
+    expect(html).toContain("40500000");
+    expect(html).toContain("40500249");
+    expect(html).toContain("Exported 250 of 250 matching accounts");
+  });
+
+  it("carries the current search and order into the file's own heading", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+    await screen.findByText("40480241");
+
+    fireEvent.change(screen.getByLabelText(/^Search/), { target: { value: "Burhani" } });
+    fireEvent.change(screen.getByLabelText(/^Sort by/), { target: { value: "party" } });
+
+    await waitFor(() => expect(requested.some((url) => url.includes("sort=party"))).toBe(true));
+    fireEvent.click(exportButton());
+
+    await waitFor(() => expect(downloads.length).toBe(1));
+
+    const html = await downloads[0].blob!.text();
+    expect(html).toContain("Search: Burhani");
+    expect(html).toContain("Order: Party (A-Z)");
+  });
+
+  it("says in the file what the file does not contain", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+    await screen.findByText("40480241");
+
+    fireEvent.click(exportButton());
+
+    await waitFor(() => expect(downloads.length).toBe(1));
+
+    const html = await downloads[0].blob!.text();
+    expect(html).toMatch(/health values/i);
+    expect(html).toMatch(/photograph/i);
+  });
+
+  it("reports what it exported, on the page as well as in the file", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+    await screen.findByText("40480241");
+
+    fireEvent.click(exportButton());
+
+    expect(await screen.findByText(/Exported 2 accounts\./)).toBeInTheDocument();
+  });
+
+  /** A Zonal Head's file is their zone's members, because the endpoint scopes it. */
+  it("is offered to a Zonal Head as well", async () => {
+    renderWithProviders(<MembersPage />, { store: storeAs("zonal_head", 3) });
+    await screen.findByText("40480241");
+
+    fireEvent.click(exportButton());
+
+    await waitFor(() => expect(downloads.length).toBe(1));
+    const html = await downloads[0].blob!.text();
+    expect(html).toContain("Scope: members posted to your zone");
+  });
+
+  it("offers nothing to export when the list is empty", async () => {
+    roster = [];
+    renderWithProviders(<MembersPage />, { store: storeAs("admin") });
+
+    await waitFor(() => expect(exportButton()).toBeDisabled());
+    expect(downloads.length).toBe(0);
   });
 });

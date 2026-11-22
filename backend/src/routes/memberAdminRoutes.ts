@@ -4,6 +4,7 @@ import { pool } from "../db/pool";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { validateMemberPassword } from "../services/authService";
 import { readMemberProfile, saveMemberProfile } from "../services/memberProfileService";
+import { COMPLETION_SELECT, completionFor } from "../services/memberCompletionQuery";
 import { fail, ok } from "../utils/response";
 
 /**
@@ -13,6 +14,12 @@ import { fail, ok } from "../utils/response";
  * photograph, zone and party posting, and WhatsApp and mobile numbers. The LIST stays at
  * that: the twelve-tab answers are not in it, so a page of fifty members is not a page of
  * fifty medical records (FR-101).
+ *
+ * One figure is DERIVED from those answers without being one of them: `completion_percent`
+ * (FR-112b), how much of the form that member has filled in. The query reads presence - 1 or
+ * 0 per field - never a value, and the presence columns are consumed in this file and left
+ * out of the response. So the list says how far along a member is without saying anything
+ * about what they wrote, which is the whole reason the measure was built on presence.
  *
  * The full profile is a separate, deliberate request — `GET /:id/profile`, one member at a
  * time, which both roles may make and which does include the Tab 6 health values under
@@ -185,7 +192,19 @@ memberAdminRoutes.get("/", async (req, res) => {
               mp.mobile_no_1,
               mp.mobile_no_2,
               ma.last_login_at,
-              ma.created_at
+              ma.created_at,
+              -- FR-112b. Presence, 1 or 0 per field, never a value. These columns are
+              -- consumed in this file and do NOT appear in the response: what goes back is
+              -- the percentage computed from them. The fragment requires the aliases mp and
+              -- ph, and both are LEFT JOINed just below, so an account with no profile row
+              -- scores 0% rather than dropping out of the list. (No backticks in here: this
+              -- is inside a template literal, and one would end the string.)
+              --
+              -- first_prefix is therefore selected twice, once above as a name part and once
+              -- here as a discriminant. MySQL allows it and both are the same value, and
+              -- dropping either one would couple the response to the other's reason for
+              -- existing.
+              ${COMPLETION_SELECT}
        FROM member_accounts ma
        LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
        LEFT JOIN member_photos ph ON ph.member_account_id = ma.id
@@ -200,28 +219,44 @@ memberAdminRoutes.get("/", async (req, res) => {
     return ok(
       res,
       {
-        items: rows.map((r) => ({
-          id: Number(r.id),
-          its_no: r.its_no,
-          member_name: r.member_name,
-          must_change_password: Boolean(r.must_change_password),
-          is_active: Boolean(r.is_active),
-          has_profile: Boolean(r.has_profile),
-          has_photo: Boolean(r.has_photo),
-          first_prefix: r.first_prefix,
-          name: r.name,
-          father_prefix: r.father_prefix,
-          father_name: r.father_name,
-          surname: r.surname,
-          zone_name: r.zone_name,
-          party_name: r.party_name,
-          whatsapp_no_1: r.whatsapp_no_1,
-          whatsapp_no_2: r.whatsapp_no_2,
-          mobile_no_1: r.mobile_no_1,
-          mobile_no_2: r.mobile_no_2,
-          last_login_at: r.last_login_at,
-          created_at: r.created_at
-        })),
+        items: rows.map((r) => {
+          // FR-112b. The same measure the dashboard averages, applied to this one member, so
+          // a row reading 76% and the figure it is counted in cannot disagree. Computed per
+          // row rather than in SQL because the rules are conditional - a Student is not asked
+          // for an employer, a Solo member has no Party - and those rules live in one
+          // readable function rather than in a CASE expression nobody would maintain.
+          const completion = completionFor(r);
+
+          return {
+            id: Number(r.id),
+            its_no: r.its_no,
+            member_name: r.member_name,
+            must_change_password: Boolean(r.must_change_password),
+            is_active: Boolean(r.is_active),
+            has_profile: Boolean(r.has_profile),
+            has_photo: Boolean(r.has_photo),
+            first_prefix: r.first_prefix,
+            name: r.name,
+            father_prefix: r.father_prefix,
+            father_name: r.father_name,
+            surname: r.surname,
+            zone_name: r.zone_name,
+            party_name: r.party_name,
+            whatsapp_no_1: r.whatsapp_no_1,
+            whatsapp_no_2: r.whatsapp_no_2,
+            mobile_no_1: r.mobile_no_1,
+            mobile_no_2: r.mobile_no_2,
+            last_login_at: r.last_login_at,
+            created_at: r.created_at,
+            // 0-100. How much of the twelve-tab form THIS member has answered.
+            completion_percent: completion.percent,
+            // The two halves of that fraction, so the page can say "22 of 42 questions"
+            // rather than leave a bare percentage to be taken on trust. The denominator
+            // differs between members by design: it counts only what each was asked.
+            completion_answered: completion.answered,
+            completion_asked: completion.asked
+          };
+        }),
         total,
         page,
         page_size: pageSize,

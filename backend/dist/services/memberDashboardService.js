@@ -4,92 +4,10 @@ exports.DASHBOARD_QUERY = void 0;
 exports.readMemberDashboard = readMemberDashboard;
 const pool_1 = require("../db/pool");
 const memberFormCompletion_1 = require("./memberFormCompletion");
-/**
- * The administrator's member dashboard: who has got into their account, and how much of the
- * form they have filled in.
- *
- * TWO QUESTIONS, AND THEY ARE NOT THE SAME QUESTION
- *   "Signed in" and "chose their own password" look like one number and are not. Every
- *   account is issued a one-time password and `must_change_password` is set, so a member can
- *   sign in, land on the forced-change screen, and stop there. Reporting only the sign-ins
- *   would count that member as settled; reporting only the password changes would lose the
- *   fact that they got in at all. The gap between the two is the population worth chasing,
- *   so both are counted and the gap is named.
- *
- * NO MEMBER DATA LEAVES THIS SERVICE
- *   The query selects PRESENCE - 1 or 0 per field - rather than values, with seven
- *   exceptions that decide which further questions the form asks. Tab 6 is medical data
- *   under FR-065 and FR-066: no blood group, height or weight is ever read here, only
- *   whether each box has something in it. The response is counts and percentages, and names
- *   no member.
- */
-/** Counted as answered only when they hold something other than whitespace. */
-const TEXT_PRESENCE_FIELDS = new Set([
-    "name",
-    "father_name",
-    "surname",
-    "nationality",
-    "residence_address",
-    "email",
-    "five_kalam_uploaded_when",
-    "organisation_name",
-    "designation",
-    "work_phone_no",
-    "work_address",
-    "major_subjects",
-    "hifz_current_surah",
-    "hifz_current_ayyah",
-    "tamreen_absence_reason",
-    "khidmat_designation",
-    "sansta_name",
-    "umoor_name"
-]);
-/**
- * Fields whose presence is NOT a plain column on `member_profiles`.
- *
- *   photo       lives in its own table, so it is a join rather than a column.
- *   contact_no  is one question over five columns: any of them answers it.
- */
-const DERIVED_PRESENCE = {
-    photo: "IF(ph.id IS NULL, 0, 1)",
-    contact_no: `IF(COALESCE(
-                    NULLIF(TRIM(mp.phone_no), ''),
-                    NULLIF(TRIM(mp.mobile_no_1), ''),
-                    NULLIF(TRIM(mp.mobile_no_2), ''),
-                    NULLIF(TRIM(mp.whatsapp_no_1), ''),
-                    NULLIF(TRIM(mp.whatsapp_no_2), '')
-                  ) IS NULL, 0, 1)`
-};
-function presenceExpression(field) {
-    const derived = DERIVED_PRESENCE[field];
-    if (derived)
-        return `${derived} AS p_${field}`;
-    if (TEXT_PRESENCE_FIELDS.has(field)) {
-        return `IF(NULLIF(TRIM(mp.${field}), '') IS NULL, 0, 1) AS p_${field}`;
-    }
-    return `IF(mp.${field} IS NULL, 0, 1) AS p_${field}`;
-}
-/**
- * The discriminants, read as values because the questions a member is ASKED depend on them.
- * Nothing else is read as a value.
- */
-const DISCRIMINANT_COLUMNS = [
-    "first_prefix",
-    "hizb_participation",
-    "occupation_type",
-    "has_hifz_sanad",
-    "is_regular_donor",
-    "attends_karachi_tamreen",
-    "khidmat_type"
-];
+const memberCompletionQuery_1 = require("./memberCompletionQuery");
 /** Whole-number percent of `part` in `whole`; 0 rather than NaN when there is no whole. */
 function percent(part, whole) {
     return whole === 0 ? 0 : Math.round((part / whole) * 100);
-}
-function toTriState(value) {
-    if (value === null || value === undefined)
-        return null;
-    return Number(value) === 1 ? 1 : 0;
 }
 /**
  * The query, without its WHERE clause, built once at module load and exported so it can be
@@ -99,12 +17,15 @@ function toTriState(value) {
  * yet is exactly the case this dashboard exists to count: it is 0% complete, not absent.
  * `member_photos` has a UNIQUE key on `member_account_id`, so that join cannot fan a member
  * out into several rows and double-count them.
+ *
+ * The presence and discriminant columns come from `memberCompletionQuery`, which the account
+ * list uses too (FR-112b). Sharing them is what keeps a member's own percentage and the
+ * average they are counted in from drifting apart.
  */
 exports.DASHBOARD_QUERY = `SELECT ma.is_active,
        IF(ma.last_login_at IS NULL, 0, 1) AS has_signed_in,
        ma.must_change_password,
-       ${DISCRIMINANT_COLUMNS.map((c) => `mp.${c}`).join(",\n       ")},
-       ${memberFormCompletion_1.PRESENCE_FIELDS.map(presenceExpression).join(",\n       ")}
+       ${memberCompletionQuery_1.COMPLETION_SELECT}
 FROM member_accounts ma
 LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
 LEFT JOIN member_photos ph ON ph.member_account_id = ma.id`;
@@ -178,21 +99,7 @@ async function readMemberDashboard(filter = {}) {
         // figure down for work nobody intends to do.
         if (!isActive)
             continue;
-        const present = (0, memberFormCompletion_1.emptyPresence)();
-        for (const field of memberFormCompletion_1.PRESENCE_FIELDS) {
-            present[field] = Number(row[`p_${field}`]) === 1 ? 1 : 0;
-        }
-        const completionRow = {
-            present,
-            first_prefix: row.first_prefix ?? null,
-            hizb_participation: row.hizb_participation ?? null,
-            occupation_type: row.occupation_type ?? null,
-            has_hifz_sanad: toTriState(row.has_hifz_sanad),
-            is_regular_donor: toTriState(row.is_regular_donor),
-            attends_karachi_tamreen: toTriState(row.attends_karachi_tamreen),
-            khidmat_type: row.khidmat_type ?? null
-        };
-        const completion = (0, memberFormCompletion_1.profileCompletion)(completionRow);
+        const completion = (0, memberFormCompletion_1.profileCompletion)((0, memberCompletionQuery_1.completionRowFrom)(row));
         measured += 1;
         percentSum += completion.percent;
         questionsAsked += completion.asked;

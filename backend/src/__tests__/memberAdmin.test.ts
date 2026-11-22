@@ -137,10 +137,116 @@ describe("admin member administration", () => {
         "weight_kg",
         "bmi",
         "photo",
-        "image_data"
+        "image_data",
+        // FR-112b. The completion query reads presence (p_*) and the seven discriminants,
+        // and both are consumed in the route. If any of them reaches the response, the list
+        // has started reporting what a member answered rather than how much — and
+        // `p_blood_group` plus `is_regular_donor` would be reporting it about Tab 6.
+        "p_blood_group",
+        "p_height_cm",
+        "p_weight_kg",
+        "p_name",
+        "p_contact_no",
+        "p_photo",
+        "is_regular_donor",
+        "has_hifz_sanad",
+        "hizb_participation",
+        "occupation_type",
+        "khidmat_type",
+        "attends_karachi_tamreen"
       ]) {
         expect(keys).not.toContain(forbidden);
       }
+    });
+
+    /**
+     * FR-112b. Each row carries how much of the twelve-tab form that member has answered.
+     *
+     * The figure must be the SAME measure the dashboard averages — they share
+     * `memberCompletionQuery` for exactly this reason — and it must be derived from presence
+     * rather than from any answer, which is what the forbidden-keys test above pins.
+     */
+    describe("profile completion per member (FR-112b)", () => {
+      it("reports a percentage and the fraction behind it", async () => {
+        const res = await request(app)
+          .get("/api/v1/members")
+          .set("Authorization", `Bearer ${adminToken}`);
+
+        const item = res.body.data.items.find((m: any) => m.id === settledId);
+        expect(item).toBeDefined();
+
+        expect(typeof item.completion_percent).toBe("number");
+        expect(item.completion_percent).toBeGreaterThanOrEqual(0);
+        expect(item.completion_percent).toBeLessThanOrEqual(100);
+
+        // The fraction must agree with the percentage it was rounded from.
+        expect(item.completion_asked).toBeGreaterThan(0);
+        expect(item.completion_answered).toBeLessThanOrEqual(item.completion_asked);
+        expect(item.completion_percent).toBe(
+          Math.round((item.completion_answered / item.completion_asked) * 100)
+        );
+      });
+
+      /**
+       * The denominator is never zero, so a member with nothing filled in scores 0% rather
+       * than producing a division by zero or a misleading 100%. Tab 1 alone asks eleven
+       * unconditional questions.
+       */
+      it("scores an account with no profile row at 0% against a real denominator", async () => {
+        // A number of its own: 99900196-99900199 are taken by other test files, which run in
+        // parallel against this one shared database, and this test DELETES what it creates.
+        const its = "99900201";
+        await pool.query("DELETE FROM member_accounts WHERE its_no = :i", { i: its });
+        await pool.query(
+          `INSERT INTO member_accounts (its_no, member_name, password_hash, must_change_password, is_active)
+           VALUES (:i, '__TEST_NOPROFILE__', 'not-used', 1, 1)`,
+          { i: its }
+        );
+
+        try {
+          const res = await request(app)
+            .get(`/api/v1/members?q=${its}`)
+            .set("Authorization", `Bearer ${adminToken}`);
+
+          const item = res.body.data.items.find((m: any) => m.its_no === its);
+          expect(item).toBeDefined();
+          expect(item.has_profile).toBe(false);
+          expect(item.completion_percent).toBe(0);
+          expect(item.completion_answered).toBe(0);
+          expect(item.completion_asked).toBeGreaterThan(10);
+        } finally {
+          await pool.query("DELETE FROM member_accounts WHERE its_no = :i", { i: its });
+        }
+      });
+
+      /** Answering something must move the figure, or it is not measuring anything. */
+      it("counts the answers a member has actually given", async () => {
+        const res = await request(app)
+          .get(`/api/v1/members?q=${POSTED_ITS}`)
+          .set("Authorization", `Bearer ${adminToken}`);
+
+        // This fixture has a name, a surname, a zone and a party stored.
+        const posted = res.body.data.items.find((m: any) => m.id === postedId);
+        expect(posted).toBeDefined();
+        expect(posted.completion_answered).toBeGreaterThanOrEqual(4);
+        expect(posted.completion_percent).toBeGreaterThan(0);
+      });
+
+      it("is reported for every row, including a deactivated account", async () => {
+        const res = await request(app)
+          .get("/api/v1/members")
+          .set("Authorization", `Bearer ${adminToken}`);
+
+        // The dashboard measures ACTIVE accounts only, because it is reporting outstanding
+        // work. A row is a specific member the operator is looking at, so it always says.
+        for (const item of res.body.data.items) {
+          expect(typeof item.completion_percent, item.its_no).toBe("number");
+        }
+
+        const inactive = res.body.data.items.find((m: any) => m.id === inactiveId);
+        expect(inactive).toBeDefined();
+        expect(typeof inactive.completion_percent).toBe("number");
+      });
     });
 
     // FR-047, FR-048: the zone and party a member is posted to are resolved to their names,

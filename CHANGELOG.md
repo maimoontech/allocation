@@ -1,5 +1,71 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-22 — Added: profile-filling percentage per member, and a Members export
+
+Two additions to the Members list, which both an administrator and a Zonal Head use.
+
+**Each row now says how much of their own form that member has filled in.** The percentage,
+a bar for scanning, and the fraction underneath — "32 of 42". The fraction is there because
+the denominator is not the same for every member: it counts only the questions that member
+was asked, so a Student is not marked down for employment fields the form never shows them.
+A bare percentage invites "out of what?", and the answer is per member.
+
+The figure is **the same measure the dashboard averages, computed by the same code.** That
+mattered enough to restructure for: the presence select list and the row mapping moved into
+`memberCompletionQuery.ts`, which the dashboard and the list both call. Two
+implementations would have been free to drift, and the failure would have been invisible —
+a member reading 76% in their row while being counted as something else in the average looks
+entirely reasonable from either end, and nobody would think to compare them. A test asserts
+the dashboard query contains the shared fragment.
+
+**It is derived from presence, never from an answer.** The query reads 1 or 0 per field —
+whether the box holds something, not what it holds — and those columns are consumed in the
+route and left out of the response. So the list says how far along a member is and says
+nothing about what they wrote. The forbidden-keys test in `memberAdmin.test.ts` now names
+`p_blood_group` and `is_regular_donor` among the keys that must never appear, because the
+query reads them and the response must not carry them.
+
+One deliberate difference from the dashboard: the dashboard measures **active accounts only**,
+since it reports outstanding work nobody intends to do for a withdrawn member. A row carries
+a figure for every account listed, deactivated ones included — a row is a specific member
+the operator is looking at, not a population.
+
+**Export to Excel.** Downloads every account matching the current search, status filter and
+order — not the twenty-five on screen. It walks the same endpoint the grid uses, page by
+page, rather than calling a second export route: that is what guarantees the file and the
+grid hold the same members, with one search, one filter, one order, one zone scope and one
+completion measure, all decided on the server.
+
+Three details worth stating:
+
+- **The ITS number and the telephone numbers are written as text.** An ITS number is 6 to 20
+  digits and is an identifier, not a quantity. Past 15 significant figures Excel rounds a
+  number, so a 20-digit ITS number would have arrived subtly wrong and an operator pasting it
+  back into a search would have found nobody. Mobile numbers lose their leading zero the same
+  way.
+- **The percentage is written as a bare number**, with the unit in the heading. "76%" is text
+  to a spreadsheet, and a column of text cannot be averaged, sorted numerically or filtered
+  with "greater than" — which is most of the reason to want this in Excel at all.
+- **The file states its own scope**: how many rows out of how many matched, the search and
+  order it reflects, whose scope it was taken under, and what it leaves out. A spreadsheet
+  outlives the screen it came from, and somebody will be asked "is this everybody?" about a
+  file somebody else sent them. If the 5,000-row ceiling ever bites, the file says it was cut
+  short — a short file that claims to be complete is the one outcome worth ruling out.
+
+**The one decision that needed authorising.** FR-101 says contact details must not appear in
+an export unless that is separately specified and authorised. The WhatsApp and Mobile numbers
+are in the file, on your instruction, and FR-101b now records the exception and keeps it
+narrow: those two columns, which both roles already read on screen, and nothing else. No
+email address, no residence or work address, no health value, no photograph — and the server
+does not put any of them in this payload, so the export could not add them if it tried.
+
+The Excel helpers went into `utils/excelExport.ts` rather than becoming a fourth copy:
+ReportsPage and SchedulesPage each hold their own, and ImportExportPage a third copy of the
+download function. Those two pages were deliberately left alone — rewriting them is separate
+work from adding an export to Members.
+
+FR-112b, FR-006c and FR-101b added.
+
 ## 2026-11-21 — Added: a Need Help topic for the Occupation tab
 
 The Need Help agent had nothing to say about Tab 4, so "what do I put if I am a student?" —

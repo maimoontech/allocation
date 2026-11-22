@@ -30,6 +30,18 @@ export type MemberAccount = {
   mobile_no_2: string | null;
   last_login_at: string | null;
   created_at: string;
+  /**
+   * FR-112b. How much of this member's own twelve-tab form they have answered, 0 to 100.
+   *
+   * Derived from PRESENCE — whether each box holds something — never from what it holds, so
+   * it says how far along a member is without disclosing a single answer. It is the same
+   * measure the dashboard averages, computed by the same code, which is why a row and the
+   * figure it is counted in cannot disagree.
+   */
+  completion_percent: number;
+  /** The two halves of that fraction. The denominator counts only what THIS member was asked. */
+  completion_answered: number;
+  completion_asked: number;
 };
 
 export type MemberAccountPage = {
@@ -215,6 +227,16 @@ export const memberAdminApi = api.injectEndpoints({
 
 export const {
   useGetMemberAccountsQuery,
+  /**
+   * FR-006c. Used by the Excel export to walk every page of the CURRENT filter.
+   *
+   * The export must cover every matching member, not the twenty-five on screen — a file
+   * headed "Members" that silently held page one would be worse than no file. The same
+   * endpoint is used rather than a second export route, so the file cannot contain a
+   * different set from the grid: one search, one status filter, one order, one zone scope,
+   * and one completion measure, decided in one place on the server.
+   */
+  useLazyGetMemberAccountsQuery,
   useGetAdminMemberProfileQuery,
   useSaveMemberProfileAsAdminMutation,
   useCreateMemberAccountMutation,

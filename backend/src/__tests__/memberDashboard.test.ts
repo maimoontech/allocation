@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { authRoutes } from "../routes/authRoutes";
 import { memberDashboardRoutes } from "../routes/memberDashboardRoutes";
+import { DASHBOARD_QUERY } from "../services/memberDashboardService";
+import { COMPLETION_SELECT } from "../services/memberCompletionQuery";
 import { pool } from "../db/pool";
 import { buildTestApp } from "./helpers/testApp";
 import { TEST_CREDENTIALS, ensureFixtures } from "./helpers/fixtures";
@@ -31,6 +33,18 @@ async function tokenFor(identifier: string, password: string, role: string) {
   const res = await request(app).post("/api/v1/auth/login").send({ identifier, password, role });
   return res.body.data?.token as string;
 }
+
+/**
+ * FR-112b. The dashboard average and the per-member figure in the account list must be the
+ * SAME measure, and the only way to guarantee that is for both to read the same select list.
+ *
+ * Asserted rather than assumed because the failure is invisible: a member shown 76% in their
+ * row while being counted as something else in the average looks perfectly reasonable from
+ * either end, and nobody would think to compare them.
+ */
+it("computes completion from the select list the account list also uses", () => {
+  expect(DASHBOARD_QUERY).toContain(COMPLETION_SELECT);
+});
 
 describe("member dashboard", () => {
   let adminToken: string;
