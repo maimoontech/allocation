@@ -5,8 +5,9 @@ type ApiEnvelope<T> = { success: boolean; data: T; message?: string };
 /**
  * A party's own roster, scoped by the server to the party in the token.
  *
- * The response carries names and a `has_photo` flag only. The photograph itself is a separate
- * authenticated request per member, because image bytes do not belong in a list payload.
+ * The response carries names, a `has_photo` flag, and two facts ABOUT the profile that
+ * disclose nothing from it (FR-112c). The photograph itself is a separate authenticated
+ * request per member, because image bytes do not belong in a list payload.
  */
 export type PartyMember = {
   id: number;
@@ -17,6 +18,23 @@ export type PartyMember = {
   father_name: string | null;
   surname: string | null;
   has_photo: boolean;
+  /**
+   * When the profile was last saved. Moves on any successful save, including one that
+   * changed only a repeatable section, and also when an administrator corrects the profile
+   * (FR-047a) - which is why the page does not attribute it to the member.
+   */
+  profile_updated_at: string | null;
+  /**
+   * FR-112c. How much of their own twelve-tab form the member has answered, 0 to 100.
+   *
+   * Derived from PRESENCE - whether each box holds something, never what it holds - so it
+   * says how far along a member is without disclosing a single answer. The same measure the
+   * administrator's list shows and the dashboard averages.
+   */
+  completion_percent: number;
+  /** The two halves of that fraction. The denominator counts only what THIS member was asked. */
+  completion_answered: number;
+  completion_asked: number;
 };
 
 export type PartyMemberPage = {

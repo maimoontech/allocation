@@ -4,6 +4,10 @@ import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { Button } from "../../components/ui/Button";
 import {
+  LastUpdatedCell,
+  ProfileCompletionCell
+} from "../../components/member/ProfileCompletion";
+import {
   useGetPartyMemberPhotoQuery,
   useGetPartyMembersQuery,
   type PartyMember
@@ -15,6 +19,12 @@ import {
  * Scoped by the server: the party id comes from the signed-in token, so this page cannot be
  * widened by editing the URL. It shows a name, an ITS number and the uploaded photograph —
  * nothing from the twelve-tab profile, no contact details, no health values, no account state.
+ *
+ * It also shows two facts ABOUT each profile that disclose nothing from it (FR-112c): how
+ * much of the form the member has filled in, and when they last saved it. The completion
+ * figure is computed from presence — whether each box holds something, never what — and the
+ * cells are the same ones the administrator's Members list uses, so the two screens cannot
+ * say different things about the same member.
  */
 
 const PAGE_SIZE = 25;
@@ -96,15 +106,32 @@ export function PartyMembersPage() {
       </div>
 
       <Card>
-        <Input
-          label="Search"
-          placeholder="ITS No or name"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(1);
-          }}
-        />
+        <div className="space-y-3">
+          <Input
+            label="Search"
+            placeholder="ITS No or name"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+          />
+
+          {/* FR-112 requires the definition to sit beside the figure, and the reason holds
+              here as much as on the dashboard: a percentage whose denominator varies per
+              member will be misread unless it says so. The sentence about who may have saved
+              it is there because an administrator's correction moves the date too. */}
+          <div className="rounded-input border border-border bg-surface p-2 text-xs text-textMuted">
+            <strong>Profile</strong> is how much of their own twelve-tab form the member has
+            filled in, counting only the questions that member was asked — so a Student is not
+            marked down for employment fields the form never shows them. The repeating lists
+            (Titles, Sharaf, Skills, Maqamaat, Ashara, Tamreen methods) are not counted,
+            because having none to record is not the same as leaving them blank.{" "}
+            <strong>Last saved</strong> is when the profile was last written, by the member or
+            by an administrator correcting it. Neither column shows what a member answered:
+            their profile stays private to them.
+          </div>
+        </div>
       </Card>
 
       {error ? (
@@ -126,12 +153,14 @@ export function PartyMembersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[22rem] text-left text-sm">
+            <table className="w-full min-w-[34rem] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs uppercase text-textMuted">
                   <th className="px-2 py-2">Photo</th>
                   <th className="px-2 py-2">ITS No</th>
                   <th className="px-2 py-2">Name</th>
+                  <th className="px-2 py-2">Profile</th>
+                  <th className="px-2 py-2">Last saved</th>
                 </tr>
               </thead>
               <tbody>
@@ -142,6 +171,16 @@ export function PartyMembersPage() {
                     </td>
                     <td className="px-2 py-2 font-semibold">{member.its_no}</td>
                     <td className="px-2 py-2">{fullName(member) || "—"}</td>
+                    <td className="px-2 py-2">
+                      <ProfileCompletionCell
+                        percent={member.completion_percent}
+                        answered={member.completion_answered}
+                        asked={member.completion_asked}
+                      />
+                    </td>
+                    <td className="px-2 py-2">
+                      <LastUpdatedCell updatedAt={member.profile_updated_at} />
+                    </td>
                   </tr>
                 ))}
               </tbody>

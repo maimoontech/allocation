@@ -20,7 +20,12 @@ const MEMBERS = [
     father_prefix: "Sheikh",
     father_name: "Ali",
     surname: "Kaukawala",
-    has_photo: true
+    has_photo: true,
+    // FR-112c. Supplied by the server, computed from presence rather than from any answer.
+    profile_updated_at: "2026-11-24T08:30:00.000Z",
+    completion_percent: 76,
+    completion_answered: 32,
+    completion_asked: 42
   },
   {
     id: 12,
@@ -30,7 +35,12 @@ const MEMBERS = [
     father_prefix: "None",
     father_name: "None",
     surname: "Bai",
-    has_photo: false
+    has_photo: false,
+    // Saved once, long ago: the case the column exists to make visible.
+    profile_updated_at: "2026-02-10T08:30:00.000Z",
+    completion_percent: 19,
+    completion_answered: 8,
+    completion_asked: 42
   }
 ];
 
@@ -116,5 +126,62 @@ describe("PartyMembersPage", () => {
         requested.some((url) => url.includes("/party-members?") && url.includes("q=Fatema"))
       ).toBe(true);
     });
+  });
+});
+
+/**
+ * Profile completion and when the member last saved (FR-112c).
+ *
+ * The party is who does the chasing, so these two columns are the reason a party leader opens
+ * this page at all. Both come from the SERVER - the percentage computed there by the same code
+ * the administrator list and the dashboard use - so what is worth testing here is that the row
+ * shows them faithfully and that the page says what they mean.
+ */
+describe("profile completion and last saved (FR-112c)", () => {
+  it("shows each member own percentage", async () => {
+    renderWithProviders(<PartyMembersPage />);
+
+    expect(await screen.findByText("76%")).toBeInTheDocument();
+    expect(screen.getByText("19%")).toBeInTheDocument();
+  });
+
+  it("spells out the fraction, because the denominator is per member", async () => {
+    renderWithProviders(<PartyMembersPage />);
+
+    expect(await screen.findByText("32 of 42")).toBeInTheDocument();
+    expect(screen.getByText("8 of 42")).toBeInTheDocument();
+  });
+
+  it("says how long ago the profile was saved, and on what date", async () => {
+    renderWithProviders(<PartyMembersPage />);
+
+    // The exact date is what gets quoted back in a conversation; the relative line is what
+    // answers "who has gone quiet".
+    expect(await screen.findByText("24/Nov/26")).toBeInTheDocument();
+    expect(screen.getByText("10/Feb/26")).toBeInTheDocument();
+  });
+
+  /**
+   * FR-112 requires the definition beside the figure. It matters more here than anywhere: a
+   * party leader reading "19%" will act on it, and the denominator is not fixed.
+   */
+  it("states what the two columns mean, and what they do not show", async () => {
+    renderWithProviders(<PartyMembersPage />);
+
+    const note = await screen.findByText(/only the questions that member was asked/i);
+    expect(note.textContent).toMatch(/Student/);
+    // The date moves on an administrator correction too, so it is not attributed.
+    expect(note.textContent).toMatch(/by the member or by an administrator correcting it/i);
+    expect(note.textContent).toMatch(/stays private to them/i);
+  });
+
+  it("still shows nothing from the profile itself", async () => {
+    renderWithProviders(<PartyMembersPage />);
+    await screen.findByText("76%");
+
+    // The roster columns plus the two derived figures. No answer, no contact detail, no
+    // account state.
+    const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
+    expect(headers).toEqual(["Photo", "ITS No", "Name", "Profile", "Last saved"]);
   });
 });

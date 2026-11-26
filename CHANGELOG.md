@@ -1,5 +1,49 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-26 — Added: profile completion and last-saved date in the party panel
+
+The party's member section now shows two columns beside each member: **Profile**, how much of
+their twelve-tab form they have filled in, and **Last saved**, when the profile was last
+written.
+
+**Why this role.** A Zonal Head sees a zone and an administrator sees everybody, but the
+person who can telephone a member and ask them to finish their form is the one running their
+Hizb. The chasing happens here, so the figures belong here.
+
+**It adds no member to what a party can see.** The scoping is untouched: the party id comes
+from the signed-in token and every read is filtered by `member_profiles.party_id`, exactly as
+before. What is new is two facts about the members the party already sees — and both are
+about the profile rather than from it. The completion figure is computed from **presence**,
+whether each box holds something and never what, and the presence columns are consumed in the
+route and left out of the response. A test asserts that none of them, including the two that
+would be Tab 6 medical data, appears anywhere in the payload.
+
+**One measure, three screens.** The percentage comes from the same `memberCompletionQuery`
+the administrator's list and the dashboard use. The cells are shared too — moved into
+`components/member/ProfileCompletion.tsx` and now used by both the Members list and the party
+roster. If each page drew its own, the thresholds and the wording would drift, and an
+operator comparing two screens about one member would be comparing two different claims.
+
+**Last saved says "last saved", not "last updated by the member".** The timestamp moves on
+any successful save, including one that changed only a repeating section such as Skills —
+`saveMemberProfile` touches it deliberately for that case. It also moves when an administrator
+corrects the profile under FR-047a. So the column is not attributed to the member, and the
+note on the page says plainly that it is "by the member or by an administrator correcting it".
+The alternative was to cross-reference the edit log on every row to work out who saved last,
+which is a lot of machinery to avoid one honest sentence.
+
+Each cell shows how long ago as well as the date — "6 months ago" answers "who has gone
+quiet", while "12/May/26" is what gets quoted back in a conversation. Only a gap of six months
+or more is coloured: a profile untouched for a week is normal, and colouring it would turn the
+column into noise.
+
+**A timezone bug the tests caught.** The relative figure compares local calendar days, because
+"yesterday" means yesterday where the person reading the screen is. The first draft of the
+test asserted against `2026-11-25T23:30:00Z`, which is late on the 25th in London and already
+the 26th here — so it failed, correctly, and the fixtures are now built in local time.
+
+FR-112c added.
+
 ## 2026-11-22 — Fixed, properly: no SQL comments inside a query, ever
 
 The member list still answered ER_PARSE_ERROR after the previous fix. The previous fix treated

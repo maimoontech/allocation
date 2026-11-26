@@ -17,6 +17,7 @@ import {
   type MemberAccount,
   type MemberSort
 } from "../../features/member/memberAdminApi";
+import { ProfileCompletionCell } from "../../components/member/ProfileCompletion";
 import { downloadExcelTable } from "../../utils/excelExport";
 import { buildMembersExportTable, membersExportMetaLines } from "./membersExport";
 
@@ -127,47 +128,6 @@ function MemberThumb({ member }: { member: MemberAccount }) {
 
 function contactNumber(primary: string | null, secondary: string | null) {
   return primary || secondary || "—";
-}
-
-/**
- * How much of their own form this member has filled in (FR-112b).
- *
- * THE NUMBER IS THE ANSWER; THE BAR IS FOR SCANNING
- *   The percentage is text, so it is readable by a screen reader, copyable, and legible to
- *   anyone who cannot distinguish the colours. The bar is there because the question an
- *   operator actually has is "who is behind?", and twenty-five two-digit numbers in a column
- *   do not answer that at a glance. It is `aria-hidden` for the same reason: it repeats the
- *   number rather than adding to it.
- *
- * WHY THE FRACTION IS SPELLED OUT UNDERNEATH
- *   The denominator is not the same for every member — it counts only the questions that
- *   member was asked, so a Student and a shopkeeper are measured out of different totals
- *   (FR-112). A bare percentage invites "out of what?", and the answer is per member, which
- *   is exactly the kind of thing nobody guesses correctly.
- *
- * THRESHOLDS
- *   Deliberately coarse: under a third is behind, a third to two thirds is in progress, above
- *   that is close. Finer bands would imply a precision the measure does not have.
- */
-function CompletionCell({ member }: { member: MemberAccount }) {
-  const percent = Math.max(0, Math.min(100, member.completion_percent));
-  const tone =
-    percent >= 67 ? "bg-primary" : percent >= 34 ? "bg-warning" : "bg-danger";
-
-  return (
-    <div className="min-w-[5.5rem]">
-      <div className="font-semibold">{percent}%</div>
-      <div
-        className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface"
-        aria-hidden="true"
-      >
-        <div className={`h-full ${tone}`} style={{ width: `${percent}%` }} />
-      </div>
-      <div className="mt-1 whitespace-nowrap text-xs text-textMuted">
-        {member.completion_answered} of {member.completion_asked}
-      </div>
-    </div>
-  );
 }
 
 const EMPTY_FORM = { its_no: "", member_name: "", password: "" };
@@ -760,7 +720,11 @@ export function MembersPage() {
                     <td className="px-2 py-2 font-semibold">{member.its_no}</td>
                     <td className="px-2 py-2">{memberFullName(member) || member.member_name || "—"}</td>
                     <td className="px-2 py-2">
-                      <CompletionCell member={member} />
+                      <ProfileCompletionCell
+                        percent={member.completion_percent}
+                        answered={member.completion_answered}
+                        asked={member.completion_asked}
+                      />
                     </td>
                     <td className="px-2 py-2">{member.zone_name || "—"}</td>
                     <td className="px-2 py-2">{member.party_name || "—"}</td>

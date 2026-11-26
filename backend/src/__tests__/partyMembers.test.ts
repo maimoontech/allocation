@@ -132,6 +132,11 @@ describe("party member roster", () => {
     expect(res.body.data.total).toBeGreaterThanOrEqual(1);
   });
 
+  /**
+   * An EXHAUSTIVE assertion, deliberately. Listing every key means a new column cannot be
+   * added to this response without somebody coming here and saying what it is - which is the
+   * only reliable guard on the narrowest view in the application.
+   */
   it("returns the name parts without account or contact details", async () => {
     const res = await request(app)
       .get("/api/v1/party-members")
@@ -146,7 +151,81 @@ describe("party member roster", () => {
       father_prefix: "Sheikh",
       father_name: "Father",
       surname: "Member",
-      has_photo: true
+      has_photo: true,
+      // FR-112c. Two facts ABOUT the profile, neither of them from it. Their values are
+      // asserted in the test below; here the point is that these four keys and no others
+      // joined the response.
+      profile_updated_at: expect.anything(),
+      completion_percent: expect.any(Number),
+      completion_answered: expect.any(Number),
+      completion_asked: expect.any(Number)
+    });
+  });
+
+  /**
+   * FR-112c. How much of the form the member has filled in, and when they last saved it.
+   *
+   * The percentage must be the same measure the administrator list shows and the dashboard
+   * averages - they share `memberCompletionQuery` - and it must be derived from presence, so
+   * no profile value may appear anywhere in the response. The forbidden-keys check is in the
+   * exhaustive assertion above; this one checks the figures mean what they say.
+   */
+  describe("profile completion and last saved (FR-112c)", () => {
+    it("reports a coherent percentage and fraction", async () => {
+      const res = await request(app)
+        .get("/api/v1/party-members")
+        .set("Authorization", `Bearer ${partyToken}`);
+
+      const item = res.body.data.items.find((m: any) => m.its_no === OWN_ITS);
+      expect(item).toBeDefined();
+
+      // A member in a party has a profile row, so there is always a denominator.
+      expect(item.completion_asked).toBeGreaterThan(10);
+      expect(item.completion_answered).toBeLessThanOrEqual(item.completion_asked);
+      expect(item.completion_percent).toBe(
+        Math.round((item.completion_answered / item.completion_asked) * 100)
+      );
+
+      // The fixture stores a name, a father name, a surname and a party, so this member has
+      // answered something: a measure that reported 0 here would not be measuring.
+      expect(item.completion_answered).toBeGreaterThanOrEqual(3);
+      expect(item.completion_percent).toBeGreaterThan(0);
+    });
+
+    it("reports when the profile was last saved, as a readable date", async () => {
+      const res = await request(app)
+        .get("/api/v1/party-members")
+        .set("Authorization", `Bearer ${partyToken}`);
+
+      const item = res.body.data.items.find((m: any) => m.its_no === OWN_ITS);
+      expect(item.profile_updated_at).not.toBeNull();
+      expect(Number.isFinite(new Date(item.profile_updated_at).getTime())).toBe(true);
+    });
+
+    /**
+     * The presence columns the completion query selects must not reach the caller. Two of
+     * them would be Tab 6 medical data if they did (FR-065, FR-066).
+     */
+    it("carries no presence column and no discriminant", async () => {
+      const res = await request(app)
+        .get("/api/v1/party-members")
+        .set("Authorization", `Bearer ${partyToken}`);
+
+      const payload = JSON.stringify(res.body);
+      for (const forbidden of [
+        "p_blood_group",
+        "p_height_cm",
+        "p_weight_kg",
+        "p_contact_no",
+        "p_photo",
+        "is_regular_donor",
+        "has_hifz_sanad",
+        "occupation_type",
+        "khidmat_type",
+        "hizb_participation"
+      ]) {
+        expect(payload, forbidden).not.toContain(forbidden);
+      }
     });
   });
 

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { pool } from "../db/pool";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { COMPLETION_SELECT, completionFor } from "../services/memberCompletionQuery";
 import { fail, ok } from "../utils/response";
 
 /**
@@ -15,6 +16,16 @@ import { fail, ok } from "../utils/response";
  *
  * Account state, contact details, health values and the twelve-tab profile stay out of the
  * response. The party sees who is in it and what they look like; FR-065 and FR-101 still hold.
+ *
+ * TWO FACTS ABOUT THE PROFILE WITHOUT ANY OF ITS CONTENT (FR-112c)
+ *   How much of the form the member has filled in, and when they last saved it. Both are
+ *   about the profile rather than from it: the completion figure is computed from PRESENCE -
+ *   whether each box holds something, never what - and `updated_at` is a timestamp. The
+ *   presence columns are consumed in this file and left out of the response.
+ *
+ *   It belongs here because the party is who does the chasing. A Zonal Head sees a zone and
+ *   an administrator sees everybody, but the person who can ring a member and ask them to
+ *   finish their form is the one running their Hizb.
  */
 
 export const partyMemberRoutes = Router();
@@ -68,6 +79,25 @@ partyMemberRoutes.get("/", async (req, res) => {
       params
     );
 
+    /**
+     * NOTHING BUT SQL INSIDE THIS TEMPLATE LITERAL - no `--` comment, however useful. The
+     * pool runs with `namedPlaceholders`, so every query passes through a tokeniser that does
+     * not know what an SQL comment is and reads the prose as SQL. See the member list route,
+     * where learning that cost two deploys.
+     *
+     * `mp` is INNER JOINed here, where `memberCompletionQuery` describes it as LEFT JOINed.
+     * That is correct for this query and not a loosening of the contract: the party
+     * association IS `member_profiles.party_id`, so a member with no profile row has no party
+     * and cannot appear in a party roster at all. There is no 0%-with-no-profile case to
+     * preserve. `ph` is LEFT JOINed as the fragment requires, and is UNIQUE on
+     * `member_account_id`, so it cannot fan a member out into duplicate rows.
+     *
+     * `updated_at` moves on any successful save of the profile, including one that changed
+     * only a repeatable section such as Skills - `saveMemberProfile` touches it deliberately
+     * for that reason. It also moves when an administrator corrects the profile under
+     * FR-047a, which is why the page calls the column "last saved" rather than attributing it
+     * to the member.
+     */
     const [rows] = await pool.query<any[]>(
       `SELECT ma.id,
               ma.its_no,
@@ -76,7 +106,9 @@ partyMemberRoutes.get("/", async (req, res) => {
               mp.father_prefix,
               mp.father_name,
               mp.surname,
-              IF(ph.id IS NULL, 0, 1) AS has_photo
+              IF(ph.id IS NULL, 0, 1) AS has_photo,
+              mp.updated_at AS profile_updated_at,
+              ${COMPLETION_SELECT}
        FROM member_profiles mp
        JOIN member_accounts ma ON ma.id = mp.member_account_id
        LEFT JOIN member_photos ph ON ph.member_account_id = ma.id
@@ -89,16 +121,27 @@ partyMemberRoutes.get("/", async (req, res) => {
     return ok(
       res,
       {
-        items: rows.map((r) => ({
-          id: Number(r.id),
-          its_no: r.its_no,
-          first_prefix: r.first_prefix ?? null,
-          name: r.name ?? null,
-          father_prefix: r.father_prefix ?? null,
-          father_name: r.father_name ?? null,
-          surname: r.surname ?? null,
-          has_photo: Boolean(r.has_photo)
-        })),
+        items: rows.map((r) => {
+          // FR-112c. The same measure the administrator's list shows and the dashboard
+          // averages, computed by the same code, so the three cannot disagree about one
+          // member. The presence columns it reads stay in this function.
+          const completion = completionFor(r);
+
+          return {
+            id: Number(r.id),
+            its_no: r.its_no,
+            first_prefix: r.first_prefix ?? null,
+            name: r.name ?? null,
+            father_prefix: r.father_prefix ?? null,
+            father_name: r.father_name ?? null,
+            surname: r.surname ?? null,
+            has_photo: Boolean(r.has_photo),
+            profile_updated_at: r.profile_updated_at ?? null,
+            completion_percent: completion.percent,
+            completion_answered: completion.answered,
+            completion_asked: completion.asked
+          };
+        }),
         total: Number(countRows[0]?.total ?? 0),
         page,
         page_size: pageSize
