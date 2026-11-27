@@ -222,7 +222,9 @@ describe("party member roster", () => {
         "has_hifz_sanad",
         "occupation_type",
         "khidmat_type",
-        "hizb_participation"
+        "hizb_participation",
+        "is_muntasib_ila_jamea",
+        "p_farig_year"
       ]) {
         expect(payload, forbidden).not.toContain(forbidden);
       }

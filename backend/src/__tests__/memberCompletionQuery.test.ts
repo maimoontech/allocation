@@ -136,7 +136,8 @@ describe("completionRowFrom", () => {
       has_hifz_sanad: 1,
       is_regular_donor: 0,
       attends_karachi_tamreen: null,
-      khidmat_type: "Both"
+      khidmat_type: "Both",
+      is_muntasib_ila_jamea: 1
     });
 
     expect(row.first_prefix).toBe("Sheikh");
@@ -146,6 +147,20 @@ describe("completionRowFrom", () => {
     expect(row.is_regular_donor).toBe(0);
     expect(row.attends_karachi_tamreen).toBeNull();
     expect(row.khidmat_type).toBe("Both");
+    expect(row.is_muntasib_ila_jamea).toBe(1);
+  });
+
+  /**
+   * FR-086b, through the whole bridge. The eighth discriminant has to survive the SQL row
+   * mapping, not just the pure measure, or the Farig Year silently leaves every denominator.
+   */
+  it("asks a Muntasib for a Farig Year and nobody else", () => {
+    const muntasib = completionFor({ is_muntasib_ila_jamea: 1 });
+    const not = completionFor({ is_muntasib_ila_jamea: 0 });
+    const unanswered = completionFor({});
+
+    expect(muntasib.asked).toBe(not.asked + 1);
+    expect(not.asked).toBe(unanswered.asked);
   });
 
   /** FR-050a, through the whole bridge: a Student's Tab 4 is one question. */

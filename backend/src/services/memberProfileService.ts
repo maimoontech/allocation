@@ -74,7 +74,11 @@ const TEXT_COLUMNS = [
   "tamreen_absence_reason",
   "sansta_name",
   "umoor_name",
-  "khidmat_designation"
+  "khidmat_designation",
+  // FR-086b. Stored as the member typed it, by decision: "1441", "1441 AH" and "2019-20" are
+  // all kept. Nothing counts or sorts on it, so no calendar had to be imposed on an answer
+  // people give in whichever one they think in.
+  "farig_year"
 ] as const;
 
 const DATE_COLUMNS = ["dob_gregorian", "hifz_last_update", "last_donation_date"] as const;
@@ -92,7 +96,10 @@ const BOOLEAN_COLUMNS = [
   "attends_karachi_tamreen",
   "takes_ustad_assistance",
   "uses_idaratuz_zakereen_books",
-  "registered_with_idaratuz_zakereen"
+  "registered_with_idaratuz_zakereen",
+  // FR-086b. Nullable, like every other Yes/No here: unanswered is not No. That distinction
+  // is what decides whether Farig Year is asked of this member at all.
+  "is_muntasib_ila_jamea"
 ] as const;
 
 const DECIMAL_COLUMNS = ["height_cm", "weight_kg"] as const;
@@ -131,7 +138,8 @@ const MAX_LENGTHS: Record<string, number> = {
   tamreen_absence_reason: 65535,
   sansta_name: 150,
   umoor_name: 150,
-  khidmat_designation: 150
+  khidmat_designation: 150,
+  farig_year: 20
 };
 
 /**
@@ -212,7 +220,8 @@ const COLUMN_TAB: Record<string, number> = {
   takes_ustad_assistance: 11, uses_idaratuz_zakereen_books: 11,
   khidmat_type: 12, sansta_name: 12, umoor_name: 12, khidmat_designation: 12,
   sansta_id: 12, umoor_id: 12,
-  khidmat_since_year: 12
+  khidmat_since_year: 12,
+  is_muntasib_ila_jamea: 12, farig_year: 12
 };
 
 /**
@@ -682,6 +691,18 @@ export async function saveMemberProfile(
   } else if (values.khidmat_type === "Umoor") {
     values.sansta_id = null;
     values.sansta_name = null;
+  }
+
+  // FR-086b. Farig Year belongs to the Muntasib answer, so No clears it — for the same
+  // reason FR-059 clears the Sanad. The browser hides the box on No and a hidden box fires no
+  // change event, so without this a year entered before the answer changed would stay stored
+  // where nobody could see it to correct it.
+  //
+  // It is NOT required on Yes. The profile has no mandatory fields (FR-095), and demanding
+  // free text that nothing validates would block a save to no end. An unanswered Farig Year
+  // shows up where it should: in that member's completion figure.
+  if (values.is_muntasib_ila_jamea === 0) {
+    values.farig_year = null;
   }
 
   if (values.khidmat_type != null) {

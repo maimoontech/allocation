@@ -91,6 +91,8 @@ const BASE = {
   umoor_name: null,
   khidmat_designation: null,
   khidmat_since_year: null,
+  is_muntasib_ila_jamea: null,
+  farig_year: null,
   titles: [],
   sharafs: [],
   skill_ids: [],

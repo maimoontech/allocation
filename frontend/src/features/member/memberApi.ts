@@ -190,6 +190,10 @@ export type MemberProfile = {
   umoor_name: string | null;
   khidmat_designation: string | null;
   khidmat_since_year: number | null;
+  /** FR-086b. Nullable: unanswered is not No, and the form shows neither radio for null. */
+  is_muntasib_ila_jamea: boolean | null;
+  /** FR-086b. Kept exactly as typed - no calendar is imposed and nothing counts on it. */
+  farig_year: string | null;
 
   titles: TitleEntry[];
   sharafs: SharafEntry[];

@@ -29,7 +29,8 @@ function blank(): CompletionRow {
     has_hifz_sanad: null,
     is_regular_donor: null,
     attends_karachi_tamreen: null,
-    khidmat_type: null
+    khidmat_type: null,
+    is_muntasib_ila_jamea: null
   };
 }
 
@@ -230,6 +231,65 @@ describe("profileCompletion", () => {
 
     expect(result.tabs.reduce((n, t) => n + t.asked, 0)).toBe(result.asked);
     expect(result.tabs.reduce((n, t) => n + t.answered, 0)).toBe(result.answered);
+  });
+
+  /**
+   * FR-086b. The Muntasib question, and the Farig Year that hangs off it.
+   *
+   * The same shape as FR-059's Sanad and FR-081's absence reason: one question always asked,
+   * a second asked only on one answer. What is worth pinning here is the THIRD state. A
+   * member who answered No has answered a question, and is not asked a year; a member who
+   * has answered nothing has not answered it, and is also not asked a year. Those two look
+   * identical in the denominator and must differ in the numerator, and a checkbox on the
+   * form - rather than the radios it actually uses - would have collapsed them into one.
+   */
+  describe("Muntasib Ila Jamea and Farig Year (FR-086b)", () => {
+    const tab12Of = (row: CompletionRow) =>
+      profileCompletion(row).tabs.find((t) => t.tab === 12)!;
+
+    it("asks every member the Muntasib question", () => {
+      expect(tab12Of(blank()).asked).toBe(4);
+    });
+
+    it("asks for a Farig Year only on Yes", () => {
+      expect(tab12Of({ ...blank(), is_muntasib_ila_jamea: 1 }).asked).toBe(5);
+      expect(tab12Of({ ...blank(), is_muntasib_ila_jamea: 0 }).asked).toBe(4);
+      expect(tab12Of(blank()).asked).toBe(4);
+    });
+
+    it("counts a No as answered, though it asks for no year", () => {
+      const row = { ...blank(), is_muntasib_ila_jamea: 0 as const };
+      row.present.is_muntasib_ila_jamea = 1;
+
+      const tab12 = tab12Of(row);
+      expect(tab12.asked).toBe(4);
+      expect(tab12.answered).toBe(1);
+    });
+
+    it("leaves a Yes with no year short by exactly one", () => {
+      const yesOnly = { ...blank(), is_muntasib_ila_jamea: 1 as const };
+      yesOnly.present.is_muntasib_ila_jamea = 1;
+
+      const withYear = { ...blank(), is_muntasib_ila_jamea: 1 as const };
+      withYear.present.is_muntasib_ila_jamea = 1;
+      withYear.present.farig_year = 1;
+
+      expect(tab12Of(yesOnly).answered).toBe(1);
+      expect(tab12Of(withYear).answered).toBe(2);
+      expect(tab12Of(yesOnly).asked).toBe(tab12Of(withYear).asked);
+    });
+
+    /**
+     * 100% has to stay reachable for a Muntasib, which is the property the whole measure
+     * rests on. If the Farig Year were counted for everybody, a member who is not a Muntasib
+     * could never reach it.
+     */
+    it("keeps 100% reachable either way", () => {
+      for (const answer of [0, 1] as const) {
+        const row = answerEverythingAsked({ ...blank(), is_muntasib_ila_jamea: answer });
+        expect(profileCompletion(row).percent).toBe(100);
+      }
+    });
   });
 
   it("rounds the percentage to a whole number", () => {

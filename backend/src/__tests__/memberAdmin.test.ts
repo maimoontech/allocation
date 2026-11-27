@@ -138,7 +138,7 @@ describe("admin member administration", () => {
         "bmi",
         "photo",
         "image_data",
-        // FR-112b. The completion query reads presence (p_*) and the seven discriminants,
+        // FR-112b. The completion query reads presence (p_*) and the eight discriminants,
         // and both are consumed in the route. If any of them reaches the response, the list
         // has started reporting what a member answered rather than how much — and
         // `p_blood_group` plus `is_regular_donor` would be reporting it about Tab 6.
@@ -153,7 +153,10 @@ describe("admin member administration", () => {
         "hizb_participation",
         "occupation_type",
         "khidmat_type",
-        "attends_karachi_tamreen"
+        "attends_karachi_tamreen",
+        // FR-086b. The eighth discriminant and the presence bit it gates.
+        "is_muntasib_ila_jamea",
+        "p_farig_year"
       ]) {
         expect(keys).not.toContain(forbidden);
       }
@@ -393,10 +396,104 @@ describe("admin member administration", () => {
        * unrecognised key silently falls back, and a page that showed "Party (A–Z)" while the
        * server had sorted by ITS number would be lying quietly.
        */
-      it("accepts and reports each of the six orders", async () => {
-        for (const key of ["its_no", "name", "party", "zone", "recent_login", "newest"]) {
+      it("accepts and reports each of the eight orders", async () => {
+        for (const key of [
+          "its_no",
+          "name",
+          "party",
+          "zone",
+          "recent_login",
+          "newest",
+          "completion_asc",
+          "completion_desc"
+        ]) {
           expect((await listSorted(key)).sort).toBe(key);
         }
+      });
+
+      /**
+       * FR-006d. Ordering by how much of the form each member has filled in.
+       *
+       * This is the one order the server cannot express as an ORDER BY: completion is
+       * computed per member, conditionally, so it is ranked in a pass of its own over every
+       * account the filters match. The tests that matter are therefore about PAGING, not
+       * about one page being internally sorted - ranking only the rows a LIMIT already chose
+       * would sort each page within itself and leave the pages in ITS-number order, which
+       * looks sorted page by page and is not.
+       */
+      describe("ordering by profile completion (FR-006d)", () => {
+        it("returns least complete first, and most complete first", async () => {
+          const ascending = (await listSorted("completion_asc")).items.map(
+            (m: any) => m.completion_percent
+          );
+          const descending = (await listSorted("completion_desc")).items.map(
+            (m: any) => m.completion_percent
+          );
+
+          expect(ascending.length).toBeGreaterThan(1);
+          expect(ascending).toEqual([...ascending].sort((a, b) => a - b));
+          expect(descending).toEqual([...descending].sort((a, b) => b - a));
+          // Both directions see the same members, so the two lists hold the same figures.
+          expect([...descending].sort()).toEqual([...ascending].sort());
+        });
+
+        /**
+         * The percentage on the row must be the one it was RANKED by. The route carries the
+         * figure over from the ranking pass rather than recomputing it from the second read,
+         * so a member saving between the two reads cannot make the order look broken.
+         */
+        it("shows a figure consistent with its own fraction", async () => {
+          for (const item of (await listSorted("completion_asc")).items) {
+            expect(item.completion_percent).toBe(
+              Math.round((item.completion_answered / item.completion_asked) * 100)
+            );
+          }
+        });
+
+        /**
+         * THE PAGING TEST, and the reason the ranking reads the whole filtered set. Two pages
+         * of one row each must be the first two rows of the single-page ordering - if the
+         * ranking were per page, page 2 would start again from whoever the database happened
+         * to return second.
+         */
+        it("pages through the ranked order rather than re-ranking each page", async () => {
+          const whole = (await listSorted("completion_asc")).items.map((m: any) => m.its_no);
+
+          const paged: string[] = [];
+          for (let page = 1; page <= 3; page += 1) {
+            const res = await request(app)
+              .get(`/api/v1/members?sort=completion_asc&page_size=1&page=${page}`)
+              .set("Authorization", `Bearer ${adminToken}`);
+            expect(res.status).toBe(200);
+            expect(res.body.data.sort).toBe("completion_asc");
+            paged.push(...res.body.data.items.map((m: any) => m.its_no));
+          }
+
+          expect(paged).toEqual(whole.slice(0, paged.length));
+        });
+
+        /** A page past the end is empty, not an error - and must not build `IN ()`. */
+        it("answers an empty page rather than failing", async () => {
+          const res = await request(app)
+            .get("/api/v1/members?sort=completion_asc&page_size=50&page=9999")
+            .set("Authorization", `Bearer ${adminToken}`);
+
+          expect(res.status).toBe(200);
+          expect(res.body.data.items).toEqual([]);
+          expect(res.body.data.total).toBeGreaterThan(0);
+        });
+
+        /** The filters still apply: the ranking narrows to them, it does not escape them. */
+        it("ranks only the accounts the filters match", async () => {
+          const res = await request(app)
+            .get("/api/v1/members?sort=completion_asc&is_active=false&page_size=200")
+            .set("Authorization", `Bearer ${adminToken}`);
+
+          expect(res.status).toBe(200);
+          for (const item of res.body.data.items) {
+            expect(item.is_active).toBe(false);
+          }
+        });
       });
 
       it("falls back to ITS number for an unknown order rather than failing", async () => {

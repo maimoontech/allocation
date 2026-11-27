@@ -38,7 +38,9 @@ const SORT_LABELS: Record<MemberSort, string> = {
   party: "Party (A-Z)",
   zone: "Zone (A-Z)",
   recent_login: "Recently signed in",
-  newest: "Newest account first"
+  newest: "Newest account first",
+  completion_asc: "Profile % (least complete first)",
+  completion_desc: "Profile % (most complete first)"
 };
 
 const DASH = "—";

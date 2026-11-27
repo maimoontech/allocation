@@ -3,7 +3,7 @@
 -- ==========================================================================
 --
 -- GENERATED FILE. Do not edit by hand.
---   Sources : membership_schema.sql (sha256 4183e6693e38cf50)
+--   Sources : membership_schema.sql (sha256 5b1af19d742b4de0)
 --             membership_seed.sql (sha256 5f21b37792e7ad7c)
 --   Rebuild : node database/build_live_update.mjs
 --   Verify  : node database/build_live_update.mjs --check
@@ -579,6 +579,8 @@ CREATE TABLE IF NOT EXISTS member_profiles (
   umoor_name VARCHAR(150) NULL COMMENT 'FR-086: required when khidmat_type is Umoor or Both',
   khidmat_designation VARCHAR(150) NULL,
   khidmat_since_year SMALLINT UNSIGNED NULL COMMENT 'A year, spec assumption 8',
+  is_muntasib_ila_jamea TINYINT(1) NULL COMMENT 'FR-086b: nullable - unanswered is not No',
+  farig_year VARCHAR(20) NULL COMMENT 'FR-086b: free text, kept as typed. No calendar imposed',
 
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1391,6 +1393,48 @@ DELIMITER ;
 
 CALL mm_widen_occupation_type();
 DROP PROCEDURE mm_widen_occupation_type;
+
+
+-- ----------------------------------------------------------------------------
+-- 4j. Backfill: the two Tab 12 columns added on 2026-11-27 (FR-086b)
+--
+--     "Are you a Muntasib Ila Jamea?" and the Farig Year it asks for on Yes.
+--
+--     is_muntasib_ila_jamea is NULLABLE and existing rows stay NULL. Writing 0
+--     would record a No from every member who has never been shown the
+--     question, which is a different claim and a false one. The completion
+--     measure and the form both distinguish the two: NULL shows neither radio
+--     selected and counts as unanswered.
+--
+--     farig_year is VARCHAR(20), not a year column. The year is kept exactly as
+--     the member types it, so '1441', '1441 AH' and '2019-20' all survive, and
+--     no calendar is imposed on an answer people give in whichever one they
+--     think in. Nothing counts or sorts on it, which is what makes that safe.
+-- ----------------------------------------------------------------------------
+
+DROP PROCEDURE IF EXISTS mm_add_muntasib_columns;
+
+DELIMITER $
+CREATE PROCEDURE mm_add_muntasib_columns()
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'is_muntasib_ila_jamea') THEN
+    ALTER TABLE member_profiles
+      ADD COLUMN is_muntasib_ila_jamea TINYINT(1) NULL AFTER khidmat_since_year;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'member_profiles'
+                   AND COLUMN_NAME = 'farig_year') THEN
+    ALTER TABLE member_profiles
+      ADD COLUMN farig_year VARCHAR(20) NULL AFTER is_muntasib_ila_jamea;
+  END IF;
+END$
+DELIMITER ;
+
+CALL mm_add_muntasib_columns();
+DROP PROCEDURE mm_add_muntasib_columns;
 
 
 -- ----------------------------------------------------------------------------

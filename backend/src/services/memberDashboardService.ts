@@ -15,7 +15,7 @@ import { COMPLETION_SELECT, completionRowFrom } from "./memberCompletionQuery";
  *   so both are counted and the gap is named.
  *
  * NO MEMBER DATA LEAVES THIS SERVICE
- *   The query selects PRESENCE - 1 or 0 per field - rather than values, with seven
+ *   The query selects PRESENCE - 1 or 0 per field - rather than values, with eight
  *   exceptions that decide which further questions the form asks. Tab 6 is medical data
  *   under FR-065 and FR-066: no blood group, height or weight is ever read here, only
  *   whether each box has something in it. The response is counts and percentages, and names

@@ -235,10 +235,24 @@ exports.HELP_TOPICS = [
     {
         id: "khidmat",
         label: "Other Sansta Khidmat",
-        keywords: [["khidmat", 2], ["sansta", 2], ["umoor", 2], "designation", "since"],
+        keywords: [
+            ["khidmat", 2],
+            ["sansta", 2],
+            ["umoor", 2],
+            ["muntasib", 2],
+            ["farig", 2],
+            ["jamea", 2],
+            "designation",
+            "since"
+        ],
         answer: "This tab records service you give outside your Hizb. Choosing Sansta, Umoor or Both " +
             "decides which name boxes appear, so pick that first. The 'Since' year here is a Hijri " +
-            "year from 1401 AH."
+            "year from 1401 AH. The last question on the tab is a separate one: 'Are you a " +
+            "Muntasib Ila Jamea?'. Answer Yes and a Farig Year box appears; answer No and it goes " +
+            "away again, and anything already typed in it is cleared. That box is ordinary text, " +
+            "not a dropdown, and it is not checked against anything — write the year the way you " +
+            "would say it, in whichever calendar you think in. Nothing on this tab has to be " +
+            "answered before you can save."
     },
     {
         id: "empty_dropdown",

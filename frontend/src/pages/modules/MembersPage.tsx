@@ -69,7 +69,12 @@ const sortOptions: Array<{ value: MemberSort; label: string }> = [
   { value: "party", label: "Party (A–Z)" },
   { value: "zone", label: "Zone (A–Z)" },
   { value: "recent_login", label: "Recently signed in" },
-  { value: "newest", label: "Newest account first" }
+  { value: "newest", label: "Newest account first" },
+  // FR-006d. The order for chasing: least complete first is the list of who needs a
+  // telephone call. Both directions are offered because the other one answers a different
+  // question - who has actually finished.
+  { value: "completion_asc", label: "Profile % (least complete first)" },
+  { value: "completion_desc", label: "Profile % (most complete first)" }
 ];
 
 /**
@@ -410,6 +415,14 @@ export function MembersPage() {
 
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
+  /**
+   * The order the SERVER used, which is not always the one the control asks for (FR-006d).
+   *
+   * Undefined while the first page is in flight, which is why the banner below waits for it
+   * rather than treating "not yet known" as "refused".
+   */
+  const servedSort = data?.sort ?? null;
+  const isCompletionSort = sort === "completion_asc" || sort === "completion_desc";
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   /**
@@ -641,6 +654,17 @@ export function MembersPage() {
             <div className="text-xs text-textMuted">
               Members who have not chosen a {sort === "party" ? "Party" : "Zone"} are listed
               last, on the final {total > PAGE_SIZE ? "pages" : "page"}.
+            </div>
+          ) : null}
+          {/* FR-006d. The server reports the order it ACTUALLY used, and it is allowed to
+              refuse this one: ranking by completion means computing it for every matching
+              account, and beyond its ceiling the list comes back in ITS-number order. Saying
+              so is the whole point — a list quietly mislabelled "least complete first" is
+              worse than one that admits it could not be. */}
+          {isCompletionSort && servedSort !== null && servedSort !== sort ? (
+            <div className="text-xs text-warning">
+              Too many accounts to order by Profile %, so this list is in ITS No order.
+              Narrow the search or the status filter and try again.
             </div>
           ) : null}
         </div>

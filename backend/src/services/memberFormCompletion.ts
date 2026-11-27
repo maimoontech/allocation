@@ -31,7 +31,7 @@
  * NO PROFILE VALUE REACHES THIS FUNCTION
  *   The caller passes `present`: a map of field name to 1 or 0, built in SQL. Tab 6 is
  *   medical data under FR-065 and FR-066, so its values are never selected, never held in
- *   memory and never aggregated - only whether each box has something in it. The seven
+ *   memory and never aggregated - only whether each box has something in it. The eight
  *   discriminants below are the exception, and they are read because the questions a member
  *   is ASKED depend on them. Only one of them, `is_regular_donor`, is a health value, and it
  *   decides exactly one thing: whether the donation-date question applies.
@@ -50,6 +50,8 @@ export type CompletionRow = {
   is_regular_donor: 0 | 1 | null;
   attends_karachi_tamreen: 0 | 1 | null;
   khidmat_type: string | null;
+  /** FR-086b. Decides whether Farig Year is asked. */
+  is_muntasib_ila_jamea: 0 | 1 | null;
 };
 
 export type TabTotals = { tab: number; label: string; asked: number; answered: number };
@@ -197,7 +199,14 @@ export const QUESTIONS: Question[] = [
     answered: (r) => r.present.umoor_id === 1 || r.present.umoor_name === 1
   },
   { key: "khidmat_designation", tab: 12 },
-  { key: "khidmat_since_year", tab: 12 }
+  { key: "khidmat_since_year", tab: 12 },
+  // FR-086b. Asked of every member on this tab, which is why it LOWERS the figure for
+  // everybody until they answer it - adding a question to the form adds it to the
+  // denominator, and that is the honest behaviour rather than a regression.
+  { key: "is_muntasib_ila_jamea", tab: 12 },
+  // Asked only of a Muntasib. A member who answered No, or who has not answered at all, is
+  // not shown the box, so counting it would hold a year against people never asked for one.
+  { key: "farig_year", tab: 12, asked: (r) => yes(r.is_muntasib_ila_jamea) }
 ];
 
 /** The tabs this measure covers, in form order. 7, 8 and 9 are absent by design. */

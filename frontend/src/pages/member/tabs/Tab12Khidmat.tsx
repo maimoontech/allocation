@@ -1,5 +1,6 @@
 import { Input } from "../../../components/ui/Input";
 import { Select } from "../../../components/ui/Select";
+import { YesNoField } from "../../../components/ui/YesNoField";
 import {
   PROFILE_HIJRI_YEAR_MIN,
   enumOptions,
@@ -23,11 +24,30 @@ const KHIDMAT_TYPES = ["Sansta", "Umoor", "Both"] as const;
  * `Since` is a YEAR, not a full date (spec assumption 8). It is Hijri (AH), unlike the Since
  * Year on Tab 4, which is still Gregorian — only the five fields named in the request moved.
  * That assumption is still awaiting sign-off.
+ *
+ * FR-086b adds the Muntasib Ila Jamea question and the Farig Year it asks for on Yes. That
+ * year is a plain text box, not a year dropdown like `Since (AH)` above it, and it is not
+ * validated: the member's answer is stored exactly as typed, so "1441", "1441 AH" and
+ * "2019-20" all survive. Nothing counts or sorts on the value, which is what makes leaving the
+ * calendar to the member safe rather than sloppy.
  */
 export function Tab12Khidmat({ value, lookups, errorFor, onChange, disabled }: TabProps) {
   const type = value.khidmat_type;
   const showSansta = type === "Sansta" || type === "Both";
   const showUmoor = type === "Umoor" || type === "Both";
+
+  const isMuntasib = value.is_muntasib_ila_jamea === true;
+
+  function onMuntasibChange(next: boolean) {
+    if (!next) {
+      // Hide and clear together, the same rule the Khidmat type follows above and FR-059
+      // follows on Tab 5. A disabled or unmounted box fires no change event, so a year
+      // entered before the answer changed would otherwise stay saved out of sight.
+      onChange("__fields__", { is_muntasib_ila_jamea: false, farig_year: null });
+      return;
+    }
+    onChange("is_muntasib_ila_jamea", true);
+  }
 
   function onTypeChange(raw: string) {
     const next = raw === "" ? null : raw;
@@ -120,6 +140,36 @@ export function Tab12Khidmat({ value, lookups, errorFor, onChange, disabled }: T
           error={errorFor("khidmat_since_year")}
           disabled={disabled}
         />
+      </div>
+
+      {/* FR-086b. Its own section rather than another cell in the grid above: this question
+          is about Aljamea-tus-Saifiyah, not about the Sansta or Umoor Khidmat the rest of the
+          tab records, and running the two together would read as one. */}
+      <div className="border-t border-border pt-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <YesNoField
+            label="Are you a Muntasib Ila Jamea?"
+            name="is_muntasib_ila_jamea"
+            value={value.is_muntasib_ila_jamea}
+            onChange={onMuntasibChange}
+            error={errorFor("is_muntasib_ila_jamea")}
+            disabled={disabled}
+          />
+
+          {/* Shown only on Yes. Not required on Yes, though: the profile has no mandatory
+              fields (FR-095), so an unanswered Farig Year shows up in the member's completion
+              figure rather than blocking the save. */}
+          {isMuntasib ? (
+            <Input
+              label="Farig Year"
+              value={value.farig_year ?? ""}
+              onChange={(e) => onChange("farig_year", e.target.value)}
+              helperText="The year you became Farig, as you would write it."
+              error={errorFor("farig_year")}
+              disabled={disabled}
+            />
+          ) : null}
+        </div>
       </div>
     </div>
   );

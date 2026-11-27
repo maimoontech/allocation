@@ -58,6 +58,40 @@ export async function ensureSchema() {
   await ensureHizbParticipation();
   await ensureSanstaUmoorLists();
   await ensureStudentOccupationType();
+  await ensureMuntasibColumns();
+}
+
+/**
+ * FR-086b. The two Tab 12 columns added on 2026-11-27.
+ *
+ * `is_muntasib_ila_jamea` is nullable, like every other Yes/No on the profile. Existing rows
+ * stay NULL rather than being written as 0: nobody has been asked the question yet, and "No"
+ * is an answer, not an absence. The completion figure treats the two differently, and so does
+ * the form - a NULL shows neither radio selected.
+ *
+ * `farig_year` is VARCHAR, not a year column, by decision: the year is kept exactly as the
+ * member types it, so "1441", "1441 AH" and "2019-20" all survive. Nothing counts or sorts on
+ * it, which is what makes that safe.
+ */
+async function ensureMuntasibColumns() {
+  for (const [column, definition, after] of [
+    ["is_muntasib_ila_jamea", "TINYINT(1) NULL", "khidmat_since_year"],
+    ["farig_year", "VARCHAR(20) NULL", "is_muntasib_ila_jamea"]
+  ] as const) {
+    const [rows] = await pool.query<any[]>(
+      `SELECT COUNT(*) AS cnt
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'member_profiles'
+         AND COLUMN_NAME = :column`,
+      { column }
+    );
+    if (Number(rows[0]?.cnt ?? 0) === 0) {
+      await pool.query(
+        `ALTER TABLE member_profiles ADD COLUMN ${column} ${definition} AFTER ${after}`
+      );
+    }
+  }
 }
 
 /**

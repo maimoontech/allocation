@@ -802,6 +802,78 @@ describe("member profile", () => {
 
         expect((await getProfile(token)).body.data.umoor_name).toBeNull();
       });
+
+      /**
+       * FR-086b. "Are you a Muntasib Ila Jamea?" and the Farig Year it asks for.
+       *
+       * The year is deliberately UNVALIDATED - stored exactly as typed, in whichever calendar
+       * the member thinks in - so the tests here are about the two things that are rules: the
+       * answer survives a round trip untouched, and a No clears it.
+       */
+      describe("Muntasib Ila Jamea (FR-086b)", () => {
+        it("keeps the Farig Year exactly as it was typed", async () => {
+          for (const typed of ["1441", "1441 AH", "2019-20", "  1435  "]) {
+            const res = await putProfile(token, {
+              is_muntasib_ila_jamea: true,
+              farig_year: typed
+            });
+            expect(res.status).toBe(200);
+            // Trimmed, like every other text field here, and otherwise untouched: no
+            // calendar is imposed and no digits are rejected.
+            expect((await getProfile(token)).body.data.farig_year).toBe(typed.trim());
+          }
+        });
+
+        /** No mandatory fields on this profile (FR-095), and free text is no exception. */
+        it("saves a Yes with no year at all", async () => {
+          const res = await putProfile(token, {
+            is_muntasib_ila_jamea: true,
+            farig_year: null
+          });
+
+          expect(res.status).toBe(200);
+          expect((await getProfile(token)).body.data.farig_year).toBeNull();
+        });
+
+        /**
+         * The rule that needs a server to enforce it. The browser hides the box on No, and a
+         * box that is not on screen fires no change event - so without this, a year entered
+         * before the answer changed would stay stored where nobody could see it to correct it.
+         */
+        it("clears the Farig Year when the answer becomes No", async () => {
+          await putProfile(token, { is_muntasib_ila_jamea: true, farig_year: "1441" });
+          expect((await getProfile(token)).body.data.farig_year).toBe("1441");
+
+          // The year is sent again, as a stale form would send it. It must not survive.
+          const res = await putProfile(token, {
+            is_muntasib_ila_jamea: false,
+            farig_year: "1441"
+          });
+
+          expect(res.status).toBe(200);
+          const profile = (await getProfile(token)).body.data;
+          expect(profile.is_muntasib_ila_jamea).toBe(false);
+          expect(profile.farig_year).toBeNull();
+        });
+
+        /** Unanswered is not No, and the form shows neither radio for it. */
+        it("round-trips an unanswered question as null", async () => {
+          const res = await putProfile(token, { is_muntasib_ila_jamea: null });
+
+          expect(res.status).toBe(200);
+          expect((await getProfile(token)).body.data.is_muntasib_ila_jamea).toBeNull();
+        });
+
+        it("refuses a Farig Year longer than the column", async () => {
+          const res = await putProfile(token, {
+            is_muntasib_ila_jamea: true,
+            farig_year: "x".repeat(21)
+          });
+
+          expect(res.status).toBe(400);
+          expect(errorFields(res)).toContain("farig_year");
+        });
+      });
     });
   });
 

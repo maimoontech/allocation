@@ -18,7 +18,7 @@ const memberFormCompletion_1 = require("./memberFormCompletion");
  *   calling this file.
  *
  * NO PROFILE VALUE IS READ
- *   Every field comes back as 1 or 0 - whether the box holds something, never what. The seven
+ *   Every field comes back as 1 or 0 - whether the box holds something, never what. The eight
  *   discriminants are the single exception, and they are read because the questions a member
  *   is ASKED depend on them. Tab 6 is medical data under FR-065 and FR-066, so no blood
  *   group, height or weight is selected here, held in memory, or returned to anybody. The
@@ -52,7 +52,10 @@ const TEXT_PRESENCE_FIELDS = new Set([
     "tamreen_absence_reason",
     "khidmat_designation",
     "sansta_name",
-    "umoor_name"
+    "umoor_name",
+    // FR-086b. Free text, so whitespace alone is not an answer - the same rule as every other
+    // typed box here.
+    "farig_year"
 ]);
 /**
  * Fields whose presence is NOT a plain column on `member_profiles`.
@@ -90,7 +93,10 @@ exports.DISCRIMINANT_COLUMNS = [
     "has_hifz_sanad",
     "is_regular_donor",
     "attends_karachi_tamreen",
-    "khidmat_type"
+    "khidmat_type",
+    // FR-086b. Read as a value because Farig Year is asked only of a Muntasib. It says nothing
+    // about health, and nothing about what the member answered anywhere else.
+    "is_muntasib_ila_jamea"
 ];
 /**
  * The select list a query needs in order to compute completion, built once at module load.
@@ -128,7 +134,8 @@ function completionRowFrom(row) {
         has_hifz_sanad: toTriState(row.has_hifz_sanad),
         is_regular_donor: toTriState(row.is_regular_donor),
         attends_karachi_tamreen: toTriState(row.attends_karachi_tamreen),
-        khidmat_type: row.khidmat_type ?? null
+        khidmat_type: row.khidmat_type ?? null,
+        is_muntasib_ila_jamea: toTriState(row.is_muntasib_ila_jamea)
     };
 }
 /** The whole measure for one result row, in one call. */

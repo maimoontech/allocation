@@ -65,7 +65,13 @@ export type MemberSort =
   | "party"
   | "zone"
   | "recent_login"
-  | "newest";
+  | "newest"
+  // FR-006d. Not an ORDER BY on the server: completion is computed per member, so these two
+  // are ranked in a pass of their own. They can therefore be REFUSED - a filtered set over
+  // the server's ranking ceiling comes back ordered by ITS number, and `sort` on the
+  // response says so. Read it back rather than assuming the order that was asked for.
+  | "completion_asc"
+  | "completion_desc";
 
 /** The three fields an Admin or Zonal Head supplies to create an account. */
 export type CreateMemberRequest = {

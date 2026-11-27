@@ -117,12 +117,19 @@ let posted: any[] = [];
 let createFailure: { status: number; message: string } | null = null;
 /** Set by a test to make the next password reset fail. */
 let resetFailure: { status: number; message: string } | null = null;
+/**
+ * Set by a test to make the list report an order OTHER than the one it was asked for
+ * (FR-006d). The real server does this when a completion ranking would have to read more
+ * accounts than its ceiling allows.
+ */
+let servedSort: string | null = null;
 
 beforeEach(() => {
   requested = [];
   posted = [];
   createFailure = null;
   resetFailure = null;
+  servedSort = null;
   roster = ITEMS;
   downloads = [];
   lastBlob = null;
@@ -227,7 +234,7 @@ beforeEach(() => {
               total: roster.length,
               page,
               page_size: pageSize,
-              sort: query.get("sort") ?? "its_no"
+              sort: servedSort ?? query.get("sort") ?? "its_no"
             }
           }),
           { status: 200, headers: { "Content-Type": "application/json" } }
@@ -319,7 +326,7 @@ describe("MembersPage — searching and sorting", () => {
     expect(listCalls().some((u) => u.includes("sort=its_no"))).toBe(true);
   });
 
-  it("offers the six orders, Party among them", async () => {
+  it("offers the eight orders, Party and Profile % among them", async () => {
     renderWithProviders(<MembersPage />);
     await screen.findByText("Burhani Party");
 
@@ -330,7 +337,9 @@ describe("MembersPage — searching and sorting", () => {
       "Party (A–Z)",
       "Zone (A–Z)",
       "Recently signed in",
-      "Newest account first"
+      "Newest account first",
+      "Profile % (least complete first)",
+      "Profile % (most complete first)"
     ]);
   });
 
@@ -347,7 +356,14 @@ describe("MembersPage — searching and sorting", () => {
     renderWithProviders(<MembersPage />);
     await screen.findByText("Burhani Party");
 
-    for (const key of ["name", "zone", "recent_login", "newest"]) {
+    for (const key of [
+      "name",
+      "zone",
+      "recent_login",
+      "newest",
+      "completion_asc",
+      "completion_desc"
+    ]) {
       fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: key } });
       await waitFor(() => expect(listCalls().some((u) => u.includes(`sort=${key}`))).toBe(true));
     }
@@ -388,6 +404,56 @@ describe("MembersPage — searching and sorting", () => {
     fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "zone" } });
 
     expect(screen.getByText(/Members who have not chosen a Zone/)).toBeInTheDocument();
+  });
+
+  /**
+   * FR-006d. Ordering by Profile %, and the one case where the server may not do as asked.
+   *
+   * Completion is not a column - it is computed per member - so the server ranks the whole
+   * filtered set in a pass of its own, and beyond its ceiling it declines and returns ITS
+   * number order instead. It reports the order it ACTUALLY used, and the page has to read
+   * that back: a list labelled "least complete first" that is nothing of the kind is worse
+   * than one that admits it could not be.
+   */
+  describe("ordering by Profile % (FR-006d)", () => {
+    it("says nothing while the server is doing as it was asked", async () => {
+      renderWithProviders(<MembersPage />);
+      await screen.findByText("Burhani Party");
+
+      fireEvent.change(screen.getByLabelText("Sort by"), {
+        target: { value: "completion_asc" }
+      });
+
+      await waitFor(() =>
+        expect(listCalls().some((u) => u.includes("sort=completion_asc"))).toBe(true)
+      );
+      expect(screen.queryByText(/Too many accounts to order by Profile/)).not.toBeInTheDocument();
+    });
+
+    it("says so when the server returns a different order instead", async () => {
+      servedSort = "its_no";
+      renderWithProviders(<MembersPage />);
+      await screen.findByText("Burhani Party");
+
+      fireEvent.change(screen.getByLabelText("Sort by"), {
+        target: { value: "completion_desc" }
+      });
+
+      expect(
+        await screen.findByText(/Too many accounts to order by Profile %/)
+      ).toBeInTheDocument();
+    });
+
+    /** The same mismatch in any other order is the ordinary fallback, not this one. */
+    it("stays quiet when a different order falls back", async () => {
+      servedSort = "its_no";
+      renderWithProviders(<MembersPage />);
+      await screen.findByText("Burhani Party");
+
+      fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "party" } });
+
+      expect(screen.queryByText(/Too many accounts to order by Profile/)).not.toBeInTheDocument();
+    });
   });
 
   it("says nothing about blanks for the orders where they do not bunch up", async () => {

@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { validateMemberPassword } from "../services/authService";
 import { readMemberProfile, saveMemberProfile } from "../services/memberProfileService";
 import { COMPLETION_SELECT, completionFor } from "../services/memberCompletionQuery";
+import type { CompletionResult } from "../services/memberFormCompletion";
 import { fail, ok } from "../utils/response";
 
 /**
@@ -82,11 +83,46 @@ const SORT_ORDERS: Record<string, string> = {
   newest: "ma.created_at DESC, ma.its_no ASC"
 };
 
-export const MEMBER_SORT_KEYS = Object.keys(SORT_ORDERS);
+/**
+ * The two orders that CANNOT be expressed as an ORDER BY (FR-006d).
+ *
+ * Completion is not a column. It is questions answered over questions ASKED, and what a
+ * member is asked depends on their own answers - a Student is not asked for an employer, a
+ * Solo member has no Party, a member who is not a Muntasib is not asked a Farig Year. Those
+ * rules live in `memberFormCompletion`, as a readable function, deliberately: the earlier
+ * note on the list query says the same thing, that a CASE expression nobody would maintain is
+ * the wrong home for them.
+ *
+ * So these two keys are not in `SORT_ORDERS` and are ranked in a pass of their own below.
+ * The alternative - a second definition of completion written in SQL purely to sort by - is
+ * how a row comes to read 76% in a list ordered as though it were something else.
+ */
+const COMPLETION_SORTS: Record<string, "asc" | "desc"> = {
+  completion_asc: "asc",
+  completion_desc: "desc"
+};
+
+/**
+ * How many accounts the ranking pass will read before it gives up and returns the list in ITS
+ * number order instead.
+ *
+ * Ranking by completion means computing it for EVERY account the filters match, not just the
+ * fifty on the page, because page 2 of "least complete first" is meaningless unless page 1
+ * was drawn from the whole set. That pass reads presence bits - one TINYINT per field, no
+ * values - so it is cheap per row, but it is still linear in the filtered set.
+ *
+ * 20,000 is far above this organisation's membership and far below anything that would hold a
+ * request open. Crossing it does NOT error: the response reports `sort` as the order it
+ * actually used, the page shows that order in its control, and an operator who needs the
+ * ranking narrows the search. Silently serving a mislabelled order would be the real failure.
+ */
+const MAX_COMPLETION_RANK_ROWS = 20000;
+
+export const MEMBER_SORT_KEYS = [...Object.keys(SORT_ORDERS), ...Object.keys(COMPLETION_SORTS)];
 
 function sortKeyFor(raw: unknown): string {
   const key = String(raw ?? "").trim();
-  return key in SORT_ORDERS ? key : "its_no";
+  return key in SORT_ORDERS || key in COMPLETION_SORTS ? key : "its_no";
 }
 
 /**
@@ -153,7 +189,6 @@ memberAdminRoutes.get("/", async (req, res, next) => {
   // An unrecognised key resolves to `its_no` and is reported as such in the response, so the
   // page shows the order it actually got rather than the one it asked for.
   const sortKey = sortKeyFor(req.query.sort);
-  const orderBy = SORT_ORDERS[sortKey];
 
   try {
     // The joins MIRROR the list query below, including the two this count does not read.
@@ -171,6 +206,116 @@ memberAdminRoutes.get("/", async (req, res, next) => {
       params
     );
     const total = Number(countRows[0]?.total ?? 0);
+
+    /**
+     * FR-006d. Ordering by completion, which needs a pass of its own.
+     *
+     * WHY A WHOLE-SET PASS AND NOT AN ORDER BY
+     *   Completion is computed, conditionally, per member. There is no column to sort on, and
+     *   writing one in SQL would mean a second definition of the measure - the thing this
+     *   module has gone out of its way to avoid, because two definitions is how a row reads
+     *   76% inside a list ordered as if it read something else.
+     *
+     * WHY THE WHOLE FILTERED SET AND NOT THIS PAGE
+     *   "Least complete first" is a claim about everybody the filters match. Ranking only the
+     *   fifty rows a LIMIT already chose would sort each page within itself and leave the
+     *   pages in ITS-number order - which looks sorted, page by page, and is not. So the
+     *   ranking reads every matching account, orders it, and only then takes this page's
+     *   slice. That slice is a list of ids, and the display query below is confined to them.
+     *
+     * WHAT THE PASS READS
+     *   Presence bits and the eight discriminants. No profile value, exactly as elsewhere -
+     *   so ordering the list by how complete it is reads nothing about what anybody wrote.
+     */
+    const rankDirection = COMPLETION_SORTS[sortKey];
+    let effectiveSort = sortKey;
+    let rankedIds: number[] | null = null;
+    const rankedCompletion = new Map<number, CompletionResult>();
+
+    if (rankDirection) {
+      if (total > MAX_COMPLETION_RANK_ROWS) {
+        // Reported, not hidden. See MAX_COMPLETION_RANK_ROWS.
+        effectiveSort = "its_no";
+      } else {
+        const [rankRows] = await pool.query<any[]>(
+          `SELECT ma.id,
+                  ma.its_no,
+                  ${COMPLETION_SELECT}
+           FROM member_accounts ma
+           LEFT JOIN member_profiles mp ON mp.member_account_id = ma.id
+           LEFT JOIN member_photos ph ON ph.member_account_id = ma.id
+           LEFT JOIN zones z ON z.id = mp.zone_id
+           LEFT JOIN parties p ON p.id = mp.party_id
+           ${where}`,
+          params
+        );
+
+        const ranked = rankRows.map((r) => ({
+          id: Number(r.id),
+          its_no: String(r.its_no ?? ""),
+          completion: completionFor(r)
+        }));
+
+        // The tie-break is `its_no`, for the reason every order in SORT_ORDERS has one:
+        // without it, two members on the same percentage come back in whatever order the
+        // engine chose that time, and paging skips and repeats rows between pages. ITS
+        // numbers are fixed-length digit strings, so comparing them as strings is the same
+        // order MySQL's `ma.its_no ASC` gives.
+        const direction = rankDirection === "desc" ? -1 : 1;
+        ranked.sort((a, b) => {
+          if (a.completion.percent !== b.completion.percent) {
+            return (a.completion.percent - b.completion.percent) * direction;
+          }
+          return a.its_no < b.its_no ? -1 : a.its_no > b.its_no ? 1 : 0;
+        });
+
+        const offset = (page - 1) * pageSize;
+        const slice = ranked.slice(offset, offset + pageSize);
+        rankedIds = slice.map((r) => r.id);
+        for (const r of slice) rankedCompletion.set(r.id, r.completion);
+      }
+    }
+
+    const orderBy = SORT_ORDERS[effectiveSort];
+
+    // A page past the end of a ranked list: no ids, so there is nothing to ask the database
+    // for. Returning here rather than building `IN ()`, which is a syntax error.
+    if (rankedIds !== null && rankedIds.length === 0) {
+      return ok(
+        res,
+        { items: [], total, page, page_size: pageSize, sort: effectiveSort },
+        "OK"
+      );
+    }
+
+    // One placeholder per id rather than one bound array. The pool runs with
+    // `namedPlaceholders`, and how an array is expanded there is a property of the driver's
+    // patch version; a named placeholder per id is a question nobody has to look up. At most
+    // MAX_PAGE_SIZE of them, so the statement stays a sane length.
+    const rankPlaceholders = rankedIds
+      ? rankedIds.map((_, i) => `:rank_id_${i}`).join(", ")
+      : "";
+    const rankParams: Record<string, number> = {};
+    if (rankedIds) rankedIds.forEach((id, i) => (rankParams[`rank_id_${i}`] = id));
+
+    // The filters are re-applied ALONGSIDE the id list, not replaced by it. The ids came from
+    // the scoped ranking query above, so this is belt and braces - but a Zonal Head's scope is
+    // exactly the condition that must not depend on one query having got it right earlier.
+    const listWhere = rankedIds
+      ? `WHERE ma.id IN (${rankPlaceholders})${
+          conditions.length ? ` AND ${conditions.join(" AND ")}` : ""
+        }`
+      : where;
+    // FIELD() keeps the ranked order, which the id list alone does not carry.
+    const listOrderBy = rankedIds ? `FIELD(ma.id, ${rankPlaceholders})` : orderBy;
+    // The ranking pass already took this page's slice, so the LIMIT below has nothing left to
+    // do on that path - but it STAYS IN THE QUERY TEXT, and the offset becomes 0.
+    //
+    // Moving it into a ${hole} would have been tidier and would have cost real safety: the
+    // guard in `sqlNamedPlaceholders.test.ts` scans source for literals carrying `:name`, so
+    // a query whose only placeholders arrive through a hole drops out of the set it checks.
+    // This query is the one that has twice gone to production broken. It stays in the set.
+    const listOffset = rankedIds ? 0 : (page - 1) * pageSize;
 
     /**
      * NOTHING BUT SQL GOES INSIDE THIS TEMPLATE LITERAL. No `--` comment, however useful.
@@ -229,10 +374,10 @@ memberAdminRoutes.get("/", async (req, res, next) => {
        LEFT JOIN member_photos ph ON ph.member_account_id = ma.id
        LEFT JOIN zones z ON z.id = mp.zone_id
        LEFT JOIN parties p ON p.id = mp.party_id
-       ${where}
-       ORDER BY ${orderBy}
+       ${listWhere}
+       ORDER BY ${listOrderBy}
        LIMIT :limit OFFSET :offset`,
-      { ...params, limit: pageSize, offset: (page - 1) * pageSize }
+      { ...params, ...rankParams, limit: pageSize, offset: listOffset }
     );
 
     return ok(
@@ -244,7 +389,13 @@ memberAdminRoutes.get("/", async (req, res, next) => {
           // row rather than in SQL because the rules are conditional - a Student is not asked
           // for an employer, a Solo member has no Party - and those rules live in one
           // readable function rather than in a CASE expression nobody would maintain.
-          const completion = completionFor(r);
+          //
+          // FR-006d. When the list was RANKED by completion, the figure carried over from
+          // that pass is used rather than recomputed from this second read. The row then
+          // shows the number it was ordered by, even in the case where the member saved
+          // between the two queries - a row reading 80% inside "least complete first" would
+          // look like a bug in the sort rather than the honest race it is.
+          const completion = rankedCompletion.get(Number(r.id)) ?? completionFor(r);
 
           return {
             id: Number(r.id),
@@ -279,7 +430,10 @@ memberAdminRoutes.get("/", async (req, res, next) => {
         total,
         page,
         page_size: pageSize,
-        sort: sortKey
+        // The order ACTUALLY used, which is not always the one asked for: an unrecognised key
+        // falls back to `its_no`, and so does a completion ranking over
+        // MAX_COMPLETION_RANK_ROWS. The page reads this back into its own control.
+        sort: effectiveSort
       },
       "OK"
     );

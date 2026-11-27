@@ -1,5 +1,77 @@
 # Changelog — Claude Migration Baseline
 
+## 2026-11-27 — Added: the Muntasib Ila Jamea question, and ordering the member list by Profile %
+
+Two unrelated additions.
+
+### Tab 12 asks whether the member is a Muntasib Ila Jamea
+
+The Other Sansta Khidmat tab now ends with **"Are you a Muntasib Ila Jamea?"** — Yes or No —
+and a **Farig Year** box that appears only on Yes. It sits in its own section under a dividing
+rule rather than as another cell in the grid above, because the question is about
+Aljamea-tus-Saifiyah and the rest of the tab is about Sansta and Umoor Khidmat; running the
+two together would read as one.
+
+**The Farig Year is a plain text box and is not validated.** That was a deliberate choice,
+not an omission. The year is stored exactly as the member types it, so "1441", "1441 AH" and
+"2019-20" all survive, and no calendar is imposed on an answer people give in whichever one
+they think in — unlike the "Since (AH)" dropdown directly above it, which is Hijri. Nothing
+counts, sorts or computes on the value, and that is what makes leaving it open safe rather
+than sloppy. The only rule it has is the column width: 20 characters, reported as a field
+error rather than a failed save.
+
+**Radios, not a checkbox**, for the reason the seven other Yes/No questions on this profile
+use radios: unanswered is not No. A member who has never seen the question and a member who
+has answered No are different people, and the completion figure treats them differently.
+
+**A No clears the year, on the server.** The browser removes the box on No, and a control that
+is not on screen fires no change event — so without the server rule, a year typed before the
+answer changed would stay stored where nobody could see it to correct it. The same rule FR-059
+applies to the Hifz Sanad. A stale form that re-sends the year on a No does not get to keep it.
+
+**Neither question is mandatory.** The profile has no mandatory fields (FR-095), and demanding
+free text that nothing validates would block a save to no purpose. An unanswered Farig Year
+surfaces where it should: in that member's completion percentage.
+
+**Every member's percentage drops by a little until they answer.** Adding a question to the
+form adds it to the denominator — the empty-profile denominator goes from 42 questions to 43 —
+and that is the honest behaviour rather than a regression. The Farig Year joins it only for a
+member who answered Yes, so 100% stays reachable for everyone.
+
+The Need Help chat's Khidmat topic was updated to describe the new question, since it
+otherwise described a tab that had changed.
+
+### The member list can be ordered by Profile %
+
+Two new orders in the admin and Zonal Head Members list: **least complete first**, which is
+the list of who needs a telephone call, and **most complete first**.
+
+**This one could not be an `ORDER BY`.** Completion is not a column — it is questions answered
+over questions *asked*, and what a member is asked depends on their own answers. So the server
+ranks it in a pass of its own: it reads presence bits for every account the filters match,
+applies the same measure the row's own figure uses, orders the result, and only then takes the
+page's slice. The display query is then confined to those ids, in that order.
+
+**Ranking the whole filtered set, not the page, is the point.** "Least complete first" is a
+claim about everybody who matched. Ranking only the fifty rows a `LIMIT` had already chosen
+would sort each page within itself and leave the pages in ITS-number order — which looks
+sorted, page by page, and is not. There is a test that pages through one row at a time and
+checks the result against the single-page ordering.
+
+**The alternative was rejected on purpose.** Writing the measure a second time in SQL purely
+to sort by it is how a row comes to read 76% inside a list ordered as though it read something
+else. The row now shows the figure it was *ranked* by, carried over from the ranking pass, so
+a member who saves between the two reads cannot make the order look broken.
+
+**The server may decline, and says so.** Ranking is linear in the filtered set, so there is a
+ceiling of 20,000 accounts — far above this organisation's membership and far below anything
+that would hold a request open. Past it, the list comes back in ITS-number order and the
+response reports that; the page then says plainly that it is not in the order asked for.
+Serving a list quietly mislabelled "least complete first" would be the real failure.
+
+Ordering by completion reads **no profile value** — only presence bits and the discriminants,
+as everywhere else this measure is used.
+
 ## 2026-11-26 — Added: profile completion and last-saved date in the party panel
 
 The party's member section now shows two columns beside each member: **Profile**, how much of

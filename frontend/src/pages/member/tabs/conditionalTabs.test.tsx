@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { Tab04Occupation } from "./Tab04Occupation";
 import { Tab05EducationHifz } from "./Tab05EducationHifz";
 import { Tab06Health } from "./Tab06Health";
@@ -92,6 +92,8 @@ const BASE: MemberProfile = {
   umoor_name: null,
   khidmat_designation: null,
   khidmat_since_year: null,
+  is_muntasib_ila_jamea: null,
+  farig_year: null,
   titles: [],
   sharafs: [],
   skill_ids: [],
@@ -534,5 +536,72 @@ describe("Tab 12 — Other Sansta Khidmat", () => {
     renderTab(Tab12Khidmat, {});
     expect(screen.queryByLabelText(/^Sansta Name/)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/^Umoor Name/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * FR-086b. "Are you a Muntasib Ila Jamea?" and the Farig Year it asks for on Yes.
+   *
+   * The same shape as FR-059 on Tab 5, and tested the same way: the box appearing is half of
+   * it, and the value going with it when the answer changes is the half that matters. A year
+   * left behind on a No is invisible on screen and still sent on the next save.
+   *
+   * The box is a plain text input, deliberately, and not a year dropdown like the Since (AH)
+   * select above it - the member writes the year as they would say it, in whichever calendar
+   * they think in, and nothing counts or sorts on the value.
+   */
+  describe("Muntasib Ila Jamea (FR-086b)", () => {
+    it("asks the question of every member, whatever their Khidmat type", () => {
+      // cleanup() between iterations: without it the fourth render would find four of the
+      // same group in the document and getByRole would fail for the wrong reason.
+      for (const khidmat_type of [null, "Sansta", "Umoor", "Both"]) {
+        renderTab(Tab12Khidmat, { khidmat_type });
+        expect(
+          screen.getByRole("group", { name: /Are you a Muntasib Ila Jamea/ })
+        ).toBeInTheDocument();
+        cleanup();
+      }
+    });
+
+    it("keeps the Farig Year hidden while the question is unanswered", () => {
+      renderTab(Tab12Khidmat, {});
+
+      expect(screen.queryByLabelText(/^Farig Year/)).not.toBeInTheDocument();
+    });
+
+    it("shows the Farig Year on Yes", () => {
+      const state = renderTab(Tab12Khidmat, {});
+
+      answer(/Are you a Muntasib Ila Jamea/, "Yes");
+
+      expect(screen.getByLabelText(/^Farig Year/)).toBeInTheDocument();
+      expect(state.value.is_muntasib_ila_jamea).toBe(true);
+    });
+
+    it("hides the Farig Year on No and clears what was typed", () => {
+      const state = renderTab(Tab12Khidmat, {
+        is_muntasib_ila_jamea: true,
+        farig_year: "1441"
+      });
+
+      expect((screen.getByLabelText(/^Farig Year/) as HTMLInputElement).value).toBe("1441");
+
+      answer(/Are you a Muntasib Ila Jamea/, "No");
+
+      expect(screen.queryByLabelText(/^Farig Year/)).not.toBeInTheDocument();
+      expect(state.value.is_muntasib_ila_jamea).toBe(false);
+      expect(state.value.farig_year).toBeNull();
+    });
+
+    /** Free text, not a year dropdown and not digits only: whatever is typed is kept. */
+    it("keeps whatever the member types, in whichever calendar", () => {
+      const state = renderTab(Tab12Khidmat, { is_muntasib_ila_jamea: true });
+      const box = screen.getByLabelText(/^Farig Year/) as HTMLInputElement;
+
+      expect(box.tagName).toBe("INPUT");
+
+      fireEvent.change(box, { target: { value: "1441 AH" } });
+
+      expect(state.value.farig_year).toBe("1441 AH");
+    });
   });
 });
